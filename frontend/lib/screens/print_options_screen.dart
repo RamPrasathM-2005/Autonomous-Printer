@@ -6,53 +6,6 @@ import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import 'payment_screen.dart';
 
-class DocumentPrintConfig {
-  final UploadedDocument document;
-  int copies;
-  bool isColor;
-  String sides; // 'one-sided' or 'two-sided-long-edge'
-  String paperSize; // Fixed to 'A4'
-  String orientation; // 'portrait' or 'landscape'
-  bool isCustomRange;
-  String customRange;
-
-  DocumentPrintConfig({
-    required this.document,
-    this.copies = 1,
-    this.isColor = false,
-    this.sides = 'one-sided',
-    this.paperSize = 'A4',
-    this.orientation = 'portrait',
-    this.isCustomRange = false,
-    this.customRange = '',
-  });
-
-  int get calculatedPages {
-    if (!isCustomRange || customRange.trim().isEmpty) {
-      return document.pages > 0 ? document.pages : 1;
-    }
-    final text = customRange.trim();
-    final parts = text.split('-');
-    if (parts.length == 2) {
-      int? start = int.tryParse(parts[0].trim());
-      int? end = int.tryParse(parts[1].trim());
-      if (start != null && end != null && end >= start) {
-        return (end - start + 1);
-      }
-    }
-    return document.pages > 0 ? document.pages : 1;
-  }
-
-  double get estimatedCost {
-    final rate = isColor ? 10.0 : 2.0;
-    double cost = calculatedPages * copies * rate;
-    if (sides != 'one-sided') {
-      cost = cost * 0.9; // 10% duplex discount
-    }
-    return cost;
-  }
-}
-
 class PrintOptionsScreen extends StatefulWidget {
   final List<UploadedDocument> documents;
   final String selectedStationId;
@@ -109,14 +62,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     super.dispose();
   }
 
-  bool _appliedToAll = false;
-
   DocumentPrintConfig get _currentConfig => _configs[_selectedDocIndex];
 
   void _updateActiveSetting(VoidCallback update) {
     setState(() {
       update();
-      _appliedToAll = false;
     });
   }
 
@@ -149,32 +99,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     if (_selectedDocIndex > 0) {
       _selectDocument(_selectedDocIndex - 1);
     }
-  }
-
-  void _applyCurrentSettingsToAll() {
-    final current = _currentConfig;
-    setState(() {
-      for (int i = 0; i < _configs.length; i++) {
-        _configs[i].copies = current.copies;
-        _configs[i].isColor = current.isColor;
-        _configs[i].sides = current.sides;
-        _configs[i].paperSize = 'A4';
-        _configs[i].orientation = current.orientation;
-        _configs[i].isCustomRange = current.isCustomRange;
-        _configs[i].customRange = current.customRange;
-      }
-      _appliedToAll = true;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Settings successfully applied to all ${_configs.length} documents!',
-        ),
-        backgroundColor: AppTheme.success,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   double get _totalEstimatedTotal {
@@ -220,7 +144,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (ctx) => PaymentScreen(order: order),
+          builder: (ctx) => PaymentScreen(
+            order: order,
+            documents: widget.documents,
+            configs: _configs,
+          ),
         ),
       );
     } catch (e) {
@@ -251,196 +179,61 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                   // Multi-PDF Tab Selector (If more than 1 document)
                   if (_configs.length > 1) ...[
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.picture_as_pdf_rounded,
-                                size: 18, color: AppTheme.primary),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Documents (${_selectedDocIndex + 1}/${_configs.length})',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            // Quick Prev Button
-                            InkWell(
-                              onTap:
-                                  _selectedDocIndex > 0 ? _prevDocument : null,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _selectedDocIndex > 0
-                                      ? AppTheme.surfaceWhite
-                                      : AppTheme.surfaceSubtle,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppTheme.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.chevron_left_rounded,
-                                      size: 16,
-                                      color: _selectedDocIndex > 0
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textMuted,
-                                    ),
-                                    Text(
-                                      'Prev',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: _selectedDocIndex > 0
-                                            ? AppTheme.textPrimary
-                                            : AppTheme.textMuted,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            // Quick Next Button
-                            InkWell(
-                              onTap: _selectedDocIndex < _configs.length - 1
-                                  ? _nextDocument
-                                  : null,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _selectedDocIndex < _configs.length - 1
-                                      ? AppTheme.surfaceWhite
-                                      : AppTheme.surfaceSubtle,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppTheme.border),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      'Next',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: _selectedDocIndex <
-                                                _configs.length - 1
-                                            ? AppTheme.textPrimary
-                                            : AppTheme.textMuted,
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.chevron_right_rounded,
-                                      size: 16,
-                                      color: _selectedDocIndex <
-                                              _configs.length - 1
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textMuted,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                        const Icon(Icons.picture_as_pdf_rounded,
+                            size: 18, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Documents (${_selectedDocIndex + 1}/${_configs.length})',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
 
-                    // Horizontal PDF tabs with side scroll chevrons
-                    Row(
-                      children: [
-                        if (_configs.length > 2) ...[
-                          InkWell(
-                            onTap: () {
-                              if (_tabScrollController.hasClients) {
-                                _tabScrollController.animateTo(
-                                  (_tabScrollController.offset - 160)
-                                      .clamp(0.0, _tabScrollController.position.maxScrollExtent),
-                                  duration: const Duration(milliseconds: 250),
-                                  curve: Curves.easeOut,
-                                );
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              height: 46,
-                              width: 28,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: AppTheme.surfaceWhite,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppTheme.border),
-                              ),
-                              child: const Icon(Icons.chevron_left_rounded,
-                                  size: 20, color: AppTheme.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
-                          child: SizedBox(
-                            height: 48,
-                            child: ListView.separated(
-                              controller: _tabScrollController,
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _configs.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 8),
+                    // Horizontal PDF tabs (Clean, smooth scrolling without <> arrow buttons)
+                    SizedBox(
+                      height: 46,
+                      child: ListView.separated(
+                        controller: _tabScrollController,
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _configs.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
                         itemBuilder: (ctx, index) {
                           final cfg = _configs[index];
                           final isSelected = index == _selectedDocIndex;
 
-                          // When 'Apply to All' was chosen, all tabs are marked in the SAME unified color.
-                          // Otherwise, the active/selected tab has a distinct primary highlight color,
-                          // and unselected tabs have a distinct clean surface color.
-                          final Color tabBg = _appliedToAll
-                              ? const Color(0xFFECFDF5)
-                              : (isSelected
-                                  ? AppTheme.primarySurface
-                                  : AppTheme.surfaceWhite);
-                          final Color tabBorder = _appliedToAll
-                              ? const Color(0xFF10B981)
-                              : (isSelected
-                                  ? AppTheme.primary
-                                  : AppTheme.border);
-                          final Color tabText = _appliedToAll
-                              ? const Color(0xFF065F46)
-                              : (isSelected
-                                  ? AppTheme.primary
-                                  : AppTheme.textPrimary);
-                          final Color badgeBg = _appliedToAll
-                              ? const Color(0xFF10B981)
-                              : (isSelected
-                                  ? AppTheme.primary
-                                  : AppTheme.surfaceSubtle);
-                          final Color badgeText = _appliedToAll || isSelected
+                          final Color tabBg = isSelected
+                              ? AppTheme.primary
+                              : AppTheme.surfaceWhite;
+                          final Color tabBorder = isSelected
+                              ? AppTheme.primary
+                              : AppTheme.border;
+                          final Color tabText = isSelected
+                              ? Colors.white
+                              : AppTheme.textPrimary;
+                          final Color badgeBg = isSelected
+                              ? Colors.white.withValues(alpha: 0.22)
+                              : AppTheme.surfaceSubtle;
+                          final Color badgeText = isSelected
                               ? Colors.white
                               : AppTheme.textSecondary;
-                          final IconData tabIcon = _appliedToAll
-                              ? Icons.check_circle_rounded
-                              : (isSelected
-                                  ? Icons.picture_as_pdf_rounded
-                                  : Icons.picture_as_pdf_outlined);
-                          final Color iconColor = _appliedToAll
-                              ? const Color(0xFF059669)
-                              : (isSelected
-                                  ? AppTheme.primary
-                                  : AppTheme.textSecondary);
+                          final IconData tabIcon = isSelected
+                              ? Icons.picture_as_pdf_rounded
+                              : Icons.picture_as_pdf_outlined;
+                          final Color iconColor = isSelected
+                              ? Colors.white
+                              : AppTheme.textSecondary;
 
                           return InkWell(
                             onTap: () => _selectDocument(index),
                             borderRadius: BorderRadius.circular(10),
-                            child: Container(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
@@ -448,8 +241,18 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: tabBorder,
-                                  width: (_appliedToAll || isSelected) ? 1.5 : 1,
+                                  width: isSelected ? 1.5 : 1,
                                 ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: AppTheme.primary
+                                              .withValues(alpha: 0.25),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
                               ),
                               child: Row(
                                 children: [
@@ -463,24 +266,22 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                     cfg.document.filename,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      fontWeight: (_appliedToAll || isSelected)
+                                      fontWeight: isSelected
                                           ? FontWeight.w700
                                           : FontWeight.w500,
                                       color: tabText,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
+                                        horizontal: 7, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: badgeBg,
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      _appliedToAll
-                                          ? '${cfg.document.pages}p • Synced'
-                                          : '${cfg.document.pages}p',
+                                      '${cfg.document.pages}p',
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
@@ -495,164 +296,37 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         },
                       ),
                     ),
-                  ),
-                  if (_configs.length > 2) ...[
-                    const SizedBox(width: 6),
-                    InkWell(
-                      onTap: () {
-                        if (_tabScrollController.hasClients) {
-                          _tabScrollController.animateTo(
-                            (_tabScrollController.offset + 160).clamp(
-                                0.0, _tabScrollController.position.maxScrollExtent),
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOut,
-                          );
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        height: 46,
-                        width: 28,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceWhite,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppTheme.border),
-                        ),
-                        child: const Icon(Icons.chevron_right_rounded,
-                            size: 20, color: AppTheme.textSecondary),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 12),
-
-                    // ONE Global Apply Settings to All Button Card
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _appliedToAll
-                            ? const Color(0xFFECFDF5)
-                            : AppTheme.surfaceWhite,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _appliedToAll
-                              ? const Color(0xFF10B981)
-                              : AppTheme.border,
-                          width: _appliedToAll ? 1.5 : 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: _appliedToAll
-                                  ? const Color(0xFFD1FAE5)
-                                  : AppTheme.primarySurface,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              _appliedToAll
-                                  ? Icons.done_all_rounded
-                                  : Icons.copy_all_rounded,
-                              color: _appliedToAll
-                                  ? const Color(0xFF059669)
-                                  : AppTheme.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _appliedToAll
-                                      ? 'All PDFs Synchronized (${_configs.length})'
-                                      : 'Apply Settings to All PDFs',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                    color: _appliedToAll
-                                        ? const Color(0xFF065F46)
-                                        : AppTheme.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _appliedToAll
-                                      ? 'All tabs now share identical print options'
-                                      : 'Replicate active PDF options across all ${_configs.length} documents',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: _appliedToAll
-                                        ? const Color(0xFF047857)
-                                        : AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _applyCurrentSettingsToAll,
-                            icon: Icon(
-                              _appliedToAll
-                                  ? Icons.check_circle_outline
-                                  : Icons.copy_all_rounded,
-                              size: 15,
-                            ),
-                            label: Text(
-                                _appliedToAll ? 'Synced' : 'Apply to All'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _appliedToAll
-                                  ? const Color(0xFF10B981)
-                                  : AppTheme.primary,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ],
 
-                  // Currently active document banner (Single clean indicator, no duplicate button)
+                  // Currently active document banner with ONLY Next and Previous buttons
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceWhite,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppTheme.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(9),
                           decoration: BoxDecoration(
                             color: AppTheme.primarySurface,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
-                            Icons.tune_rounded,
+                            Icons.description_rounded,
                             color: AppTheme.primary,
-                            size: 22,
+                            size: 20,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -683,53 +357,54 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         ),
                         if (_configs.length > 1) ...[
                           const SizedBox(width: 8),
+                          // Dedicated Next & Previous navigation buttons right by the PDF name
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Tooltip(
-                                message: 'Previous document',
-                                child: InkWell(
-                                  onTap: _selectedDocIndex > 0 ? _prevDocument : null,
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _selectedDocIndex > 0
-                                          ? AppTheme.surfaceSubtle
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(
-                                      Icons.chevron_left_rounded,
-                                      size: 20,
-                                      color: _selectedDocIndex > 0
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textSecondary.withValues(alpha: 0.4),
-                                    ),
+                              OutlinedButton.icon(
+                                onPressed: _selectedDocIndex > 0
+                                    ? _prevDocument
+                                    : null,
+                                icon: const Icon(Icons.arrow_back_rounded,
+                                    size: 14),
+                                label: const Text('Prev'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  visualDensity: VisualDensity.compact,
+                                  foregroundColor: AppTheme.textPrimary,
+                                  disabledForegroundColor: AppTheme.textMuted,
+                                  side: BorderSide(
+                                    color: _selectedDocIndex > 0
+                                        ? AppTheme.border
+                                        : AppTheme.border
+                                            .withValues(alpha: 0.4),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              Tooltip(
-                                message: 'Next document',
-                                child: InkWell(
-                                  onTap: _selectedDocIndex < _configs.length - 1 ? _nextDocument : null,
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: _selectedDocIndex < _configs.length - 1
-                                          ? AppTheme.surfaceSubtle
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(
-                                      Icons.chevron_right_rounded,
-                                      size: 20,
-                                      color: _selectedDocIndex < _configs.length - 1
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textSecondary.withValues(alpha: 0.4),
-                                    ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: _selectedDocIndex < _configs.length - 1
+                                    ? _nextDocument
+                                    : null,
+                                icon: const Icon(Icons.arrow_forward_rounded,
+                                    size: 14),
+                                label: const Text('Next'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: AppTheme.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor:
+                                      AppTheme.surfaceSubtle,
+                                  disabledForegroundColor: AppTheme.textMuted,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
                               ),

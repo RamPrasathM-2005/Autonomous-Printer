@@ -109,9 +109,9 @@ class OrderOtp {
 
   factory OrderOtp.fromJson(Map<String, dynamic> json) {
     return OrderOtp(
-      orderId: json['order_id'] ?? '',
+      orderId: json['orderId'] ?? json['order_id'] ?? '',
       otp: json['otp'] ?? '',
-      expiresAt: json['expires_at'] ?? '',
+      expiresAt: json['expiresAt'] ?? json['expires_at'] ?? '',
     );
   }
 }

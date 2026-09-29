@@ -153,7 +153,7 @@ class _UploadScreenState extends State<UploadScreen> {
         MaterialPageRoute(
           builder: (ctx) => PrintOptionsScreen(
             documents: uploadedDocs,
-            selectedStationId: _selectedStation?.id ?? 'station-1',
+            selectedStationId: _selectedStation?.id ?? 'PRINT-SERVER-001',
           ),
         ),
       );
@@ -190,7 +190,7 @@ class _UploadScreenState extends State<UploadScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'QwikPrint',
+                    'AutosPrint',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
@@ -222,7 +222,7 @@ class _UploadScreenState extends State<UploadScreen> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -240,21 +240,23 @@ class _UploadScreenState extends State<UploadScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.success,
+                          decoration: BoxDecoration(
+                            color: (_selectedStation?.status.toLowerCase() == 'online')
+                                ? AppTheme.success
+                                : AppTheme.warning,
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _selectedStation != null
                                 ? 'Connected: ${_selectedStation!.name} (${_selectedStation!.location})'
                                 : (_isLoadingStations
-                                    ? 'Discovering nearby kiosk stations...'
-                                    : 'Default Kiosk Station (Ready)'),
+                                    ? 'Connecting to kiosk station...'
+                                    : 'Station: Central Library Station (Ready)'),
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.textPrimary,
                             ),
@@ -262,11 +264,31 @@ class _UploadScreenState extends State<UploadScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: (_selectedStation?.status.toLowerCase() == 'online')
+                                ? const Color(0xFFECFDF5)
+                                : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            (_selectedStation?.status ?? 'ONLINE').toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: (_selectedStation?.status.toLowerCase() == 'online')
+                                  ? const Color(0xFF065F46)
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -315,78 +337,123 @@ class _UploadScreenState extends State<UploadScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Upload Dropzone Card
-                  InkWell(
-                    onTap: _pickFiles,
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 32, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: _selectedFiles.isNotEmpty
-                            ? AppTheme.primarySurface
-                            : AppTheme.surfaceWhite,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _selectedFiles.isNotEmpty
-                              ? AppTheme.primary
-                              : AppTheme.border,
-                          width: _selectedFiles.isNotEmpty ? 1.5 : 1,
+                  // Initial Step: Clean, compact dropzone that fits on screen without scrolling
+                  if (_selectedFiles.isEmpty)
+                    InkWell(
+                      onTap: _pickFiles,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 24, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceWhite,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.primary.withValues(alpha: 0.35),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primary.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primarySurface,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(alpha: 0.2),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 28,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Tap to Browse & Select PDF Files',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Choose documents from your mobile storage, downloads, or drive',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                _buildFormatBadge('PDF Document', Icons.picture_as_pdf, const Color(0xFFDC2626)),
+                                _buildFormatBadge('PNG / JPG Image', Icons.image_rounded, const Color(0xFF2563EB)),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: _selectedFiles.isNotEmpty
-                                  ? AppTheme.primary
-                                  : AppTheme.surfaceSubtle,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              _selectedFiles.isNotEmpty
-                                  ? Icons.add_circle_outline
-                                  : Icons.cloud_upload_outlined,
-                              size: 28,
-                              color: _selectedFiles.isNotEmpty
-                                  ? Colors.white
-                                  : AppTheme.primary,
-                            ),
+                    )
+                  else ...[
+                    // Compact "Add More" Button
+                    InkWell(
+                      onTap: _pickFiles,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primarySurface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppTheme.primary,
+                            width: 1.5,
                           ),
-                          const SizedBox(height: 14),
-                          Text(
-                            _selectedFiles.isNotEmpty
-                                ? '+ Tap to Add More Documents'
-                                : 'Tap to Browse & Select PDF Files',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: _selectedFiles.isNotEmpty
-                                  ? AppTheme.primary
-                                  : AppTheme.textPrimary,
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_circle_outline,
+                              size: 20,
+                              color: AppTheme.primary,
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Select multiple PDFs or images (Max 50MB per file)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textMuted,
+                            SizedBox(width: 8),
+                            Text(
+                              '+ Tap to Add More Documents',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Selected Documents List
-                  if (_selectedFiles.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    // Selected Documents List
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -485,7 +552,7 @@ class _UploadScreenState extends State<UploadScreen> {
                   ],
 
                   if (_uploadError != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -511,9 +578,9 @@ class _UploadScreenState extends State<UploadScreen> {
                     ),
                   ],
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
 
-                  // Continue Button
+                  // Continue Button (directly positioned right below upload section)
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -556,9 +623,35 @@ class _UploadScreenState extends State<UploadScreen> {
                             ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormatBadge(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
           ),
         ],

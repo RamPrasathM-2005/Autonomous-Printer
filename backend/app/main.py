@@ -29,6 +29,7 @@ from app.api.routes.orders import router as orders_router
 from app.api.routes.payments import router as payments_router
 from app.api.routes.agent import router as agent_router
 from app.api.routes.maintenance import router as maintenance_router
+from app.api.routes.kiosk import router as kiosk_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,6 +55,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import time
+
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    start = time.time()
+    method = request.method
+    path = request.url.path
+    print(f"[BACKEND_LOG] >>> {method} {path}")
+    try:
+        response = await call_next(request)
+        duration_ms = (time.time() - start) * 1000
+        print(f"[BACKEND_LOG] <<< {method} {path} - Status: {response.status_code} ({duration_ms:.1f}ms)")
+        return response
+    except Exception as e:
+        duration_ms = (time.time() - start) * 1000
+        print(f"[BACKEND_LOG] !!! {method} {path} - Error: {e} ({duration_ms:.1f}ms)")
+        raise
+
 # Exception handlers
 app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -67,6 +86,7 @@ app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(agent_router)
 app.include_router(maintenance_router)
+app.include_router(kiosk_router)
 
 @app.get("/health", tags=["Health"])
 def health_check():

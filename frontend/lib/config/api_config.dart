@@ -15,6 +15,7 @@ class ApiConfig {
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
   static String? selectedStationId = 'PRINT-SERVER-001';
+  static String get baseUrl => backendUrl;
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

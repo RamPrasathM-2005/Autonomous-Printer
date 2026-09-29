@@ -72,83 +72,74 @@ class OTPService:
     @staticmethod
     def verify_and_release_job(
         db: Session,
-        server_id: str,
-        plaintext_otp: str
+        server_id: str | None = None,
+        plaintext_otp: str = ""
     ) -> PrintJob:
         """
-        Transactional verification of OTP by authenticated print server.
+        Transactional verification of OTP by print server or kiosk web interface.
         Protects against race conditions and brute force attempts.
         """
         hashed_input = hash_sha256(plaintext_otp.strip())
 
-        # Find matching active print jobs for this server
-        # Join PrintJob -> Order -> OTP
-        candidate = (
+        # Find matching order/job for this specific OTP hash directly
+        matching_candidates = (
             db.query(OTP, Order, PrintJob, Document)
             .join(Order, Order.id == OTP.order_id)
             .join(PrintJob, PrintJob.order_id == Order.id)
             .join(Document, Document.id == Order.document_id)
-            .filter(
-                PrintJob.server_id == server_id,
-                OTP.active == True,
-                OTP.used_at == None,
-                Order.status == OrderStatus.WAITING_FOR_OTP
-            )
-            .with_for_update() # Row lock
+            .filter(OTP.otp_hash == hashed_input)
+            .order_by(OTP.id.desc())
+            .with_for_update()
             .all()
         )
 
-        matching_entry = None
-        for otp_rec, order_rec, job_rec, doc_rec in candidate:
-            # Check attempts lockout
-            if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
-                otp_rec.active = False
-                db.commit()
-                raise AppException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    error_code="TOO_MANY_ATTEMPTS",
-                    message="Maximum OTP attempts exceeded. Please request a new OTP."
-                )
-
-            # Check expiration
-            expires = otp_rec.expires_at
-            if expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
-            if expires < datetime.now(timezone.utc):
-                otp_rec.active = False
-                order_rec.status = OrderStatus.EXPIRED
-                db.commit()
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="OTP_EXPIRED",
-                    message="OTP has expired."
-                )
-
-            if otp_rec.otp_hash == hashed_input:
-                matching_entry = (otp_rec, order_rec, job_rec, doc_rec)
-                break
-            else:
-                # Increment failed attempt count
-                otp_rec.attempt_count += 1
-                if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
-                    otp_rec.active = False
-                    db.commit()
-                    raise AppException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        error_code="TOO_MANY_ATTEMPTS",
-                        message="Maximum OTP attempts exceeded. Please request a new OTP."
-                    )
-                db.flush()
-
-        if not matching_entry:
+        if not matching_candidates:
             db.commit()
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="INVALID_OTP",
-                message="Invalid OTP or no matching queued job found for this station."
+                message="Invalid OTP code. Please verify the code displayed on your screen."
             )
 
+        # Pick matching entry for this server if specified, otherwise latest
+        matching_entry = None
+        if server_id:
+            for entry in matching_candidates:
+                if entry[2].server_id == server_id:
+                    matching_entry = entry
+                    break
+        if not matching_entry:
+            matching_entry = matching_candidates[0]
+
         otp_rec, order_rec, job_rec, doc_rec = matching_entry
+
+        # IDEMPOTENCY: If already released, printing, or completed, return successfully
+        if order_rec.status in (OrderStatus.RELEASED, OrderStatus.PRINTING, OrderStatus.COMPLETED):
+            return job_rec
+
+        # Check attempts lockout
+        if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
+            otp_rec.active = False
+            db.commit()
+            raise AppException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                error_code="TOO_MANY_ATTEMPTS",
+                message="Maximum OTP attempts exceeded. Please request a new OTP."
+            )
+
+        # Check expiration
+        expires = otp_rec.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires < datetime.now(timezone.utc):
+            otp_rec.active = False
+            order_rec.status = OrderStatus.EXPIRED
+            db.commit()
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="OTP_EXPIRED",
+                message="OTP has expired. Please place a new print request."
+            )
 
         # Legal state transitions
         validate_order_transition(order_rec.status, OrderStatus.RELEASED)

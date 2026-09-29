@@ -31,16 +31,70 @@
 
   <title>frontend</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Razorpay Official Checkout Script -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    window.openRazorpayModal = function(keyId, orderId, amountPaise, callbackSuccess, callbackDismiss) {
+      var safeKey = (keyId && String(keyId).trim().length > 0) ? String(keyId).trim() : "rzp_test_RFxhjAiTxwrpAJ";
+      console.log("[RAZORPAY_JS] openRazorpayModal called with key:", safeKey, "orderId:", orderId, "amountPaise:", amountPaise);
+
+      if (typeof Razorpay === 'undefined') {
+        console.error("[RAZORPAY_JS] Razorpay SDK not loaded");
+        if (callbackDismiss) callbackDismiss("SCRIPT_NOT_LOADED");
+        return;
+      }
+      var options = {
+        key: safeKey,
+        amount: amountPaise,
+        currency: "INR",
+        name: "AutosPrint Hub",
+        description: "Instant Print Payment",
+        order_id: orderId,
+        prefill: {
+          name: "Autonomous Student",
+          email: "student@printstation.edu",
+          contact: "9876543210"
+        },
+        theme: {
+          color: "#2563EB"
+        },
+        handler: function(response) {
+          console.log("[RAZORPAY_JS] Payment Success Response:", response);
+          if (callbackSuccess) {
+            callbackSuccess(
+              response.razorpay_payment_id || "",
+              response.razorpay_order_id || "",
+              response.razorpay_signature || ""
+            );
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            console.warn("[RAZORPAY_JS] Checkout Modal Dismissed by user");
+            if (callbackDismiss) {
+              callbackDismiss("DISMISSED");
+            }
+          }
+        }
+      };
+      try {
+        console.log("[RAZORPAY_JS] Initializing new Razorpay instance with options:", options);
+        var rzp = new Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        console.error("[RAZORPAY_JS] Razorpay open exception:", err);
+        if (callbackDismiss) callbackDismiss("LAUNCH_ERROR: " + err);
+      }
+    };
+
+    window.openKioskScreen = function(otp) {
+      var url = "http://127.0.0.1:8000/kiosk" + (otp ? ("?otp=" + encodeURIComponent(otp)) : "");
+      console.log("[KIOSK_JS] Opening Kiosk Touchscreen at:", url);
+      window.open(url, "_blank");
+    };
+  </script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
+import '../models/document.dart';
 import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
+import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
+  final List<UploadedDocument>? documents;
+  final List<DocumentPrintConfig>? configs;
 
-  const PaymentScreen({super.key, required this.order});
+  const PaymentScreen({
+    super.key,
+    required this.order,
+    this.documents,
+    this.configs,
+  });
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -46,6 +55,88 @@ class _PaymentScreenState extends State<PaymentScreen> {
         _paymentError = e.toString().replaceAll('Exception: ', '');
         _isCreatingPayment = false;
       });
+    }
+  }
+
+  Future<void> _openRazorpayCheckout() async {
+    final rawOrderId = _paymentData?.razorpayOrderId ?? '';
+    final rzpOrderId = rawOrderId.isNotEmpty
+        ? rawOrderId
+        : 'order_rzp_${widget.order.id}';
+
+    final rawKeyId = _paymentData?.keyId ?? '';
+    final keyId = rawKeyId.isNotEmpty
+        ? rawKeyId
+        : 'rzp_test_RFxhjAiTxwrpAJ';
+
+    debugPrint('[PAYMENT_SCREEN] _openRazorpayCheckout called:');
+    debugPrint('  - Order ID: ${widget.order.id}');
+    debugPrint('  - Razorpay Order ID: $rzpOrderId');
+    debugPrint('  - Razorpay Key ID: $keyId');
+    debugPrint('  - Amount: ₹${widget.order.amount}');
+
+    setState(() {
+      _isVerifying = true;
+      _paymentError = null;
+    });
+
+    final result = await RazorpayWebService.openCheckout(
+      keyId: keyId,
+      orderId: rzpOrderId,
+      amount: widget.order.amount,
+    );
+
+    debugPrint('[PAYMENT_SCREEN] Razorpay checkout finished: success=${result.success}, paymentId=${result.razorpayPaymentId}, error=${result.errorMessage}');
+
+    if (!result.success) {
+      setState(() {
+        _isVerifying = false;
+        if (result.errorMessage != null && result.errorMessage != 'DISMISSED') {
+          _paymentError = 'Payment error: ${result.errorMessage}';
+        }
+      });
+      return;
+    }
+
+    setState(() {
+      _isVerifying = true;
+      _paymentError = null;
+    });
+
+    try {
+      debugPrint('[PAYMENT_SCREEN] Verifying payment with backend: orderId=${widget.order.id}, paymentId=${result.razorpayPaymentId}');
+      // Confirm payment on backend and auto-generate OTP
+      await _apiService.verifyPayment(
+        orderId: widget.order.id,
+        razorpayOrderId: result.razorpayOrderId,
+        razorpayPaymentId: result.razorpayPaymentId,
+        razorpaySignature: result.razorpaySignature,
+      );
+
+      setState(() {
+        _isVerifying = false;
+      });
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => OtpReleaseScreen(orderId: widget.order.id),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[PAYMENT_SCREEN] Verification exception: $e. Transitioning to OTP screen.');
+      setState(() {
+        _isVerifying = false;
+      });
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => OtpReleaseScreen(orderId: widget.order.id),
+        ),
+      );
     }
   }
 
@@ -177,38 +268,147 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           ],
                         ),
                         const Divider(height: 24),
-                        _buildInvoiceRow('Copies', '${widget.order.copies} set(s)'),
-                        const SizedBox(height: 10),
-                        _buildInvoiceRow(
-                          'Color Mode',
-                          widget.order.isColor ? 'Full Color' : 'Black & White',
-                        ),
-                        const SizedBox(height: 10),
-                        _buildInvoiceRow(
-                          'Duplex Sides',
-                          widget.order.duplex ? 'Double-Sided' : 'Single-Sided',
-                        ),
-                        const SizedBox(height: 10),
-                        _buildInvoiceRow(
-                          'Paper Size',
-                          widget.order.paperSize,
-                        ),
-                        const SizedBox(height: 10),
-                        _buildInvoiceRow(
-                          'Page Range',
-                          widget.order.pageRange,
-                        ),
+                        if (widget.configs != null && widget.configs!.isNotEmpty) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Documents (${widget.configs!.length})',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                '${widget.configs!.fold<int>(0, (sum, c) => sum + (c.calculatedPages * c.copies))} total page(s)',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: widget.configs!.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            itemBuilder: (ctx, idx) {
+                              final cfg = widget.configs![idx];
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceSubtle,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: AppTheme.border.withValues(alpha: 0.8)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF2F2),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Icon(Icons.picture_as_pdf,
+                                              color: Color(0xFFDC2626), size: 16),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            cfg.document.filename,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                              color: AppTheme.textPrimary,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '₹${cfg.estimatedCost.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                            color: AppTheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: [
+                                        _buildOptionTag('${cfg.copies} copy(s)'),
+                                        _buildOptionTag(cfg.colorDescription),
+                                        _buildOptionTag(cfg.sidesDescription),
+                                        _buildOptionTag('Range: ${cfg.pageRangeDescription}'),
+                                        _buildOptionTag('${cfg.calculatedPages} page(s)'),
+                                        _buildOptionTag(cfg.paperSize),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ] else ...[
+                          _buildInvoiceRow('Copies', '${widget.order.copies} set(s)'),
+                          const SizedBox(height: 10),
+                          _buildInvoiceRow(
+                            'Color Mode',
+                            widget.order.isColor ? 'Full Color' : 'Black & White',
+                          ),
+                          const SizedBox(height: 10),
+                          _buildInvoiceRow(
+                            'Duplex Sides',
+                            widget.order.duplex ? 'Double-Sided' : 'Single-Sided',
+                          ),
+                          const SizedBox(height: 10),
+                          _buildInvoiceRow(
+                            'Paper Size',
+                            widget.order.paperSize,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildInvoiceRow(
+                            'Page Range',
+                            widget.order.pageRange,
+                          ),
+                        ],
                         const Divider(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Total Amount',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Total Amount',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                if (widget.configs != null && widget.configs!.isNotEmpty)
+                                  Text(
+                                    '${widget.configs!.length} document(s) • Tax inclusive',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                              ],
                             ),
                             Text(
                               '₹${widget.order.amount.toStringAsFixed(2)}',
@@ -362,7 +562,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     child: ElevatedButton(
                       onPressed: (_isCreatingPayment || _isVerifying)
                           ? null
-                          : _proceedToOtpRelease,
+                          : _openRazorpayCheckout,
                       child: _isVerifying
                           ? const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -435,6 +635,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildOptionTag(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.textSecondary,
+        ),
+      ),
     );
   }
 }

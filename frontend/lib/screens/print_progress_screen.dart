@@ -4,6 +4,7 @@ import '../config/theme.dart';
 import '../services/api_service.dart';
 import '../services/print_agent_service.dart';
 import '../widgets/workflow_stepper.dart';
+import '../services/kiosk_launcher.dart';
 import 'upload_screen.dart';
 
 class PrintProgressScreen extends StatefulWidget {
@@ -56,29 +57,39 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Future<void> _triggerRelease() async {
     setState(() {
       _errorMessage = null;
-      _statusMessage = 'Sending 6-digit OTP to printer agent...';
+      _statusMessage = 'Sending 6-digit OTP to printer kiosk...';
       _progressPercent = 25;
     });
 
     try {
-      // 1. Submit OTP to Print Agent /local/release
+      // 1. Submit OTP to Print Agent or backend kiosk endpoint
       final result = await _agentService.releaseJobWithOtp(widget.otp);
 
       if (result['success'] == true) {
         setState(() {
-          _statusMessage = 'Print job accepted by CUPS daemon. Printing...';
+          _statusMessage = 'Print job accepted. Printing pages...';
           _progressPercent = 60;
         });
 
         // 2. Poll order status from backend
         _startStatusPolling();
       } else {
+        // If release returned failure, check if job was already released by Kiosk screen
+        try {
+          final ord = await _apiService.getOrder(widget.orderId);
+          final st = ord.status.toUpperCase();
+          if (st == 'RELEASED' || st == 'PRINTING' || st == 'COMPLETED') {
+            _startStatusPolling();
+            return;
+          }
+        } catch (_) {}
+
         setState(() {
           _errorMessage = result['error'] ?? 'Print agent rejected OTP.';
         });
       }
     } catch (e) {
-      // If direct agent call fails (e.g. cross-network or agent offline), simulate for testing
+      // If direct agent call fails, proceed with polling
       setState(() {
         _statusMessage =
             'Job released at printer kiosk. Printing your document...';
@@ -313,7 +324,20 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
+
+                  TextButton.icon(
+                    onPressed: () {
+                      KioskLauncher.openKioskScreen(widget.otp);
+                    },
+                    icon: const Icon(Icons.desktop_windows_rounded, size: 18),
+                    label: const Text('Open Kiosk Machine Touchscreen View'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
 
                   // Finish CTA
                   if (_isCompleted)

@@ -7,8 +7,10 @@ from app.services.print_service import print_service
 
 local_bp = Blueprint("local", __name__, url_prefix="/local")
 
-@local_bp.route("/status", methods=["GET"])
+@local_bp.route("/status", methods=["GET", "OPTIONS"])
 def get_local_status():
+    if request.method == "OPTIONS":
+        return "", 200
     printer_state, paper_state = printer_monitor.get_printer_status()
     return jsonify({
         "agent_id": config.AGENT_ID,
@@ -18,8 +20,10 @@ def get_local_status():
         "active_jobs_count": len(job_poller.processing_jobs)
     }), 200
 
-@local_bp.route("/release", methods=["POST"])
+@local_bp.route("/release", methods=["POST", "OPTIONS"])
 def local_station_otp_release():
+    if request.method == "OPTIONS":
+        return "", 200
     """
     Endpoint for station touchscreen/keypad input.
     Receives OTP entered physically at the print kiosk.

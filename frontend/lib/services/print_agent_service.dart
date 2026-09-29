@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
@@ -33,10 +34,30 @@ class PrintAgentService {
   }
 
   Future<Map<String, dynamic>> releaseWithOtp(String otp) async {
-    final uri = Uri.parse('$_agentUrl/local/release');
+    // 1. Try local print-agent on port 5000 first
+    try {
+      final uri = Uri.parse('$_agentUrl/local/release');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'otp': otp.trim()}),
+          )
+          .timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      // Local agent unreachable or CORS blocked in browser, fallback to backend
+      debugPrint('[PrintAgentService] Port 5000 call failed, falling back to backend: $e');
+    }
+
+    // 2. Reliable Fallback: Call central FastAPI backend kiosk endpoint
+    final backendUri = Uri.parse('${ApiConfig.baseUrl}/agent/release-kiosk');
     final response = await http
         .post(
-          uri,
+          backendUri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'otp': otp.trim()}),
         )

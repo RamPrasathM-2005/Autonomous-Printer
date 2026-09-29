@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models.order import Order, OrderStatus
+from app.db.models.otp import OTP
 from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.schemas.order import OrderCreateRequest, OrderResponse, OTPResponse
 from app.services.order_service import order_service
@@ -102,7 +103,20 @@ def get_order_otp(
             message="Order not found."
         )
 
-    if order.status != OrderStatus.WAITING_FOR_OTP:
+    # Check if active OTP exists and is unexpired; if not, generate a fresh one
+    now = datetime.now(timezone.utc)
+    active_otp = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
+    is_expired = False
+    if active_otp:
+        exp = active_otp.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < now:
+            is_expired = True
+            active_otp.active = False
+            db.commit()
+
+    if not active_otp or is_expired or order.status != OrderStatus.WAITING_FOR_OTP:
         # Provision print job if not already present
         existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
         if not existing_job:
@@ -113,14 +127,14 @@ def get_order_otp(
                 server_id=order.print_server_id,
                 status=PrintJobStatus.QUEUED,
                 retry_count=0,
-                created_at=datetime.now(timezone.utc)
+                created_at=now
             )
             db.add(print_job)
             db.flush()
 
         otp_service.generate_and_store_otp(db, order.id)
         order.status = OrderStatus.WAITING_FOR_OTP
-        order.updated_at = datetime.now(timezone.utc)
+        order.updated_at = now
         db.commit()
 
     plaintext, expires_at = otp_service.get_otp_for_order(db, order.id)

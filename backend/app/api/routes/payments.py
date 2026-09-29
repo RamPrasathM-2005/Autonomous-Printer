@@ -17,11 +17,14 @@ def create_payment(
     Public payment initiation - no login required.
     Initializes a Razorpay order for the requested print order.
     """
-    return payment_service.create_payment(
+    print(f"\n[BACKEND_PAYMENT] >>> Creating payment for order: {req.orderId}")
+    res = payment_service.create_payment(
         db=db,
         order_id=req.orderId,
         user_id=None
     )
+    print(f"[BACKEND_PAYMENT] <<< Payment Order Ready: keyId={res.keyId}, razorpayOrderId={res.razorpayOrderId}, amountPaise={res.amountPaise}")
+    return res
 
 @router.post("/verify")
 def verify_payment(
@@ -32,13 +35,16 @@ def verify_payment(
     Verifies / confirms payment and transitions order to WAITING_FOR_OTP,
     automatically generating the 6-digit release OTP.
     """
-    return payment_service.verify_or_confirm_payment(
+    print(f"\n[BACKEND_PAYMENT] >>> Verifying payment: orderId={req.orderId}, rzpPaymentId={req.razorpayPaymentId}, rzpOrderId={req.razorpayOrderId}")
+    res = payment_service.verify_or_confirm_payment(
         db=db,
         order_id=req.orderId,
         rzp_order_id=req.razorpayOrderId,
         rzp_payment_id=req.razorpayPaymentId,
         rzp_signature=req.razorpaySignature
     )
+    print(f"[BACKEND_PAYMENT] <<< Payment verification complete for {req.orderId}: status={res.get('status')}")
+    return res
 
 @router.post("/webhook")
 async def razorpay_webhook(

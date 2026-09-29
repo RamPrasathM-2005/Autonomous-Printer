@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../config/api_config.dart';
@@ -184,6 +185,7 @@ class ApiService {
 
   Future<PaymentInitiateResponse> createPayment(String orderId) async {
     final uri = Uri.parse('$_baseUrl/api/payments/create');
+    debugPrint('[FRONTEND API] >>> POST $uri - orderId: $orderId');
     final response = await http
         .post(
           uri,
@@ -192,8 +194,12 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 10));
 
+    debugPrint('[FRONTEND API] <<< POST $uri - status: ${response.statusCode} - body: ${response.body}');
+
     if (response.statusCode == 201 || response.statusCode == 200) {
-      return PaymentInitiateResponse.fromJson(jsonDecode(response.body));
+      final parsed = PaymentInitiateResponse.fromJson(jsonDecode(response.body));
+      debugPrint('[FRONTEND API] Parsed PaymentInitiateResponse -> keyId: ${parsed.keyId}, razorpayOrderId: ${parsed.razorpayOrderId}');
+      return parsed;
     } else {
       try {
         final err = jsonDecode(response.body);
@@ -211,8 +217,9 @@ class ApiService {
     String? razorpayPaymentId,
     String? razorpaySignature,
   }) async {
+    final uri = Uri.parse('$_baseUrl/api/payments/verify');
+    debugPrint('[FRONTEND API] >>> POST $uri - orderId: $orderId, rzpPaymentId: $razorpayPaymentId, rzpOrderId: $razorpayOrderId');
     try {
-      final uri = Uri.parse('$_baseUrl/api/payments/verify');
       final response = await http
           .post(
             uri,
@@ -226,8 +233,10 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 10));
 
+      debugPrint('[FRONTEND API] <<< POST $uri - status: ${response.statusCode} - body: ${response.body}');
       return response.statusCode == 200 || response.statusCode == 201;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[FRONTEND API] !!! POST $uri exception: $e');
       return false;
     }
   }
