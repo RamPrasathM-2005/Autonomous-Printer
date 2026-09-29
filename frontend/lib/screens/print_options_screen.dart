@@ -84,6 +84,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   late List<DocumentPrintConfig> _configs;
   int _selectedDocIndex = 0;
   final TextEditingController _rangeController = TextEditingController();
+  final ScrollController _tabScrollController = ScrollController();
 
   bool _isValidating = false;
   String? _validationError;
@@ -104,6 +105,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   @override
   void dispose() {
     _rangeController.dispose();
+    _tabScrollController.dispose();
     super.dispose();
   }
 
@@ -124,6 +126,28 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         _selectedDocIndex = index;
         _rangeController.text = _configs[index].customRange;
       });
+      // Auto-scroll selected tab into view smoothly
+      if (_tabScrollController.hasClients) {
+        final target = (index * 150.0)
+            .clamp(0.0, _tabScrollController.position.maxScrollExtent);
+        _tabScrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+  }
+
+  void _nextDocument() {
+    if (_selectedDocIndex < _configs.length - 1) {
+      _selectDocument(_selectedDocIndex + 1);
+    }
+  }
+
+  void _prevDocument() {
+    if (_selectedDocIndex > 0) {
+      _selectDocument(_selectedDocIndex - 1);
     }
   }
 
@@ -229,52 +253,149 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Configure Documents (${_configs.length})',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
+                        Row(
+                          children: [
+                            const Icon(Icons.picture_as_pdf_rounded,
+                                size: 18, color: AppTheme.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Documents (${_selectedDocIndex + 1}/${_configs.length})',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ],
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: _appliedToAll
-                                ? const Color(0xFFECFDF5)
-                                : AppTheme.primarySurface,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: _appliedToAll
-                                  ? const Color(0xFF10B981)
-                                  : AppTheme.primary.withValues(alpha: 0.3),
+                        Row(
+                          children: [
+                            // Quick Prev Button
+                            InkWell(
+                              onTap:
+                                  _selectedDocIndex > 0 ? _prevDocument : null,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _selectedDocIndex > 0
+                                      ? AppTheme.surfaceWhite
+                                      : AppTheme.surfaceSubtle,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppTheme.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.chevron_left_rounded,
+                                      size: 16,
+                                      color: _selectedDocIndex > 0
+                                          ? AppTheme.textPrimary
+                                          : AppTheme.textMuted,
+                                    ),
+                                    Text(
+                                      'Prev',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: _selectedDocIndex > 0
+                                            ? AppTheme.textPrimary
+                                            : AppTheme.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            _appliedToAll
-                                ? 'All Settings Synced'
-                                : 'Select tab to configure',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: _appliedToAll
-                                  ? const Color(0xFF065F46)
-                                  : AppTheme.primary,
+                            const SizedBox(width: 6),
+                            // Quick Next Button
+                            InkWell(
+                              onTap: _selectedDocIndex < _configs.length - 1
+                                  ? _nextDocument
+                                  : null,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _selectedDocIndex < _configs.length - 1
+                                      ? AppTheme.surfaceWhite
+                                      : AppTheme.surfaceSubtle,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppTheme.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'Next',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: _selectedDocIndex <
+                                                _configs.length - 1
+                                            ? AppTheme.textPrimary
+                                            : AppTheme.textMuted,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 16,
+                                      color: _selectedDocIndex <
+                                              _configs.length - 1
+                                          ? AppTheme.textPrimary
+                                          : AppTheme.textMuted,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
 
-                    // Horizontal PDF tabs
-                    SizedBox(
-                      height: 48,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _configs.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    // Horizontal PDF tabs with side scroll chevrons
+                    Row(
+                      children: [
+                        if (_configs.length > 2) ...[
+                          InkWell(
+                            onTap: () {
+                              if (_tabScrollController.hasClients) {
+                                _tabScrollController.animateTo(
+                                  (_tabScrollController.offset - 160)
+                                      .clamp(0.0, _tabScrollController.position.maxScrollExtent),
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOut,
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              height: 46,
+                              width: 28,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceWhite,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.border),
+                              ),
+                              child: const Icon(Icons.chevron_left_rounded,
+                                  size: 20, color: AppTheme.textSecondary),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ListView.separated(
+                              controller: _tabScrollController,
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _configs.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
                         itemBuilder: (ctx, index) {
                           final cfg = _configs[index];
                           final isSelected = index == _selectedDocIndex;
@@ -374,7 +495,38 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  if (_configs.length > 2) ...[
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () {
+                        if (_tabScrollController.hasClients) {
+                          _tabScrollController.animateTo(
+                            (_tabScrollController.offset + 160).clamp(
+                                0.0, _tabScrollController.position.maxScrollExtent),
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOut,
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 46,
+                        width: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceWhite,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppTheme.border),
+                        ),
+                        child: const Icon(Icons.chevron_right_rounded,
+                            size: 20, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 12),
 
                     // ONE Global Apply Settings to All Button Card
                     Container(
@@ -529,6 +681,61 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             ],
                           ),
                         ),
+                        if (_configs.length > 1) ...[
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Tooltip(
+                                message: 'Previous document',
+                                child: InkWell(
+                                  onTap: _selectedDocIndex > 0 ? _prevDocument : null,
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: _selectedDocIndex > 0
+                                          ? AppTheme.surfaceSubtle
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(
+                                      Icons.chevron_left_rounded,
+                                      size: 20,
+                                      color: _selectedDocIndex > 0
+                                          ? AppTheme.textPrimary
+                                          : AppTheme.textSecondary.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Tooltip(
+                                message: 'Next document',
+                                child: InkWell(
+                                  onTap: _selectedDocIndex < _configs.length - 1 ? _nextDocument : null,
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: _selectedDocIndex < _configs.length - 1
+                                          ? AppTheme.surfaceSubtle
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 20,
+                                      color: _selectedDocIndex < _configs.length - 1
+                                          ? AppTheme.textPrimary
+                                          : AppTheme.textSecondary.withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -868,58 +1075,66 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                     child: Column(
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Total Estimated Cost',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                    if (_configs.length > 1) ...[
-                                      const SizedBox(width: 6),
-                                      InkWell(
-                                        onTap: () {
-                                          setState(() {
-                                            _showCostBreakdown =
-                                                !_showCostBreakdown;
-                                          });
-                                        },
-                                        child: Icon(
-                                          _showCostBreakdown
-                                              ? Icons.expand_less
-                                              : Icons.expand_more,
-                                          size: 18,
-                                          color: AppTheme.primary,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Flexible(
+                                        child: Text(
+                                          'Total Estimated Cost',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
+                                      if (_configs.length > 1) ...[
+                                        const SizedBox(width: 6),
+                                        InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              _showCostBreakdown =
+                                                  !_showCostBreakdown;
+                                            });
+                                          },
+                                          child: Icon(
+                                            _showCostBreakdown
+                                                ? Icons.expand_less
+                                                : Icons.expand_more,
+                                            size: 18,
+                                            color: AppTheme.primary,
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.primary,
                                   ),
-                                ),
-                                Text(
-                                  '$_totalCalculatedPages Total Pages across ${_configs.length} Document(s)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primary,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Text(
+                                    '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 10),
                             ElevatedButton(
                               onPressed: _isValidating ? null : _submitOrder,
                               child: _isValidating
