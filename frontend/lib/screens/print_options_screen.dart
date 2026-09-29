@@ -11,7 +11,8 @@ class DocumentPrintConfig {
   int copies;
   bool isColor;
   String sides; // 'one-sided' or 'two-sided-long-edge'
-  String paperSize; // 'A4', 'Letter', 'Legal'
+  String paperSize; // Fixed to 'A4'
+  String orientation; // 'portrait' or 'landscape'
   bool isCustomRange;
   String customRange;
 
@@ -21,6 +22,7 @@ class DocumentPrintConfig {
     this.isColor = false,
     this.sides = 'one-sided',
     this.paperSize = 'A4',
+    this.orientation = 'portrait',
     this.isCustomRange = false,
     this.customRange = '',
   });
@@ -123,7 +125,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         _configs[i].copies = current.copies;
         _configs[i].isColor = current.isColor;
         _configs[i].sides = current.sides;
-        _configs[i].paperSize = current.paperSize;
+        _configs[i].paperSize = 'A4';
+        _configs[i].orientation = current.orientation;
         _configs[i].isCustomRange = current.isCustomRange;
         _configs[i].customRange = current.customRange;
       }
@@ -160,7 +163,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         copies: current.copies,
         colour: current.isColor,
         sides: current.sides,
-        paperSize: current.paperSize,
+        paperSize: 'A4',
+        orientation: current.orientation,
         pageRange: current.isCustomRange && current.customRange.trim().isNotEmpty
             ? current.customRange.trim()
             : 'all',
@@ -522,52 +526,35 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                   const SizedBox(height: 14),
 
-                  // Option 4: Paper Size
+                  // Option 4: Orientation
                   _buildSectionCard(
-                    title: 'Paper Size',
+                    title: 'Orientation (A4 Paper)',
                     child: Row(
-                      children: ['A4', 'Letter', 'Legal'].map((size) {
-                        final isSelected = _currentConfig.paperSize == size;
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: InkWell(
-                              onTap: () => setState(
-                                  () => _currentConfig.paperSize = size),
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppTheme.primarySurface
-                                      : AppTheme.surfaceWhite,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppTheme.primary
-                                        : AppTheme.border,
-                                    width: isSelected ? 1.5 : 1,
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  size,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isSelected
-                                        ? AppTheme.primary
-                                        : AppTheme.textPrimary,
-                                  ),
-                                ),
-                              ),
-                            ),
+                      children: [
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Portrait',
+                            subtitle: 'Vertical layout',
+                            icon: Icons.portrait_rounded,
+                            isSelected:
+                                _currentConfig.orientation == 'portrait',
+                            onTap: () => setState(
+                                () => _currentConfig.orientation = 'portrait'),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Landscape',
+                            subtitle: 'Horizontal layout',
+                            icon: Icons.landscape_rounded,
+                            isSelected:
+                                _currentConfig.orientation == 'landscape',
+                            onTap: () => setState(
+                                () => _currentConfig.orientation = 'landscape'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -831,7 +818,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${c.document.filename} (${c.copies}x, ${c.isColor ? "Color" : "B/W"})',
+                                        '${c.document.filename} (${c.copies}x, ${c.isColor ? "Color" : "B/W"}, ${c.orientation == "landscape" ? "Landscape" : "Portrait"})',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: AppTheme.textSecondary,

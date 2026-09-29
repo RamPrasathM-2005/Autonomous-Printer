@@ -36,7 +36,6 @@ class _UploadScreenState extends State<UploadScreen> {
   String _uploadStatusText = '';
   String? _uploadError;
 
-  List<PrintServer> _stations = [];
   PrintServer? _selectedStation;
   bool _isLoadingStations = true;
 
@@ -50,7 +49,6 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       final stations = await _apiService.fetchPrintServers();
       setState(() {
-        _stations = stations;
         if (stations.isNotEmpty) {
           _selectedStation = stations.firstWhere(
             (s) => s.status.toLowerCase() == 'online',

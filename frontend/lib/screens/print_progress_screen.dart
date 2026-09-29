@@ -30,9 +30,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   late AnimationController _animController;
   Timer? _pollTimer;
 
-  bool _isReleasing = true;
   String? _errorMessage;
-  String _currentStatus = 'INITIALIZING';
   String _statusMessage = 'Connecting to local printer kiosk...';
   int _progressPercent = 10;
   bool _isCompleted = false;
@@ -57,7 +55,6 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
 
   Future<void> _triggerRelease() async {
     setState(() {
-      _isReleasing = true;
       _errorMessage = null;
       _statusMessage = 'Sending 6-digit OTP to printer agent...';
       _progressPercent = 25;
@@ -69,8 +66,6 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
 
       if (result['success'] == true) {
         setState(() {
-          _isReleasing = false;
-          _currentStatus = 'PRINTING';
           _statusMessage = 'Print job accepted by CUPS daemon. Printing...';
           _progressPercent = 60;
         });
@@ -79,15 +74,12 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
         _startStatusPolling();
       } else {
         setState(() {
-          _isReleasing = false;
           _errorMessage = result['error'] ?? 'Print agent rejected OTP.';
         });
       }
     } catch (e) {
       // If direct agent call fails (e.g. cross-network or agent offline), simulate for testing
       setState(() {
-        _isReleasing = false;
-        _currentStatus = 'PRINTING';
         _statusMessage =
             'Job released at printer kiosk. Printing your document...';
         _progressPercent = 65;
@@ -108,7 +100,6 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
           timer.cancel();
           _animController.stop();
           setState(() {
-            _currentStatus = 'COMPLETED';
             _statusMessage = 'Printing completed successfully!';
             _progressPercent = 100;
             _isCompleted = true;
@@ -126,7 +117,6 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
           timer.cancel();
           _animController.stop();
           setState(() {
-            _currentStatus = 'COMPLETED';
             _statusMessage = 'Printing completed successfully!';
             _progressPercent = 100;
             _isCompleted = true;
