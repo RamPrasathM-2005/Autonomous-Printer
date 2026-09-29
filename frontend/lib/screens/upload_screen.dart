@@ -5,9 +5,7 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
-import 'orders_history_screen.dart';
 import 'print_options_screen.dart';
-import 'settings_screen.dart';
 
 class SelectedDocItem {
   final String name;
@@ -214,32 +212,8 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Order History',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (ctx) => const OrdersHistoryScreen(),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (ctx) => const SettingsScreen(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 4),
+        actions: const [
+          SizedBox(width: 12),
         ],
       ),
       body: Column(
