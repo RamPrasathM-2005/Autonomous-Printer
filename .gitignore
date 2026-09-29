@@ -18,6 +18,12 @@ build/
 __pycache__/
 *.pyc
 
+# IDE & local configurations
+.idea/
+*.iml
+local.properties
+.gradle/
+
 # System files
 .DS_Store
 Thumbs.db
