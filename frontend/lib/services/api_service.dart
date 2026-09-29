@@ -204,7 +204,35 @@ class ApiService {
     }
   }
 
-  // 8. Payment Simulation & Webhook trigger
+  // 8. Payment Verification & Confirmation (Transitions order to WAITING_FOR_OTP and generates OTP)
+  Future<bool> verifyPayment({
+    required String orderId,
+    String? razorpayOrderId,
+    String? razorpayPaymentId,
+    String? razorpaySignature,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/payments/verify');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'orderId': orderId,
+              'razorpayOrderId': razorpayOrderId,
+              'razorpayPaymentId': razorpayPaymentId,
+              'razorpaySignature': razorpaySignature,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // 9. Payment Simulation & Webhook trigger
   // For local testing & seamless development, simulates successful Razorpay payment verification
   Future<bool> simulatePaymentVerification({
     required String orderId,
@@ -240,7 +268,10 @@ class ApiService {
       final response = await http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Razorpay-Signature': 'dev_simulated_sig',
+            },
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 8));

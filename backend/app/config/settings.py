@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     PER_PAGE_RATE: float = 2.50
     BASE_FEE: float = 1.00
 
-    RAZORPAY_KEY_ID: str = "rzp_test_key_id"
-    RAZORPAY_KEY_SECRET: str = "rzp_test_key_secret"
+    RAZORPAY_KEY_ID: str = "rzp_test_RFxhjAiTxwrpAJ"
+    RAZORPAY_KEY_SECRET: str = "f7jSae5XJ4V6EfZIYTUpWB7q"
     RAZORPAY_WEBHOOK_SECRET: str = "rzp_test_webhook_secret"
 
     AGENT_REQUEST_TIMEOUT_SECONDS: int = 10

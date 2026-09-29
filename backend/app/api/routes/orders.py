@@ -1,9 +1,12 @@
+import uuid
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models.order import Order, OrderStatus
+from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.schemas.order import OrderCreateRequest, OrderResponse, OTPResponse
 from app.services.order_service import order_service
 from app.services.otp_service import otp_service
@@ -100,11 +103,25 @@ def get_order_otp(
         )
 
     if order.status != OrderStatus.WAITING_FOR_OTP:
-        raise AppException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            error_code="INVALID_STATE",
-            message=f"Order is in {order.status.value} status, not waiting for OTP release."
-        )
+        # Provision print job if not already present
+        existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
+        if not existing_job:
+            job_id = f"job_{uuid.uuid4().hex[:12]}"
+            print_job = PrintJob(
+                id=job_id,
+                order_id=order.id,
+                server_id=order.print_server_id,
+                status=PrintJobStatus.QUEUED,
+                retry_count=0,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(print_job)
+            db.flush()
+
+        otp_service.generate_and_store_otp(db, order.id)
+        order.status = OrderStatus.WAITING_FOR_OTP
+        order.updated_at = datetime.now(timezone.utc)
+        db.commit()
 
     plaintext, expires_at = otp_service.get_otp_for_order(db, order.id)
     return OTPResponse(

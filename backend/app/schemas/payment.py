@@ -48,3 +48,22 @@ class PaymentResponse(BaseModel):
     currency: str
     status: PaymentStatus
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
+
+class PaymentVerifyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    orderId: str = Field(..., alias="orderId")
+    razorpayOrderId: Optional[str] = Field(default=None, alias="razorpayOrderId")
+    razorpayPaymentId: Optional[str] = Field(default=None, alias="razorpayPaymentId")
+    razorpaySignature: Optional[str] = Field(default=None, alias="razorpaySignature")
+
+    def __init__(self, **data):
+        if "order_id" in data and "orderId" not in data:
+            data["orderId"] = data.pop("order_id")
+        if "razorpay_order_id" in data and "razorpayOrderId" not in data:
+            data["razorpayOrderId"] = data.pop("razorpay_order_id")
+        if "razorpay_payment_id" in data and "razorpayPaymentId" not in data:
+            data["razorpayPaymentId"] = data.pop("razorpay_payment_id")
+        if "razorpay_signature" in data and "razorpaySignature" not in data:
+            data["razorpaySignature"] = data.pop("razorpay_signature")
+        super().__init__(**data)

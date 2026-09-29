@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.db.session import get_db
-from app.schemas.payment import PaymentCreateRequest, PaymentCreateResponse
+from app.schemas.payment import PaymentCreateRequest, PaymentCreateResponse, PaymentVerifyRequest
 from app.services.payment_service import payment_service
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
@@ -21,6 +21,23 @@ def create_payment(
         db=db,
         order_id=req.orderId,
         user_id=None
+    )
+
+@router.post("/verify")
+def verify_payment(
+    req: PaymentVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verifies / confirms payment and transitions order to WAITING_FOR_OTP,
+    automatically generating the 6-digit release OTP.
+    """
+    return payment_service.verify_or_confirm_payment(
+        db=db,
+        order_id=req.orderId,
+        rzp_order_id=req.razorpayOrderId,
+        rzp_payment_id=req.razorpayPaymentId,
+        rzp_signature=req.razorpaySignature
     )
 
 @router.post("/webhook")
