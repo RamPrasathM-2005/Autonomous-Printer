@@ -19,7 +19,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(String(64), primary_key=True, index=True) # e.g. ORD-20260929-0001
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     document_id = Column(String(64), ForeignKey("documents.id"), nullable=False, index=True)
     print_server_id = Column(String(64), ForeignKey("print_servers.id"), nullable=False, index=True)
     

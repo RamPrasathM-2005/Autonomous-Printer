@@ -1,0 +1,98 @@
+import sys
+from pathlib import Path
+
+# Ensure backend root is in sys.path
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from datetime import datetime, timezone
+from app.config.database import SessionLocal, engine
+from app.db.base import Base
+from app.db.models.user import User, UserRole
+from app.db.models.print_server import PrintServer, PrintServerStatus
+from app.db.models.printer import Printer
+from app.config.security import hash_password, hash_token
+
+def seed():
+    # Ensure tables exist
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+
+    try:
+        print("[INFO] Seeding database...")
+
+        # 1. Admin user
+        admin = db.query(User).filter(User.email == "admin@printplatform.local").first()
+        if not admin:
+            admin = User(
+                email="admin@printplatform.local",
+                phone="1000000000",
+                full_name="Platform Administrator",
+                password_hash=hash_password("AdminPass123!"),
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            db.add(admin)
+            print("  - Created admin user: admin@printplatform.local (Password: AdminPass123!)")
+
+        # 2. Demo student user
+        student = db.query(User).filter(User.email == "student@example.com").first()
+        if not student:
+            student = User(
+                email="student@example.com",
+                phone="9876543210",
+                full_name="Demo Student",
+                password_hash=hash_password("Password123!"),
+                role=UserRole.USER,
+                is_active=True
+            )
+            db.add(student)
+            print("  - Created student user: student@example.com (Password: Password123!)")
+
+        # 3. Print Server Station PRINT-SERVER-001
+        server = db.query(PrintServer).filter(PrintServer.id == "PRINT-SERVER-001").first()
+        default_token = "test-agent-device-token-secret"
+        token_hash = hash_token(default_token)
+
+        if not server:
+            server = PrintServer(
+                id="PRINT-SERVER-001",
+                name="Central Library Station",
+                location="Main Campus Library Floor 1",
+                device_token_hash=token_hash,
+                status=PrintServerStatus.ONLINE,
+                last_heartbeat=datetime.now(timezone.utc),
+                printer_state="READY",
+                paper_state="AVAILABLE"
+            )
+            db.add(server)
+            print(f"  - Created print station: PRINT-SERVER-001 (Device Token: {default_token})")
+        else:
+            # Update token hash if needed
+            server.device_token_hash = token_hash
+            server.status = PrintServerStatus.ONLINE
+
+        # 4. Printers attached to station
+        printer = db.query(Printer).filter(Printer.id == "printer_central_01").first()
+        if not printer:
+            printer = Printer(
+                id="printer_central_01",
+                server_id="PRINT-SERVER-001",
+                cups_printer_name="Default_Office_Printer",
+                display_name="Canon imageRUNNER ADVANCE",
+                supports_color=True,
+                supports_duplex=True,
+                is_active=True
+            )
+            db.add(printer)
+            print("  - Created printer: Default_Office_Printer (Color, Duplex)")
+
+        db.commit()
+        print("[SUCCESS] Database seeding complete!")
+
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    seed()

@@ -1,0 +1,1946 @@
+# Self-Service Printing Platform
+## React Native + FastAPI + MySQL + Linux File Storage + Flask Print Agent + CUPS
+
+---
+
+## 1. Project Overview
+
+This project is a self-service printing platform where users upload documents from a React Native mobile application, select their printing options, make payment through Razorpay, enter an OTP at the printing station, and receive their printed documents.
+
+The complete system is hosted and operated using a single Ubuntu/Linux machine.
+
+### Main technologies
+
+```text
+Mobile App       → React Native
+Backend          → FastAPI
+Database         → MySQL
+File Storage     → Linux PC HDD / filesystem
+Payment          → Razorpay
+Print Agent      → Flask
+Printer Control  → CUPS
+Reverse Proxy    → Nginx
+```
+
+### Services NOT used
+
+```text
+Firebase                  ❌
+Firestore                 ❌
+Firebase Authentication   ❌
+Cloudinary                ❌
+Amazon S3                 ❌
+Cloud Storage             ❌
+React Web Hosting         ❌
+```
+
+The React Native application runs on the user's phone. It does not need to be hosted as a website.
+
+---
+
+# 2. Main User Workflow
+
+The most important workflow of this project is:
+
+```text
+APP OPEN
+   ↓
+UPLOAD / SELECT FILE
+   ↓
+FILE UPLOADED TO FASTAPI
+   ↓
+FILE STORED ON LINUX HDD
+   ↓
+PRINT OPTIONS PAGE
+   ↓
+USER SELECTS PRINT OPTIONS
+   ↓
+BACKEND VALIDATES THE JOB
+   ↓
+JOB ACCEPTED?
+   │
+   ├── NO
+   │    ↓
+   │  Show reason
+   │
+   └── YES
+        ↓
+     CALCULATE PRICE
+        ↓
+     PAYMENT PAGE
+        ↓
+     RAZORPAY PAYMENT
+        ↓
+     PAYMENT VERIFIED BY BACKEND
+        ↓
+     PRINT JOB QUEUED
+        ↓
+     OTP PAGE
+        ↓
+     USER ENTERS OTP AT PRINT STATION
+        ↓
+     BACKEND VERIFIES OTP
+        ↓
+     CORRECT USER + CORRECT FILE + CORRECT JOB
+        ↓
+     PRINT JOB RELEASED
+        ↓
+     FLASK PRINT AGENT
+        ↓
+     CUPS
+        ↓
+     PHYSICAL PRINTER
+        ↓
+     PAPER PRINTED
+        ↓
+     JOB COMPLETED
+```
+
+---
+
+# 3. Important Design Principle
+
+The **backend is the source of truth**.
+
+The React Native app only requests operations.
+
+It must NOT decide:
+
+```text
+Whether a job is accepted
+Whether payment is successful
+Whether OTP is correct
+Whether a print job is allowed
+Whether a print job is completed
+Whether a refund is required
+```
+
+Those decisions are made by FastAPI.
+
+---
+
+# 4. Complete System Architecture
+
+```text
+                         USER
+                          │
+                          ▼
+                ┌──────────────────┐
+                │  React Native    │
+                │      App         │
+                └────────┬─────────┘
+                         │
+                         │ HTTPS
+                         ▼
+              ┌──────────────────────┐
+              │       Nginx          │
+              │   Reverse Proxy      │
+              └──────────┬───────────┘
+                         │
+                         ▼
+              ┌──────────────────────┐
+              │       FastAPI        │
+              │    Main Backend      │
+              └───────┬──────┬───────┘
+                      │      │
+             ┌────────┘      └───────────────┐
+             ▼                               ▼
+      ┌─────────────┐               ┌─────────────────┐
+      │    MySQL    │               │  Linux HDD      │
+      │             │               │                 │
+      │ Users       │               │ Original files  │
+      │ Orders      │               │ PDF             │
+      │ Payments    │               │ JPG             │
+      │ Jobs        │               │ PNG             │
+      │ OTP         │               └─────────────────┘
+      └─────────────┘
+                      │
+                      ▼
+              ┌──────────────────┐
+              │   Flask Agent    │
+              │ Print Controller │
+              └────────┬─────────┘
+                       │
+                       ▼
+                    ┌──────┐
+                    │ CUPS │
+                    └──┬───┘
+                       │
+                       ▼
+                    PRINTER
+```
+
+---
+
+# 5. Application Opening Workflow
+
+When the React Native application opens:
+
+```text
+React Native App
+      ↓
+Check authentication
+      ↓
+Load initial application state
+      ↓
+Show Upload File screen
+```
+
+The first major user action is:
+
+```text
+Upload / Select File
+```
+
+Example:
+
+```text
+┌──────────────────────────────┐
+│      SELF PRINTING           │
+│                              │
+│      Select your file        │
+│                              │
+│     [ Upload File ]          │
+│                              │
+│     PDF / JPG / PNG          │
+└──────────────────────────────┘
+```
+
+---
+
+# 6. File Upload Workflow
+
+When the user selects a file:
+
+```text
+React Native
+      │
+      │ multipart/form-data
+      ▼
+POST /api/documents/upload
+      │
+      ▼
+FastAPI
+```
+
+FastAPI performs:
+
+```text
+1. Authenticate user
+2. Validate file
+3. Validate file size
+4. Validate file type
+5. Validate actual file content
+6. Generate document ID
+7. Generate secure stored filename
+8. Save file to Linux HDD
+9. Calculate SHA-256 checksum
+10. Determine page count
+11. Store document metadata in MySQL
+12. Return document information
+```
+
+---
+
+# 7. Physical File Storage
+
+The original uploaded file is stored on the Linux machine.
+
+Recommended:
+
+```text
+/var/lib/printplatform/storage/
+```
+
+Example:
+
+```text
+/var/lib/printplatform/storage/
+└── documents/
+    └── user_42/
+        └── 7c91d2e8.pdf
+```
+
+MySQL stores only the metadata and storage key.
+
+Example:
+
+```text
+storage_key:
+documents/user_42/7c91d2e8.pdf
+```
+
+The actual file remains on the Linux HDD.
+
+---
+
+# 8. Why MySQL Does Not Store the File
+
+The system separates:
+
+```text
+Structured Data
+        ↓
+      MySQL
+```
+
+from:
+
+```text
+Original File
+        ↓
+Linux HDD
+```
+
+MySQL stores:
+
+```text
+Document ID
+User ID
+Original filename
+Stored filename
+Storage key
+MIME type
+File size
+SHA-256
+Page count
+Status
+Created time
+```
+
+The actual PDF/JPG/PNG remains on the Linux filesystem.
+
+---
+
+# 9. After Upload: Print Options Page
+
+After successful upload:
+
+```text
+Upload successful
+       ↓
+Backend returns document ID
+       ↓
+React Native opens Print Options screen
+```
+
+Example options:
+
+```text
+Document:
+project.pdf
+
+Pages:
+1-10
+
+Copies:
+2
+
+Colour:
+B/W
+Colour
+
+Sides:
+Single-sided
+Double-sided
+
+Paper:
+A4
+
+Orientation:
+Portrait
+Landscape
+```
+
+The exact options should be determined by the printer capabilities configured in the backend.
+
+---
+
+# 10. Print Options Request
+
+The app sends:
+
+```http
+POST /api/orders/validate
+```
+
+Example:
+
+```json
+{
+  "documentId": "doc_001",
+  "printServerId": "PRINT-SERVER-001",
+  "pageRange": "1-10",
+  "copies": 2,
+  "colour": false,
+  "sides": "two-sided-long-edge",
+  "paperSize": "A4",
+  "orientation": "portrait"
+}
+```
+
+---
+
+# 11. Backend Job Validation
+
+This is a critical step.
+
+The backend must decide whether the requested print job is acceptable.
+
+The backend checks:
+
+```text
+1. Is the user authenticated?
+2. Does the document exist?
+3. Does the document belong to the user?
+4. Is the document active?
+5. Does the physical file exist?
+6. Is the file valid?
+7. Is the requested page range valid?
+8. Is the number of copies valid?
+9. Is the requested paper size supported?
+10. Is colour printing supported?
+11. Is duplex printing supported?
+12. Is the printer online?
+13. Is the print server online?
+14. Is the requested job within configured limits?
+15. Is the document still within its retention period?
+16. Is the requested print configuration valid?
+```
+
+Only after all required checks pass:
+
+```text
+JOB ACCEPTED
+```
+
+---
+
+# 12. Job Validation Result
+
+### Accepted
+
+```json
+{
+  "accepted": true,
+  "documentId": "doc_001",
+  "pageCount": 10,
+  "printablePages": 10,
+  "estimatedPrice": 26.00,
+  "currency": "INR"
+}
+```
+
+The mobile application then moves to:
+
+```text
+Payment Page
+```
+
+### Rejected
+
+```json
+{
+  "accepted": false,
+  "error": "PRINTER_UNAVAILABLE",
+  "message": "The selected printer is currently unavailable."
+}
+```
+
+The mobile application stays on the print-options page and displays the reason.
+
+---
+
+# 13. Important Rule
+
+Do not allow:
+
+```text
+Frontend says:
+"Job accepted"
+```
+
+The backend must explicitly return:
+
+```text
+accepted = true
+```
+
+The frontend only displays the backend decision.
+
+---
+
+# 14. Price Calculation
+
+Once the job is accepted, FastAPI calculates the final price.
+
+Example:
+
+```text
+Pages = 5
+Copies = 2
+Rate = ₹2/page
+
+5 × 2 × ₹2
+= ₹20
+```
+
+If additional charges exist:
+
+```text
+Printing cost
++ service fee
++ other configured fees
+= final amount
+```
+
+The price is calculated by the backend.
+
+The frontend must not be trusted to provide the final amount.
+
+---
+
+# 15. Payment Page
+
+Only after the backend accepts the print job:
+
+```text
+Job accepted
+      ↓
+Price calculated
+      ↓
+Create payment order
+      ↓
+Razorpay
+      ↓
+React Native Payment Page
+```
+
+Endpoint:
+
+```http
+POST /api/payments/create
+```
+
+The backend creates the Razorpay payment order.
+
+The mobile app then opens Razorpay checkout.
+
+---
+
+# 16. Payment Verification
+
+The important rule is:
+
+```text
+Frontend payment callback
+        ≠
+Final payment confirmation
+```
+
+The backend must verify the Razorpay webhook.
+
+Workflow:
+
+```text
+User pays
+   ↓
+Razorpay
+   ↓
+Razorpay Webhook
+   ↓
+FastAPI
+   ↓
+Verify signature
+   ↓
+Verify amount
+   ↓
+Verify order
+   ↓
+Mark payment successful
+```
+
+Only then should the print job move forward.
+
+---
+
+# 17. Payment Failure
+
+If payment fails:
+
+```text
+PAYMENT_FAILED
+```
+
+The job must NOT be released for printing.
+
+The user can return to the appropriate payment/error page.
+
+The backend must not generate a printable job simply because the mobile app says that payment succeeded.
+
+---
+
+# 18. After Successful Payment
+
+Once the backend receives and verifies successful payment:
+
+```text
+Payment successful
+       ↓
+Create print job
+       ↓
+Generate OTP
+       ↓
+Job = WAITING_FOR_OTP
+```
+
+The mobile app now moves to:
+
+```text
+OTP Page
+```
+
+---
+
+# 19. OTP Page
+
+Example:
+
+```text
+┌──────────────────────────────┐
+│       PRINT JOB READY        │
+│                              │
+│ Enter the OTP at the         │
+│ printing station             │
+│                              │
+│ OTP: 483921                  │
+│                              │
+│ Status: Waiting for OTP      │
+└──────────────────────────────┘
+```
+
+The OTP identifies the user's paid print job.
+
+The OTP should be unique enough within the active OTP set and must be securely generated.
+
+---
+
+# 20. Multiple Users and FCFS
+
+This is an important part of the architecture.
+
+Suppose three users submit jobs:
+
+```text
+User A → File A → OTP 123456
+User B → File B → OTP 789012
+User C → File C → OTP 456789
+```
+
+The backend creates a queue:
+
+```text
+QUEUE
+│
+├── Job A
+├── Job B
+└── Job C
+```
+
+The default queue order is:
+
+```text
+First accepted/paid job
+        ↓
+Second accepted/paid job
+        ↓
+Third accepted/paid job
+```
+
+This is **FCFS — First Come, First Served**.
+
+However, the OTP does NOT mean:
+
+```text
+"Print any file matching this OTP."
+```
+
+The OTP is linked to exactly one print job.
+
+---
+
+# 21. OTP-to-Job Mapping
+
+Example database relationship:
+
+```text
+User A
+   │
+   └── Order A
+          │
+          └── Print Job A
+                 │
+                 └── OTP 123456
+```
+
+User B:
+
+```text
+User B
+   │
+   └── Order B
+          │
+          └── Print Job B
+                 │
+                 └── OTP 789012
+```
+
+Therefore:
+
+```text
+OTP 123456 → ONLY Job A
+OTP 789012 → ONLY Job B
+```
+
+The agent must never select a file based only on queue position.
+
+It must use the backend-authorized job identity.
+
+---
+
+# 22. FCFS Queue + OTP Relationship
+
+The recommended behavior is:
+
+```text
+                         PRINT QUEUE
+                              │
+                ┌─────────────┼─────────────┐
+                ▼             ▼             ▼
+             Job A         Job B         Job C
+             OTP A         OTP B         OTP C
+                │             │             │
+                ▼             ▼             ▼
+            User A         User B         User C
+```
+
+Jobs are ordered FCFS.
+
+But the OTP is used to authorize the correct job.
+
+### Example
+
+```text
+Queue:
+
+1. Job A
+2. Job B
+3. Job C
+```
+
+User B enters OTP B.
+
+The system identifies:
+
+```text
+OTP B → Job B
+```
+
+The backend must not print Job A merely because Job A is first in the queue.
+
+Instead, the station can only release a job when the OTP matches that job.
+
+---
+
+# 23. Important Queue Decision
+
+There are two different concepts:
+
+### Queue order
+
+Determines which jobs are normally processed first:
+
+```text
+A → B → C
+```
+
+### OTP authorization
+
+Determines which specific paid job the person is authorized to release:
+
+```text
+OTP A → A
+OTP B → B
+OTP C → C
+```
+
+These should not be mixed together.
+
+---
+
+# 24. Recommended Station Behavior
+
+When a user reaches the print station:
+
+```text
+User enters OTP
+       ↓
+Flask Agent
+       ↓
+FastAPI
+       ↓
+Find job by OTP
+       ↓
+Validate OTP
+       ↓
+Validate job
+       ↓
+Check station/print-server ownership
+       ↓
+Check job state
+       ↓
+Check whether job is allowed to print
+```
+
+If valid:
+
+```text
+JOB → RELEASED
+```
+
+If invalid:
+
+```text
+REJECT
+```
+
+---
+
+# 25. FCFS Handling at the Printer
+
+For physical printer safety, the backend should maintain a queue.
+
+Recommended logic:
+
+```text
+PAID jobs are placed in FCFS order.
+
+Only jobs that are:
+    - paid
+    - valid
+    - assigned to this printer
+    - OTP-authorized
+    - not already printing
+can be released.
+
+The printer processes one physical job at a time unless the printer
+configuration explicitly supports safe concurrent queue submission.
+```
+
+This prevents two users from physically interfering with the same printer.
+
+---
+
+# 26. Example: Multiple Users
+
+Suppose:
+
+```text
+10:00:01 → User A uploads File A
+10:00:05 → User B uploads File B
+10:00:08 → User C uploads File C
+```
+
+After option validation and payment:
+
+```text
+10:01 → Job A PAID
+10:02 → Job B PAID
+10:03 → Job C PAID
+```
+
+Queue:
+
+```text
+1. Job A
+2. Job B
+3. Job C
+```
+
+OTP mapping:
+
+```text
+OTP-A → Job A
+OTP-B → Job B
+OTP-C → Job C
+```
+
+If User B enters OTP-B:
+
+```text
+OTP-B
+   ↓
+Job B
+   ↓
+Verify
+   ↓
+Release Job B
+```
+
+The system must not accidentally print:
+
+```text
+Job A
+```
+
+just because Job A was first in the queue.
+
+---
+
+# 27. Print Release Workflow
+
+The actual release flow is:
+
+```text
+User enters OTP
+       ↓
+Flask Agent
+       ↓
+POST /api/agent/release
+       ↓
+FastAPI
+       ↓
+Find OTP
+       ↓
+Find associated order
+       ↓
+Find associated print job
+       ↓
+Validate user/job/station relationship
+       ↓
+Validate OTP
+       ↓
+Validate job state
+       ↓
+Mark OTP consumed
+       ↓
+Mark Job RELEASED
+       ↓
+Return job authorization
+       ↓
+Flask Agent
+       ↓
+Read local file
+       ↓
+Send to CUPS
+```
+
+---
+
+# 28. OTP Must Be Consumed Atomically
+
+Two requests could arrive at almost the same time.
+
+Example:
+
+```text
+Request 1 → OTP 123456
+Request 2 → OTP 123456
+```
+
+Only one request must succeed.
+
+Use a MySQL transaction and row locking.
+
+Conceptually:
+
+```text
+BEGIN TRANSACTION
+
+SELECT OTP
+FOR UPDATE
+
+Check:
+    active
+    not expired
+    not used
+    attempts valid
+
+Mark:
+    used_at = NOW()
+    active = false
+
+Mark:
+    job = RELEASED
+
+COMMIT
+```
+
+The second request then sees:
+
+```text
+OTP already used
+```
+
+and is rejected.
+
+---
+
+# 29. Print Agent Workflow
+
+The Flask agent does not independently decide what to print.
+
+It follows FastAPI's authorization.
+
+```text
+Flask Agent
+     ↓
+Poll FastAPI
+     ↓
+Get authorized job
+     ↓
+Resolve storage key
+     ↓
+Read local file
+     ↓
+Apply validated print settings
+     ↓
+Submit to CUPS
+     ↓
+Monitor CUPS
+     ↓
+Report status to FastAPI
+```
+
+---
+
+# 30. Local File Access
+
+The agent receives:
+
+```text
+documents/user_42/7c91d2e8.pdf
+```
+
+It resolves:
+
+```text
+/var/lib/printplatform/storage/documents/user_42/7c91d2e8.pdf
+```
+
+The agent must ensure the resolved path remains inside:
+
+```text
+/var/lib/printplatform/storage/
+```
+
+This prevents path traversal attacks.
+
+---
+
+# 31. Printing
+
+After successful OTP authorization:
+
+```text
+FastAPI
+   ↓
+Job RELEASED
+   ↓
+Flask Agent
+   ↓
+Read local document
+   ↓
+CUPS
+   ↓
+Printer
+```
+
+The agent applies only the print options already validated by FastAPI.
+
+Example:
+
+```text
+Pages
+Copies
+Colour/B&W
+Duplex
+Paper size
+Orientation
+```
+
+---
+
+# 32. Print Job State Machine
+
+Recommended:
+
+```text
+CREATED
+   ↓
+PAID
+   ↓
+QUEUED
+   ↓
+WAITING_FOR_OTP
+   ↓
+RELEASED
+   ↓
+PRINTING
+   ↓
+COMPLETED
+```
+
+Failure paths:
+
+```text
+QUEUED
+   ↓
+FAILED
+
+WAITING_FOR_OTP
+   ↓
+EXPIRED
+
+PRINTING
+   ↓
+FAILED
+```
+
+A failed paid job can then enter the refund workflow.
+
+---
+
+# 33. Order State Machine
+
+```text
+CREATED
+   │
+   ▼
+VALIDATED
+   │
+   ▼
+PAYMENT_PENDING
+   │
+   ├──────────────► PAYMENT_FAILED
+   │
+   ▼
+PAID
+   │
+   ▼
+WAITING_FOR_OTP
+   │
+   ├──────────────► EXPIRED
+   │
+   ▼
+RELEASED
+   │
+   ▼
+PRINTING
+   │
+   ├──────────────► COMPLETED
+   │
+   └──────────────► FAILED
+                         │
+                         ▼
+                      REFUND
+```
+
+---
+
+# 34. Queue Database Design
+
+A print job should contain fields such as:
+
+```text
+print_jobs
+---------------------------------------
+id
+order_id
+document_id
+print_server_id
+queue_position
+status
+priority
+created_at
+paid_at
+released_at
+started_at
+completed_at
+failed_at
+cups_job_id
+retry_count
+last_error
+```
+
+For FCFS, the backend can use:
+
+```text
+paid_at
+```
+
+or a dedicated sequence number.
+
+A dedicated queue sequence is often safer for deterministic ordering.
+
+Example:
+
+```text
+queue_sequence = 1001
+queue_sequence = 1002
+queue_sequence = 1003
+```
+
+---
+
+# 35. FCFS Rule
+
+The default queue ordering should be:
+
+```text
+Earlier successfully accepted/paid job
+            ↓
+processed before
+Later successfully accepted/paid job
+```
+
+Do not use:
+
+```text
+File upload time alone
+```
+
+as the final queue order if payment has not yet succeeded.
+
+A user who uploads a file but never pays should not block paid print jobs.
+
+Therefore the recommended FCFS point is:
+
+```text
+Successful payment / job queue creation
+```
+
+---
+
+# 36. Payment and Queue Ordering
+
+Example:
+
+```text
+User A uploads at 10:00
+User B uploads at 10:01
+
+User B pays at 10:02
+User A pays at 10:05
+```
+
+The paid queue becomes:
+
+```text
+10:02 → User B
+10:05 → User A
+```
+
+Therefore:
+
+```text
+Job B → first
+Job A → second
+```
+
+This prevents unpaid uploads from occupying the printing queue.
+
+---
+
+# 37. What Happens If User Uploads But Does Not Pay?
+
+The file can remain temporarily stored.
+
+The order remains:
+
+```text
+PAYMENT_PENDING
+```
+
+After a configured expiration time:
+
+```text
+PAYMENT_PENDING
+      ↓
+EXPIRED
+      ↓
+Document cleanup
+```
+
+The file is not placed into the physical print queue until payment is successfully verified.
+
+---
+
+# 38. What Happens If Payment Succeeds But User Never Enters OTP?
+
+The job remains:
+
+```text
+WAITING_FOR_OTP
+```
+
+until:
+
+```text
+OTP expires
+```
+
+Then:
+
+```text
+WAITING_FOR_OTP
+       ↓
+EXPIRED
+       ↓
+Refund workflow
+       ↓
+File cleanup
+```
+
+The exact OTP expiry and refund policy should be configurable.
+
+---
+
+# 39. What Happens If Printer Is Offline?
+
+If the printer is offline:
+
+```text
+Job validation
+      ↓
+Printer unavailable
+      ↓
+Job rejected
+```
+
+If the printer becomes unavailable after payment:
+
+```text
+PAID
+ ↓
+WAITING_FOR_OTP
+ ↓
+Printer unavailable
+```
+
+The backend must prevent release if the printer cannot safely accept the job.
+
+If a failure happens after release/printing has started:
+
+```text
+PRINTING
+   ↓
+FAILED
+   ↓
+Failure handling
+   ↓
+Refund if appropriate
+```
+
+---
+
+# 40. File Cleanup
+
+A file must not be deleted while it is required by a print job.
+
+Recommended:
+
+```text
+Upload
+  ↓
+ACTIVE
+  ↓
+PAID
+  ↓
+PRINTING
+  ↓
+COMPLETED
+  ↓
+CLEANUP_PENDING
+  ↓
+DELETE FILE
+```
+
+For failed/expired jobs:
+
+```text
+FAILED / EXPIRED
+       ↓
+CLEANUP_PENDING
+       ↓
+DELETE FILE
+```
+
+Before deleting:
+
+```text
+Check no active job references the document.
+```
+
+---
+
+# 41. MySQL Tables
+
+Recommended core tables:
+
+```text
+users
+refresh_tokens
+
+documents
+
+print_servers
+printers
+
+orders
+payments
+print_jobs
+
+otp_records
+
+refunds
+
+idempotency_keys
+
+audit_logs
+```
+
+Relationships:
+
+```text
+User
+ │
+ ├── Documents
+ │
+ └── Orders
+       │
+       ├── Payment
+       └── Print Job
+             │
+             └── OTP
+```
+
+---
+
+# 42. Document Table
+
+```text
+documents
+--------------------------------
+id
+user_id
+original_filename
+stored_filename
+storage_key
+mime_type
+file_size
+sha256
+page_count
+status
+created_at
+expires_at
+deleted_at
+```
+
+---
+
+# 43. Order Table
+
+```text
+orders
+--------------------------------
+id
+user_id
+document_id
+print_server_id
+status
+subtotal
+service_fee
+total_amount
+currency
+queue_sequence
+created_at
+paid_at
+completed_at
+failed_at
+```
+
+---
+
+# 44. Print Job Table
+
+```text
+print_jobs
+--------------------------------
+id
+order_id
+document_id
+print_server_id
+status
+queue_sequence
+page_range
+copies
+colour
+sides
+paper_size
+orientation
+cups_job_id
+retry_count
+last_error
+created_at
+released_at
+started_at
+completed_at
+failed_at
+```
+
+---
+
+# 45. OTP Table
+
+```text
+otp_records
+--------------------------------
+id
+print_job_id
+otp_hash
+expires_at
+attempt_count
+max_attempts
+used_at
+active
+created_at
+```
+
+One active OTP should correspond to one active print job.
+
+---
+
+# 46. Security
+
+Never store:
+
+```text
+Plain passwords
+Plain OTPs
+Razorpay secret
+JWT secret
+Agent token
+Database password
+```
+
+Never expose:
+
+```text
+Linux filesystem paths
+MySQL credentials
+Agent credentials
+Internal service credentials
+```
+
+to the mobile application.
+
+---
+
+# 47. API Flow Summary
+
+## Upload
+
+```http
+POST /api/documents/upload
+```
+
+## Validate Print Job
+
+```http
+POST /api/orders/validate
+```
+
+## Create Order
+
+```http
+POST /api/orders
+```
+
+## Create Razorpay Payment
+
+```http
+POST /api/payments/create
+```
+
+## Razorpay Webhook
+
+```http
+POST /api/payments/webhook
+```
+
+## Get OTP/Job Status
+
+```http
+GET /api/orders/{orderId}
+```
+
+## Agent Heartbeat
+
+```http
+POST /api/agent/heartbeat
+```
+
+## Agent Poll
+
+```http
+GET /api/agent/jobs
+```
+
+## OTP Release
+
+```http
+POST /api/agent/release
+```
+
+## Agent Status
+
+```http
+POST /api/agent/jobs/{jobId}/status
+```
+
+---
+
+# 48. Final End-to-End Workflow
+
+This is the primary workflow that the implementation must follow.
+
+```text
+┌──────────────────────────────┐
+│ 1. USER OPENS APP            │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 2. UPLOAD / SELECT FILE      │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 3. FASTAPI RECEIVES FILE     │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 4. VALIDATE FILE             │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 5. SAVE ORIGINAL FILE        │
+│    TO LINUX HDD              │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 6. SAVE METADATA TO MYSQL    │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 7. SHOW PRINT OPTIONS        │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 8. USER SELECTS OPTIONS      │
+└──────────────┬───────────────┘
+               ↓
+┌──────────────────────────────┐
+│ 9. BACKEND VALIDATES JOB     │
+└──────────────┬───────────────┘
+               ↓
+          ┌────┴────┐
+          │ ACCEPT? │
+          └────┬────┘
+          NO   │   YES
+          │    │
+          ▼    ▼
+       ERROR  CALCULATE PRICE
+                   ↓
+          ┌──────────────────┐
+          │ 10. RAZORPAY     │
+          │     PAYMENT      │
+          └────────┬─────────┘
+                   ↓
+          ┌──────────────────┐
+          │ 11. WEBHOOK      │
+          │     VERIFIED     │
+          └────────┬─────────┘
+                   ↓
+          ┌──────────────────┐
+          │ 12. CREATE JOB   │
+          │     IN QUEUE     │
+          └────────┬─────────┘
+                   ↓
+          ┌──────────────────┐
+          │ 13. GENERATE OTP │
+          └────────┬─────────┘
+                   ↓
+          ┌──────────────────┐
+          │ 14. OTP PAGE     │
+          └────────┬─────────┘
+                   ↓
+          USER ENTERS OTP
+                   ↓
+          ┌──────────────────┐
+          │ 15. FLASK AGENT  │
+          │     SENDS OTP    │
+          └────────┬─────────┘
+                   ↓
+          ┌──────────────────┐
+          │ 16. FASTAPI      │
+          │     VERIFIES OTP │
+          └────────┬─────────┘
+                   ↓
+              ┌────┴────┐
+              │ CORRECT?│
+              └────┬────┘
+              NO   │   YES
+              │    │
+              ▼    ▼
+           REJECT  RELEASE JOB
+                       ↓
+              ┌──────────────────┐
+              │ 17. READ FILE   │
+              │     FROM HDD    │
+              └────────┬─────────┘
+                       ↓
+              ┌──────────────────┐
+              │ 18. SEND TO CUPS│
+              └────────┬─────────┘
+                       ↓
+              ┌──────────────────┐
+              │ 19. PHYSICAL     │
+              │     PRINTING     │
+              └────────┬─────────┘
+                       ↓
+              ┌──────────────────┐
+              │ 20. COMPLETED    │
+              └────────┬─────────┘
+                       ↓
+              CLEANUP / RETENTION
+```
+
+---
+
+# 49. Multi-User Final Workflow
+
+For multiple users:
+
+```text
+User A
+  ↓
+Upload A
+  ↓
+Options A
+  ↓
+Accepted
+  ↓
+Paid
+  ↓
+Job A / OTP A
+```
+
+```text
+User B
+  ↓
+Upload B
+  ↓
+Options B
+  ↓
+Accepted
+  ↓
+Paid
+  ↓
+Job B / OTP B
+```
+
+```text
+User C
+  ↓
+Upload C
+  ↓
+Options C
+  ↓
+Accepted
+  ↓
+Paid
+  ↓
+Job C / OTP C
+```
+
+Backend queue:
+
+```text
+┌──────────────┐
+│ Job A        │ ← first paid/accepted job
+│ OTP A        │
+└──────────────┘
+       ↓
+┌──────────────┐
+│ Job B        │
+│ OTP B        │
+└──────────────┘
+       ↓
+┌──────────────┐
+│ Job C        │
+│ OTP C        │
+└──────────────┘
+```
+
+Every OTP is permanently associated with its own job.
+
+```text
+OTP A → Job A → File A
+OTP B → Job B → File B
+OTP C → Job C → File C
+```
+
+The system must never mix:
+
+```text
+User A + File B
+User B + File C
+OTP A + Job B
+```
+
+---
+
+# 50. Core Rules
+
+The implementation must always follow these rules:
+
+### Rule 1
+
+```text
+Upload first.
+```
+
+### Rule 2
+
+```text
+Store original file on Linux HDD.
+```
+
+### Rule 3
+
+```text
+Store only file metadata/storage key in MySQL.
+```
+
+### Rule 4
+
+```text
+Show print options after successful upload.
+```
+
+### Rule 5
+
+```text
+Backend validates the complete print job.
+```
+
+### Rule 6
+
+```text
+Only accepted jobs proceed to payment.
+```
+
+### Rule 7
+
+```text
+Only backend-calculated amount is used for payment.
+```
+
+### Rule 8
+
+```text
+Only verified Razorpay payment creates a printable job.
+```
+
+### Rule 9
+
+```text
+Every paid job gets its own OTP.
+```
+
+### Rule 10
+
+```text
+OTP belongs to exactly one print job.
+```
+
+### Rule 11
+
+```text
+OTP verification must be atomic.
+```
+
+### Rule 12
+
+```text
+Default print queue is FCFS based on successfully paid/queued jobs.
+```
+
+### Rule 13
+
+```text
+The Flask agent cannot independently decide what to print.
+```
+
+### Rule 14
+
+```text
+FastAPI authorizes the print job.
+```
+
+### Rule 15
+
+```text
+Flask reads the authorized file from the local Linux HDD.
+```
+
+### Rule 16
+
+```text
+CUPS controls the physical printer.
+```
+
+### Rule 17
+
+```text
+Print completion must be reported back to FastAPI.
+```
+
+### Rule 18
+
+```text
+Files are deleted only after they are no longer required.
+```
+
+---
+
+# 51. Final Architecture in One Line
+
+```text
+React Native
+    → FastAPI
+    → Linux HDD + MySQL
+    → Job Validation
+    → Razorpay
+    → Verified Payment
+    → FCFS Print Queue
+    → OTP
+    → OTP-to-Job Verification
+    → Flask Agent
+    → CUPS
+    → Printer
+    → Completion
+    → Cleanup
+```
+
+This is the core workflow that all backend, database, and print-agent implementation should follow.

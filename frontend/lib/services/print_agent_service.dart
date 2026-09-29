@@ -1,0 +1,52 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
+
+class PrintAgentService {
+  static final PrintAgentService _instance = PrintAgentService._internal();
+  factory PrintAgentService() => _instance;
+  PrintAgentService._internal();
+
+  String get _agentUrl => ApiConfig.agentUrl;
+
+  Future<bool> checkAgentHealth() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_agentUrl/health'))
+          .timeout(const Duration(seconds: 4));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getAgentStatus() async {
+    final response = await http
+        .get(Uri.parse('$_agentUrl/local/status'))
+        .timeout(const Duration(seconds: 5));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to get agent status');
+    }
+  }
+
+  Future<Map<String, dynamic>> releaseWithOtp(String otp) async {
+    final uri = Uri.parse('$_agentUrl/local/release');
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'otp': otp.trim()}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      throw Exception(data['message'] ?? 'OTP Release Failed (${response.statusCode})');
+    }
+  }
+}

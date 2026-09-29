@@ -1,0 +1,110 @@
+class PrintSettings {
+  final String pageRange;
+  final int copies;
+  final bool colour;
+  final String sides; // one-sided, two-sided-long-edge, two-sided-short-edge
+  final String paperSize; // A4, Letter, Legal
+  final String orientation; // portrait, landscape
+
+  PrintSettings({
+    this.pageRange = 'all',
+    this.copies = 1,
+    this.colour = false,
+    this.sides = 'one-sided',
+    this.paperSize = 'A4',
+    this.orientation = 'portrait',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'pageRange': pageRange,
+        'copies': copies,
+        'colour': colour,
+        'sides': sides,
+        'paperSize': paperSize,
+        'orientation': orientation,
+      };
+
+  factory PrintSettings.fromJson(Map<String, dynamic> json) {
+    return PrintSettings(
+      pageRange: json['pageRange'] ?? json['page_range'] ?? 'all',
+      copies: json['copies'] ?? 1,
+      colour: json['colour'] ?? false,
+      sides: json['sides'] ?? 'one-sided',
+      paperSize: json['paperSize'] ?? json['paper_size'] ?? 'A4',
+      orientation: json['orientation'] ?? 'portrait',
+    );
+  }
+}
+
+class PrintOrder {
+  final String id;
+  final String? userId;
+  final String documentId;
+  final String printServerId;
+  final PrintSettings printSettings;
+  final int totalPages;
+  final int copies;
+  final double amount;
+  final String currency;
+  final String status;
+  final String createdAt;
+
+  PrintOrder({
+    required this.id,
+    this.userId,
+    required this.documentId,
+    required this.printServerId,
+    required this.printSettings,
+    required this.totalPages,
+    required this.copies,
+    required this.amount,
+    required this.currency,
+    required this.status,
+    required this.createdAt,
+  });
+
+  String get formattedAmount => '₹${amount.toStringAsFixed(2)}';
+
+  bool get isWaitingOtp => status.toUpperCase() == 'WAITING_FOR_OTP';
+  bool get isCompleted => status.toUpperCase() == 'COMPLETED';
+  bool get isPrinting => status.toUpperCase() == 'PRINTING';
+  bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
+
+  factory PrintOrder.fromJson(Map<String, dynamic> json) {
+    return PrintOrder(
+      id: json['id'] ?? '',
+      userId: json['user_id'],
+      documentId: json['document_id'] ?? '',
+      printServerId: json['print_server_id'] ?? '',
+      printSettings: json['print_settings'] != null
+          ? PrintSettings.fromJson(json['print_settings'] as Map<String, dynamic>)
+          : PrintSettings(),
+      totalPages: json['total_pages'] ?? 1,
+      copies: json['copies'] ?? 1,
+      amount: (json['amount'] is num) ? (json['amount'] as num).toDouble() : 0.0,
+      currency: json['currency'] ?? 'INR',
+      status: json['status'] ?? 'WAITING_FOR_PAYMENT',
+      createdAt: json['created_at'] ?? '',
+    );
+  }
+}
+
+class OrderOtp {
+  final String orderId;
+  final String otp;
+  final String expiresAt;
+
+  OrderOtp({
+    required this.orderId,
+    required this.otp,
+    required this.expiresAt,
+  });
+
+  factory OrderOtp.fromJson(Map<String, dynamic> json) {
+    return OrderOtp(
+      orderId: json['order_id'] ?? '',
+      otp: json['otp'] ?? '',
+      expiresAt: json['expires_at'] ?? '',
+    );
+  }
+}

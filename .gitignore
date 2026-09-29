@@ -1,15 +1,3 @@
-# Documentation
-*.md
-
-# Agent configurations
-.agents/
-.agent/
-
-# Environment & credentials
-.env
-*.env
-.env.*
-
 # Dependencies and artifacts
 node_modules/
 dist/
@@ -17,7 +5,51 @@ build/
 .next/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+.coverage
 
-# System files
+# Flutter / Dart
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.pub/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# Environment & credentials (keep .env.example tracked)
+.env
+*.env
+.env.*
+!.env.example
+
+# Local storage and databases
+storage/
+*.db
+*.sqlite
+*.sqlite3
+
+# Agent configurations
+.agents/
+.agent/
+
+# System & IDE files
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

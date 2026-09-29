@@ -14,7 +14,7 @@ class Payment(Base):
 
     id = Column(String(64), primary_key=True, index=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False, unique=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     razorpay_order_id = Column(String(128), unique=True, nullable=False, index=True)
     razorpay_payment_id = Column(String(128), unique=True, nullable=True, index=True)

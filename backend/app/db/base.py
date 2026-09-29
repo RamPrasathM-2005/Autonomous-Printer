@@ -1,0 +1,39 @@
+# app/db/base.py
+# Import Base and all models so SQLAlchemy metadata is aware of all models
+
+from app.config.database import Base
+from app.db.models.user import User, UserRole
+from app.db.models.refresh_token import RefreshToken
+from app.db.models.document import Document, DocumentStatus
+from app.db.models.print_server import PrintServer, PrintServerStatus
+from app.db.models.printer import Printer
+from app.db.models.order import Order, OrderStatus
+from app.db.models.payment import Payment, PaymentStatus
+from app.db.models.print_job import PrintJob, PrintJobStatus
+from app.db.models.otp import OTP
+from app.db.models.refund import Refund, RefundStatus
+from app.db.models.idempotency import IdempotencyKey
+from app.db.models.audit_log import AuditLog
+
+__all__ = [
+    "Base",
+    "User",
+    "UserRole",
+    "RefreshToken",
+    "Document",
+    "DocumentStatus",
+    "PrintServer",
+    "PrintServerStatus",
+    "Printer",
+    "Order",
+    "OrderStatus",
+    "Payment",
+    "PaymentStatus",
+    "PrintJob",
+    "PrintJobStatus",
+    "OTP",
+    "Refund",
+    "RefundStatus",
+    "IdempotencyKey",
+    "AuditLog",
+]
