@@ -111,7 +111,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF0F172A),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.primaryLight.withOpacity(0.4)),
+                border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
@@ -186,9 +186,9 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: (_isSuccess ? AppTheme.success : AppTheme.danger).withOpacity(0.15),
+                  color: (_isSuccess ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: (_isSuccess ? AppTheme.success : AppTheme.danger).withOpacity(0.4)),
+                  border: Border.all(color: (_isSuccess ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [

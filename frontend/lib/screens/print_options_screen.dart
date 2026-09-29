@@ -107,7 +107,16 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     super.dispose();
   }
 
+  bool _appliedToAll = false;
+
   DocumentPrintConfig get _currentConfig => _configs[_selectedDocIndex];
+
+  void _updateActiveSetting(VoidCallback update) {
+    setState(() {
+      update();
+      _appliedToAll = false;
+    });
+  }
 
   void _selectDocument(int index) {
     if (index >= 0 && index < _configs.length) {
@@ -130,6 +139,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         _configs[i].isCustomRange = current.isCustomRange;
         _configs[i].customRange = current.customRange;
       }
+      _appliedToAll = true;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -227,14 +237,30 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             color: AppTheme.textPrimary,
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: _applyCurrentSettingsToAll,
-                          icon: const Icon(Icons.copy_all_rounded, size: 16),
-                          label: const Text(
-                            'Apply to All PDFs',
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _appliedToAll
+                                ? const Color(0xFFECFDF5)
+                                : AppTheme.primarySurface,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _appliedToAll
+                                  ? const Color(0xFF10B981)
+                                  : AppTheme.primary.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            _appliedToAll
+                                ? 'All Settings Synced'
+                                : 'Select tab to configure',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: FontWeight.w700,
+                              color: _appliedToAll
+                                  ? const Color(0xFF065F46)
+                                  : AppTheme.primary,
                             ),
                           ),
                         ),
@@ -252,6 +278,44 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         itemBuilder: (ctx, index) {
                           final cfg = _configs[index];
                           final isSelected = index == _selectedDocIndex;
+
+                          // When 'Apply to All' was chosen, all tabs are marked in the SAME unified color.
+                          // Otherwise, the active/selected tab has a distinct primary highlight color,
+                          // and unselected tabs have a distinct clean surface color.
+                          final Color tabBg = _appliedToAll
+                              ? const Color(0xFFECFDF5)
+                              : (isSelected
+                                  ? AppTheme.primarySurface
+                                  : AppTheme.surfaceWhite);
+                          final Color tabBorder = _appliedToAll
+                              ? const Color(0xFF10B981)
+                              : (isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.border);
+                          final Color tabText = _appliedToAll
+                              ? const Color(0xFF065F46)
+                              : (isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.textPrimary);
+                          final Color badgeBg = _appliedToAll
+                              ? const Color(0xFF10B981)
+                              : (isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.surfaceSubtle);
+                          final Color badgeText = _appliedToAll || isSelected
+                              ? Colors.white
+                              : AppTheme.textSecondary;
+                          final IconData tabIcon = _appliedToAll
+                              ? Icons.check_circle_rounded
+                              : (isSelected
+                                  ? Icons.picture_as_pdf_rounded
+                                  : Icons.picture_as_pdf_outlined);
+                          final Color iconColor = _appliedToAll
+                              ? const Color(0xFF059669)
+                              : (isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.textSecondary);
+
                           return InkWell(
                             onTap: () => _selectDocument(index),
                             borderRadius: BorderRadius.circular(10),
@@ -259,37 +323,29 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppTheme.primarySurface
-                                    : AppTheme.surfaceWhite,
+                                color: tabBg,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: isSelected
-                                      ? AppTheme.primary
-                                      : AppTheme.border,
-                                  width: isSelected ? 1.5 : 1,
+                                  color: tabBorder,
+                                  width: (_appliedToAll || isSelected) ? 1.5 : 1,
                                 ),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
-                                    Icons.picture_as_pdf_outlined,
+                                    tabIcon,
                                     size: 16,
-                                    color: isSelected
-                                        ? AppTheme.primary
-                                        : AppTheme.textSecondary,
+                                    color: iconColor,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     cfg.document.filename,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                      color: isSelected
-                                          ? AppTheme.primary
-                                          : AppTheme.textPrimary,
+                                      fontWeight: (_appliedToAll || isSelected)
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: tabText,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
@@ -297,19 +353,17 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppTheme.primary
-                                          : AppTheme.surfaceSubtle,
+                                      color: badgeBg,
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      '${cfg.document.pages}p',
+                                      _appliedToAll
+                                          ? '${cfg.document.pages}p • Synced'
+                                          : '${cfg.document.pages}p',
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : AppTheme.textSecondary,
+                                        color: badgeText,
                                       ),
                                     ),
                                   ),
@@ -320,10 +374,114 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         },
                       ),
                     ),
+                    const SizedBox(height: 12),
+
+                    // ONE Global Apply Settings to All Button Card
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _appliedToAll
+                            ? const Color(0xFFECFDF5)
+                            : AppTheme.surfaceWhite,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _appliedToAll
+                              ? const Color(0xFF10B981)
+                              : AppTheme.border,
+                          width: _appliedToAll ? 1.5 : 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _appliedToAll
+                                  ? const Color(0xFFD1FAE5)
+                                  : AppTheme.primarySurface,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              _appliedToAll
+                                  ? Icons.done_all_rounded
+                                  : Icons.copy_all_rounded,
+                              color: _appliedToAll
+                                  ? const Color(0xFF059669)
+                                  : AppTheme.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _appliedToAll
+                                      ? 'All PDFs Synchronized (${_configs.length})'
+                                      : 'Apply Settings to All PDFs',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: _appliedToAll
+                                        ? const Color(0xFF065F46)
+                                        : AppTheme.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _appliedToAll
+                                      ? 'All tabs now share identical print options'
+                                      : 'Replicate active PDF options across all ${_configs.length} documents',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _appliedToAll
+                                        ? const Color(0xFF047857)
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _applyCurrentSettingsToAll,
+                            icon: Icon(
+                              _appliedToAll
+                                  ? Icons.check_circle_outline
+                                  : Icons.copy_all_rounded,
+                              size: 15,
+                            ),
+                            label: Text(
+                                _appliedToAll ? 'Synced' : 'Apply to All'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _appliedToAll
+                                  ? const Color(0xFF10B981)
+                                  : AppTheme.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              textStyle: const TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
-                  // Currently active document banner
+                  // Currently active document banner (Single clean indicator, no duplicate button)
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -371,25 +529,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             ],
                           ),
                         ),
-                        if (_configs.length > 1)
-                          OutlinedButton.icon(
-                            onPressed: _applyCurrentSettingsToAll,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              side: const BorderSide(color: AppTheme.primary),
-                            ),
-                            icon: const Icon(Icons.sync_rounded,
-                                size: 14, color: AppTheme.primary),
-                            label: const Text(
-                              'Set to All',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -430,7 +569,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               IconButton(
                                 icon: const Icon(Icons.remove, size: 18),
                                 onPressed: _currentConfig.copies > 1
-                                    ? () => setState(
+                                    ? () => _updateActiveSetting(
                                         () => _currentConfig.copies--)
                                     : null,
                               ),
@@ -449,7 +588,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               IconButton(
                                 icon: const Icon(Icons.add, size: 18),
                                 onPressed: _currentConfig.copies < 50
-                                    ? () => setState(
+                                    ? () => _updateActiveSetting(
                                         () => _currentConfig.copies++)
                                     : null,
                               ),
@@ -473,8 +612,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             subtitle: '₹2.00 / page',
                             icon: Icons.monochrome_photos_outlined,
                             isSelected: !_currentConfig.isColor,
-                            onTap: () =>
-                                setState(() => _currentConfig.isColor = false),
+                            onTap: () => _updateActiveSetting(
+                                () => _currentConfig.isColor = false),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -484,8 +623,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             subtitle: '₹10.00 / page',
                             icon: Icons.palette_outlined,
                             isSelected: _currentConfig.isColor,
-                            onTap: () =>
-                                setState(() => _currentConfig.isColor = true),
+                            onTap: () => _updateActiveSetting(
+                                () => _currentConfig.isColor = true),
                           ),
                         ),
                       ],
@@ -505,7 +644,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             subtitle: 'Standard',
                             icon: Icons.description_outlined,
                             isSelected: _currentConfig.sides == 'one-sided',
-                            onTap: () => setState(
+                            onTap: () => _updateActiveSetting(
                                 () => _currentConfig.sides = 'one-sided'),
                           ),
                         ),
@@ -516,7 +655,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             subtitle: '10% Duplex discount',
                             icon: Icons.auto_stories_outlined,
                             isSelected: _currentConfig.sides != 'one-sided',
-                            onTap: () => setState(() =>
+                            onTap: () => _updateActiveSetting(() =>
                                 _currentConfig.sides = 'two-sided-long-edge'),
                           ),
                         ),
@@ -538,7 +677,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             icon: Icons.portrait_rounded,
                             isSelected:
                                 _currentConfig.orientation == 'portrait',
-                            onTap: () => setState(
+                            onTap: () => _updateActiveSetting(
                                 () => _currentConfig.orientation = 'portrait'),
                           ),
                         ),
@@ -550,7 +689,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             icon: Icons.landscape_rounded,
                             isSelected:
                                 _currentConfig.orientation == 'landscape',
-                            onTap: () => setState(
+                            onTap: () => _updateActiveSetting(
                                 () => _currentConfig.orientation = 'landscape'),
                           ),
                         ),
@@ -570,7 +709,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             Expanded(
                               child: InkWell(
                                 onTap: () {
-                                  setState(() {
+                                  _updateActiveSetting(() {
                                     _currentConfig.isCustomRange = false;
                                   });
                                 },
@@ -617,7 +756,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             Expanded(
                               child: InkWell(
                                 onTap: () {
-                                  setState(() {
+                                  _updateActiveSetting(() {
                                     _currentConfig.isCustomRange = true;
                                   });
                                 },
@@ -672,7 +811,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   size: 20),
                             ),
                             onChanged: (text) {
-                              setState(() {
+                              _updateActiveSetting(() {
                                 _currentConfig.customRange = text;
                               });
                             },

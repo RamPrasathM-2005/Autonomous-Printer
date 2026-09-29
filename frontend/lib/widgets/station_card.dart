@@ -22,7 +22,7 @@ class StationCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isSelected ? AppTheme.primaryLight : Colors.white.withOpacity(0.08),
+          color: isSelected ? AppTheme.primaryLight : Colors.white.withValues(alpha: 0.08),
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -40,7 +40,7 @@ class StationCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (isSelected ? AppTheme.primary : AppTheme.surfaceLight).withOpacity(0.3),
+                      color: (isSelected ? AppTheme.primary : AppTheme.surfaceLight).withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -113,7 +113,7 @@ class StationCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.2),
+                        color: AppTheme.primary.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Row(

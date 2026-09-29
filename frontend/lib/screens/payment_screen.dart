@@ -277,7 +277,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         color: AppTheme.dangerSurface,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppTheme.danger.withOpacity(0.3)),
+                            color: AppTheme.danger.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [

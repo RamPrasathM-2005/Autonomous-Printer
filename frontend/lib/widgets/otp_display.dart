@@ -21,10 +21,10 @@ class OtpDisplayCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.cardDark,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primary.withOpacity(0.12),
+            color: AppTheme.primary.withValues(alpha: 0.12),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -93,7 +93,7 @@ class OtpDisplayCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryLight.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.5), width: 1.5),
       ),
       alignment: Alignment.center,
       child: Text(

@@ -149,7 +149,7 @@ class _StationsScreenState extends State<StationsScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryDark.withOpacity(0.3),
+                    color: AppTheme.primaryDark.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -160,7 +160,7 @@ class _StationsScreenState extends State<StationsScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.location_city_rounded, color: Colors.white, size: 24),
@@ -226,9 +226,9 @@ class _StationsScreenState extends State<StationsScreen> {
                 margin: const EdgeInsets.symmetric(vertical: 20),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.danger.withOpacity(0.1),
+                  color: AppTheme.danger.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                  border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   children: [
