@@ -70,6 +70,11 @@ class PrintOrder {
   bool get isPrinting => status.toUpperCase() == 'PRINTING';
   bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
 
+  bool get isColor => printSettings.colour;
+  bool get duplex => printSettings.sides != 'one-sided';
+  String get paperSize => printSettings.paperSize;
+  String get pageRange => printSettings.pageRange;
+
   factory PrintOrder.fromJson(Map<String, dynamic> json) {
     return PrintOrder(
       id: json['id'] ?? '',
@@ -99,6 +104,8 @@ class OrderOtp {
     required this.otp,
     required this.expiresAt,
   });
+
+  String get otpCode => otp;
 
   factory OrderOtp.fromJson(Map<String, dynamic> json) {
     return OrderOtp(

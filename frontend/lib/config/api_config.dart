@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
@@ -5,9 +6,11 @@ class ApiConfig {
   static const String _keyAgentUrl = 'agent_base_url';
   static const String _keySelectedStationId = 'selected_station_id';
 
-  // Default URLs: 10.0.2.2 for Android emulator, 127.0.0.1 for local/desktop
-  static String defaultBackendUrl = 'http://10.0.2.2:8000';
-  static String defaultAgentUrl = 'http://10.0.2.2:5001';
+  // Smart defaults: 127.0.0.1 for Web and Desktop, 10.0.2.2 for Android emulator
+  static String get defaultBackendUrl =>
+      kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000';
+  static String get defaultAgentUrl =>
+      kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
 
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
@@ -15,9 +18,23 @@ class ApiConfig {
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    backendUrl = prefs.getString(_keyBackendUrl) ?? defaultBackendUrl;
-    agentUrl = prefs.getString(_keyAgentUrl) ?? defaultAgentUrl;
-    selectedStationId = prefs.getString(_keySelectedStationId) ?? 'PRINT-SERVER-001';
+    String? storedBackend = prefs.getString(_keyBackendUrl);
+    String? storedAgent = prefs.getString(_keyAgentUrl);
+
+    // On Web, if stored URL is the Android emulator loopback 10.0.2.2, auto-correct to localhost
+    if (kIsWeb && (storedBackend == null || storedBackend.contains('10.0.2.2'))) {
+      storedBackend = 'http://127.0.0.1:8000';
+      await prefs.setString(_keyBackendUrl, storedBackend);
+    }
+    if (kIsWeb && (storedAgent == null || storedAgent.contains('10.0.2.2'))) {
+      storedAgent = 'http://127.0.0.1:5000';
+      await prefs.setString(_keyAgentUrl, storedAgent);
+    }
+
+    backendUrl = storedBackend ?? defaultBackendUrl;
+    agentUrl = storedAgent ?? defaultAgentUrl;
+    selectedStationId =
+        prefs.getString(_keySelectedStationId) ?? 'PRINT-SERVER-001';
   }
 
   static Future<void> updateBackendUrl(String url) async {
@@ -26,11 +43,15 @@ class ApiConfig {
     await prefs.setString(_keyBackendUrl, backendUrl);
   }
 
+  static Future<void> setBackendUrl(String url) => updateBackendUrl(url);
+
   static Future<void> updateAgentUrl(String url) async {
     agentUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyAgentUrl, agentUrl);
   }
+
+  static Future<void> setAgentUrl(String url) => updateAgentUrl(url);
 
   static Future<void> updateSelectedStationId(String stationId) async {
     selectedStationId = stationId;

@@ -49,4 +49,16 @@ class PrintAgentService {
       throw Exception(data['message'] ?? 'OTP Release Failed (${response.statusCode})');
     }
   }
+
+  Future<Map<String, dynamic>> releaseJobWithOtp(String otp) async {
+    try {
+      final res = await releaseWithOtp(otp);
+      return {'success': true, ...res};
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString().replaceAll('Exception: ', ''),
+      };
+    }
+  }
 }

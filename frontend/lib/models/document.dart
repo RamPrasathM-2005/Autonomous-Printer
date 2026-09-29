@@ -13,6 +13,9 @@ class UploadedDocument {
     required this.status,
   });
 
+  String get id => documentId;
+  String get filename => originalFilename;
+
   String get formattedSize {
     if (size < 1024) return '$size B';
     if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'config/api_config.dart';
 import 'config/theme.dart';
-import 'screens/main_nav_screen.dart';
+import 'screens/upload_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,10 +15,10 @@ class PrintApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Self-Service Printing',
+      title: 'QwikPrint Kiosk',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: const MainNavScreen(),
+      theme: AppTheme.lightTheme,
+      home: const UploadScreen(),
     );
   }
 }

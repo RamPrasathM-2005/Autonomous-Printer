@@ -23,3 +23,5 @@ class PaymentInitiateResponse {
     );
   }
 }
+
+typedef PaymentOrderResponse = PaymentInitiateResponse;

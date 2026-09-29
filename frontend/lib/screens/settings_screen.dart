@@ -64,31 +64,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveSettings() async {
-    await ApiConfig.updateBackendUrl(_backendController.text);
-    await ApiConfig.updateAgentUrl(_agentController.text);
+    await ApiConfig.setBackendUrl(_backendController.text.trim());
+    await ApiConfig.setAgentUrl(_agentController.text.trim());
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Server URLs saved successfully!'),
+        content: Text('Server endpoints saved successfully!'),
         backgroundColor: AppTheme.success,
       ),
     );
+    Navigator.pop(context);
   }
 
   void _applyPreset(String backend, String agent) {
     setState(() {
       _backendController.text = backend;
       _agentController.text = agent;
+      _backendHealthy = null;
+      _agentHealthy = null;
     });
-    _saveSettings();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Network & Server Settings'),
+        title: const Text('Network Configuration'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -96,50 +99,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Connection Presets',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              'Quick Environment Presets',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _applyPreset('http://10.0.2.2:8000', 'http://10.0.2.2:5001'),
-                    child: const Text('Emulator', style: TextStyle(fontSize: 12)),
+                    onPressed: () => _applyPreset(
+                        'http://127.0.0.1:8000', 'http://127.0.0.1:5001'),
+                    child: const Text('Localhost (Web/Desktop)'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _applyPreset('http://127.0.0.1:8000', 'http://127.0.0.1:5001'),
-                    child: const Text('Localhost', style: TextStyle(fontSize: 12)),
+                    onPressed: () => _applyPreset(
+                        'http://10.0.2.2:8000', 'http://10.0.2.2:5001'),
+                    child: const Text('Emulator (10.0.2.2)'),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () => _applyPreset(
+                  'http://192.168.31.91:8000', 'http://192.168.31.91:5001'),
+              child: const Text('Wi-Fi LAN IP (192.168.31.91)'),
             ),
             const SizedBox(height: 24),
 
             // Backend URL
             const Text(
               'FastAPI Backend URL',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const SizedBox(height: 6),
             TextField(
               controller: _backendController,
               decoration: InputDecoration(
-                hintText: 'http://10.0.2.2:8000',
-                prefixIcon: const Icon(Icons.dns_rounded),
+                hintText: 'http://127.0.0.1:8000',
+                prefixIcon: const Icon(Icons.dns_rounded, size: 20),
                 suffixIcon: IconButton(
                   icon: _isTestingBackend
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : Icon(
                           _backendHealthy == null
                               ? Icons.bolt_rounded
-                              : (_backendHealthy! ? Icons.check_circle_rounded : Icons.cancel_rounded),
+                              : (_backendHealthy!
+                                  ? Icons.check_circle_rounded
+                                  : Icons.cancel_rounded),
                           color: _backendHealthy == null
-                              ? Colors.white54
-                              : (_backendHealthy! ? AppTheme.success : AppTheme.danger),
+                              ? AppTheme.textMuted
+                              : (_backendHealthy!
+                                  ? AppTheme.success
+                                  : AppTheme.danger),
                         ),
                   onPressed: _testBackend,
                   tooltip: 'Test Ping',
@@ -151,24 +177,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Print Agent URL
             const Text(
               'Flask Print Agent URL (Station Kiosk)',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
             ),
             const SizedBox(height: 6),
             TextField(
               controller: _agentController,
               decoration: InputDecoration(
-                hintText: 'http://10.0.2.2:5001',
-                prefixIcon: const Icon(Icons.print_rounded),
+                hintText: 'http://127.0.0.1:5001',
+                prefixIcon: const Icon(Icons.print_rounded, size: 20),
                 suffixIcon: IconButton(
                   icon: _isTestingAgent
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : Icon(
                           _agentHealthy == null
                               ? Icons.bolt_rounded
-                              : (_agentHealthy! ? Icons.check_circle_rounded : Icons.cancel_rounded),
+                              : (_agentHealthy!
+                                  ? Icons.check_circle_rounded
+                                  : Icons.cancel_rounded),
                           color: _agentHealthy == null
-                              ? Colors.white54
-                              : (_agentHealthy! ? AppTheme.success : AppTheme.danger),
+                              ? AppTheme.textMuted
+                              : (_agentHealthy!
+                                  ? AppTheme.success
+                                  : AppTheme.danger),
                         ),
                   onPressed: _testAgent,
                   tooltip: 'Test Ping',
@@ -179,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             ElevatedButton.icon(
               onPressed: _saveSettings,
-              icon: const Icon(Icons.save_rounded),
+              icon: const Icon(Icons.save_rounded, size: 18),
               label: const Text('Save Server Configuration'),
             ),
             const SizedBox(height: 24),
@@ -188,25 +225,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.cardDark,
+                color: AppTheme.surfaceWhite,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white10),
+                border: Border.all(color: AppTheme.border),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    'Network Architecture Note',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryLight, fontSize: 13),
+                    'Network Architecture Guide',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primary,
+                      fontSize: 13,
+                    ),
                   ),
-                  SizedBox(height: 6),
+                  SizedBox(height: 8),
                   Text(
-                    '• Android Emulator accesses your PC host at 10.0.2.2\n'
-                    '• Real Android device requires your PC\'s Wi-Fi LAN IP (e.g., http://192.168.1.x:8000)\n'
-                    '• FastAPI runs on port 8000\n'
-                    '• Flask Print Agent runs on port 5001\n'
-                    '• All documents remain stored on the local Linux/PC filesystem without cloud dependency.',
-                    style: TextStyle(fontSize: 12, height: 1.5, color: Colors.white60),
+                    '• Web & Desktop: connects directly to http://127.0.0.1:8000\n'
+                    '• Android Emulator: accesses your PC host at http://10.0.2.2:8000\n'
+                    '• Physical Android Phone: connects via same Wi-Fi using PC IP (http://192.168.31.91:8000)\n'
+                    '• Print Agent: runs locally on port 5001 connected to physical CUPS printers.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),

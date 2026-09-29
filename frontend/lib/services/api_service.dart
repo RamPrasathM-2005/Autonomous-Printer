@@ -53,14 +53,15 @@ class ApiService {
     }
   }
 
-  // 3. Document Upload
-  Future<UploadedDocument> uploadDocument(File file) async {
+  // 3. Document Upload (Universal: Web + Mobile + Desktop)
+  Future<UploadedDocument> uploadDocumentBytes({
+    required List<int> bytes,
+    required String filename,
+  }) async {
     final uri = Uri.parse('$_baseUrl/api/documents/upload');
     final request = http.MultipartRequest('POST', uri);
 
-    final filename = file.path.split(Platform.pathSeparator).last;
     String extension = filename.split('.').last.toLowerCase();
-    
     MediaType mediaType = MediaType('application', 'pdf');
     if (extension == 'jpg' || extension == 'jpeg') {
       mediaType = MediaType('image', 'jpeg');
@@ -69,15 +70,16 @@ class ApiService {
     }
 
     request.files.add(
-      await http.MultipartFile.fromPath(
+      http.MultipartFile.fromBytes(
         'file',
-        file.path,
+        bytes,
         filename: filename,
         contentType: mediaType,
       ),
     );
 
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+    final streamedResponse =
+        await request.send().timeout(const Duration(seconds: 30));
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 201 || response.statusCode == 200) {
@@ -85,11 +87,18 @@ class ApiService {
     } else {
       try {
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Upload failed (${response.statusCode})');
+        throw Exception(
+            errorData['message'] ?? 'Upload failed (${response.statusCode})');
       } catch (_) {
         throw Exception('Upload failed: ${response.body}');
       }
     }
+  }
+
+  Future<UploadedDocument> uploadDocument(File file) async {
+    final bytes = await file.readAsBytes();
+    final filename = file.path.split(RegExp(r'[\\/]')).last;
+    return uploadDocumentBytes(bytes: bytes, filename: filename);
   }
 
   // 4. Create Order & Validate Job
@@ -170,6 +179,9 @@ class ApiService {
   }
 
   // 7. Payment Initiation
+  Future<PaymentInitiateResponse> createPaymentOrder(String orderId) =>
+      createPayment(orderId);
+
   Future<PaymentInitiateResponse> createPayment(String orderId) async {
     final uri = Uri.parse('$_baseUrl/api/payments/create');
     final response = await http

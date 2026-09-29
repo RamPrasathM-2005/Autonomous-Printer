@@ -1,15 +1,34 @@
 import 'package:flutter/material.dart';
-import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
+import '../widgets/workflow_stepper.dart';
 import 'payment_screen.dart';
 
 class PrintOptionsScreen extends StatefulWidget {
-  final UploadedDocument document;
+  final List<UploadedDocument> documents;
+  final String selectedStationId;
 
-  const PrintOptionsScreen({super.key, required this.document});
+  PrintOptionsScreen({
+    super.key,
+    List<UploadedDocument>? documents,
+    UploadedDocument? document,
+    this.selectedStationId = 'station-1',
+  }) : documents = documents ?? (document != null ? [document] : []);
+
+  UploadedDocument get primaryDocument => documents.isNotEmpty
+      ? documents.first
+      : UploadedDocument(
+          documentId: 'doc-default',
+          originalFilename: 'document.pdf',
+          pages: 1,
+          size: 0,
+          status: 'UPLOADED',
+        );
+
+  int get totalPages =>
+      documents.fold(0, (sum, d) => sum + d.pages);
 
   @override
   State<PrintOptionsScreen> createState() => _PrintOptionsScreenState();
@@ -20,9 +39,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
   int _copies = 1;
   bool _isColor = false;
-  String _sides = 'one-sided';
+  String _sides = 'one-sided'; // 'one-sided' or 'two-sided-long-edge'
   String _paperSize = 'A4';
-  String _orientation = 'portrait';
   bool _isCustomRange = false;
 
   final TextEditingController _rangeController = TextEditingController();
@@ -35,21 +53,31 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     super.dispose();
   }
 
-  double get _estimatedTotal {
-    final ratePerPage = _isColor ? 10.0 : 2.0;
-    int pages = widget.document.pages;
-    if (_isCustomRange && _rangeController.text.isNotEmpty) {
-      // rough client preview estimate
-      final parts = _rangeController.text.split('-');
-      if (parts.length == 2) {
-        int? start = int.tryParse(parts[0]);
-        int? end = int.tryParse(parts[1]);
-        if (start != null && end != null && end >= start) {
-          pages = (end - start + 1);
-        }
+  int get _calculatedPages {
+    if (!_isCustomRange || _rangeController.text.trim().isEmpty) {
+      return widget.totalPages > 0 ? widget.totalPages : 1;
+    }
+    final text = _rangeController.text.trim();
+    final parts = text.split('-');
+    if (parts.length == 2) {
+      int? start = int.tryParse(parts[0].trim());
+      int? end = int.tryParse(parts[1].trim());
+      if (start != null && end != null && end >= start) {
+        return (end - start + 1);
       }
     }
-    return pages * _copies * ratePerPage;
+    return widget.totalPages > 0 ? widget.totalPages : 1;
+  }
+
+  double get _estimatedTotal {
+    final rate = _isColor ? 10.0 : 2.0;
+    final pages = _calculatedPages;
+    double total = pages * _copies * rate;
+    if (_sides != 'one-sided') {
+      // 10% duplex discount
+      total = total * 0.9;
+    }
+    return total;
   }
 
   Future<void> _submitOrder() async {
@@ -58,22 +86,21 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       _validationError = null;
     });
 
-    final stationId = ApiConfig.selectedStationId ?? 'PRINT-SERVER-001';
-    final range = _isCustomRange ? _rangeController.text.trim() : 'all';
-
-    final settings = PrintSettings(
-      pageRange: range.isEmpty ? 'all' : range,
-      copies: _copies,
-      colour: _isColor,
-      sides: _sides,
-      paperSize: _paperSize,
-      orientation: _orientation,
-    );
-
     try {
+      final settings = PrintSettings(
+        copies: _copies,
+        colour: _isColor,
+        sides: _sides,
+        paperSize: _paperSize,
+        pageRange:
+            _isCustomRange && _rangeController.text.trim().isNotEmpty
+                ? _rangeController.text.trim()
+                : 'all',
+      );
+
       final order = await _apiService.createOrder(
-        documentId: widget.document.documentId,
-        printServerId: stationId,
+        documentId: widget.primaryDocument.id,
+        printServerId: widget.selectedStationId,
         printSettings: settings,
       );
 
@@ -83,10 +110,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
       if (!mounted) return;
 
+      // Navigate to Step 3: Payment
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (ctx) => PaymentScreen(order: order, document: widget.document),
+          builder: (ctx) => PaymentScreen(order: order),
         ),
       );
     } catch (e) {
@@ -100,376 +128,438 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
         title: const Text('Print Settings'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Document summary card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.cardDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
+      body: Column(
+        children: [
+          const WorkflowStepper(currentStep: 2),
+          const Divider(height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Document summary banner
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.2),
+                      color: AppTheme.surfaceWhite,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.border),
                     ),
-                    child: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.primaryLight, size: 28),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          widget.document.originalFilename,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primarySurface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            widget.documents.length > 1
+                                ? Icons.copy_all_rounded
+                                : Icons.picture_as_pdf,
+                            color: AppTheme.primary,
+                            size: 22,
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${widget.document.pages} Total Pages  •  ${widget.document.formattedSize}',
-                          style: const TextStyle(fontSize: 13, color: Colors.white60),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.documents.length > 1
+                                    ? '${widget.documents.length} Documents Selected'
+                                    : widget.primaryDocument.filename,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${widget.totalPages} Total Pages • Station: ${widget.selectedStationId}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
 
-            // Number of copies
-            _sectionHeader('Number of Copies'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceDark,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Copies', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: _copies > 1 ? () => setState(() => _copies--) : null,
-                        icon: const Icon(Icons.remove_circle_outline, color: AppTheme.primaryLight),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceLight,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '$_copies',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _copies < 99 ? () => setState(() => _copies++) : null,
-                        icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryLight),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-            // Color Mode Selection
-            _sectionHeader('Color Mode'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _modeOption(
-                    title: 'Black & White',
-                    subtitle: '₹2.00 / page',
-                    icon: Icons.filter_b_and_w_rounded,
-                    isSelected: !_isColor,
-                    onTap: () => setState(() => _isColor = false),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _modeOption(
-                    title: 'Full Color',
-                    subtitle: '₹10.00 / page',
-                    icon: Icons.color_lens_rounded,
-                    isSelected: _isColor,
-                    onTap: () => setState(() => _isColor = true),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Duplex / Sides
-            _sectionHeader('Sides (Duplex)'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _choiceChip(
-                    label: 'Single-Sided',
-                    isSelected: _sides == 'one-sided',
-                    onTap: () => setState(() => _sides = 'one-sided'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _choiceChip(
-                    label: '2-Sided (Long)',
-                    isSelected: _sides == 'two-sided-long-edge',
-                    onTap: () => setState(() => _sides = 'two-sided-long-edge'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _choiceChip(
-                    label: '2-Sided (Short)',
-                    isSelected: _sides == 'two-sided-short-edge',
-                    onTap: () => setState(() => _sides = 'two-sided-short-edge'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Page range
-            _sectionHeader('Page Range'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _choiceChip(
-                    label: 'All Pages (1-${widget.document.pages})',
-                    isSelected: !_isCustomRange,
-                    onTap: () => setState(() => _isCustomRange = false),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _choiceChip(
-                    label: 'Custom Range',
-                    isSelected: _isCustomRange,
-                    onTap: () => setState(() => _isCustomRange = true),
-                  ),
-                ),
-              ],
-            ),
-            if (_isCustomRange) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _rangeController,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. 1-5 or 1,3,5',
-                  labelText: 'Custom Page Range',
-                  prefixIcon: Icon(Icons.pages_rounded),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-            const SizedBox(height: 20),
-
-            // Orientation & Paper Size
-            _sectionHeader('Paper Size & Layout'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _paperSize,
-                        isExpanded: true,
-                        dropdownColor: AppTheme.surfaceDark,
-                        items: ['A4', 'Letter', 'Legal']
-                            .map((s) => DropdownMenuItem(value: s, child: Text('Size: $s')))
-                            .toList(),
-                        onChanged: (v) => setState(() => _paperSize = v ?? 'A4'),
-                      ),
+                  const Text(
+                    'Step 2: Configure Job Options',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _orientation,
-                        isExpanded: true,
-                        dropdownColor: AppTheme.surfaceDark,
-                        items: const [
-                          DropdownMenuItem(value: 'portrait', child: Text('Portrait')),
-                          DropdownMenuItem(value: 'landscape', child: Text('Landscape')),
-                        ],
-                        onChanged: (v) => setState(() => _orientation = v ?? 'portrait'),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-            // Estimated Price Bar
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppTheme.primaryDark.withOpacity(0.4), AppTheme.primary.withOpacity(0.2)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.primaryLight.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Estimated Total', style: TextStyle(fontSize: 13, color: Colors.white70)),
-                      Text('Authoritative rate by backend', style: TextStyle(fontSize: 11, color: Colors.white38)),
-                    ],
-                  ),
-                  Text(
-                    '₹${_estimatedTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-
-            // Error display
-            if (_validationError != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.danger.withOpacity(0.4)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.cancel_rounded, color: AppTheme.danger, size: 24),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Job Validation Rejected',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  // Option 1: Number of Copies
+                  _buildSectionCard(
+                    title: 'Number of Copies',
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Total sets to print',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _validationError!,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppTheme.border),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 18),
+                                onPressed: _copies > 1
+                                    ? () => setState(() => _copies--)
+                                    : null,
+                              ),
+                              Container(
+                                constraints: const BoxConstraints(minWidth: 36),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$_copies',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 18),
+                                onPressed: _copies < 50
+                                    ? () => setState(() => _copies++)
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Option 2: Color Mode
+                  _buildSectionCard(
+                    title: 'Color Mode',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Black & White',
+                            subtitle: '₹2.00 / page',
+                            icon: Icons.monochrome_photos_outlined,
+                            isSelected: !_isColor,
+                            onTap: () => setState(() => _isColor = false),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Full Color',
+                            subtitle: '₹10.00 / page',
+                            icon: Icons.palette_outlined,
+                            isSelected: _isColor,
+                            onTap: () => setState(() => _isColor = true),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Option 3: Print Sides
+                  _buildSectionCard(
+                    title: 'Print Sides (Duplex)',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Single-Sided',
+                            subtitle: 'Standard',
+                            icon: Icons.description_outlined,
+                            isSelected: _sides == 'one-sided',
+                            onTap: () =>
+                                setState(() => _sides = 'one-sided'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildSelectableChip(
+                            label: 'Double-Sided',
+                            subtitle: '10% Duplex discount',
+                            icon: Icons.auto_stories_outlined,
+                            isSelected: _sides != 'one-sided',
+                            onTap: () => setState(
+                                () => _sides = 'two-sided-long-edge'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Option 4: Paper Size
+                  _buildSectionCard(
+                    title: 'Paper Size',
+                    child: Row(
+                      children: ['A4', 'Letter', 'Legal'].map((size) {
+                        final isSelected = _paperSize == size;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: InkWell(
+                              onTap: () => setState(() => _paperSize = size),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.primarySurface
+                                      : AppTheme.surfaceWhite,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppTheme.primary
+                                        : AppTheme.border,
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  size,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? AppTheme.primary
+                                        : AppTheme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Option 5: Page Range
+                  _buildSectionCard(
+                    title: 'Page Range',
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: RadioListTile<bool>(
+                                value: false,
+                                groupValue: _isCustomRange,
+                                title: const Text('All Pages',
+                                    style: TextStyle(fontSize: 14)),
+                                contentPadding: EdgeInsets.zero,
+                                activeColor: AppTheme.primary,
+                                onChanged: (v) {
+                                  setState(() => _isCustomRange = false);
+                                },
+                              ),
+                            ),
+                            Expanded(
+                              child: RadioListTile<bool>(
+                                value: true,
+                                groupValue: _isCustomRange,
+                                title: const Text('Custom Range',
+                                    style: TextStyle(fontSize: 14)),
+                                contentPadding: EdgeInsets.zero,
+                                activeColor: AppTheme.primary,
+                                onChanged: (v) {
+                                  setState(() => _isCustomRange = true);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_isCustomRange) ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _rangeController,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g. 1-3 or 1,2,5',
+                              prefixIcon: Icon(Icons.format_list_numbered,
+                                  size: 20),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  if (_validationError != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.dangerSurface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppTheme.danger.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: AppTheme.danger, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _validationError!,
+                              style: const TextStyle(
+                                  color: AppTheme.danger, fontSize: 13),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
 
-            const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-            // Validate & Proceed
-            ElevatedButton(
-              onPressed: _isValidating ? null : _submitOrder,
-              child: _isValidating
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                        SizedBox(width: 12),
-                        Text('Validating Job with Backend...'),
-                      ],
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Validate Job & Proceed to Payment'),
-                        SizedBox(width: 8),
-                        Icon(Icons.payment_rounded, size: 18),
+                  // Price Preview & Submit Card
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceWhite,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
                       ],
                     ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Estimated Total',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '₹${_estimatedTotal.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            ElevatedButton(
+                              onPressed: _isValidating ? null : _submitOrder,
+                              child: _isValidating
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Row(
+                                      children: [
+                                        Text('Proceed to Pay'),
+                                        SizedBox(width: 6),
+                                        Icon(Icons.arrow_forward_rounded,
+                                            size: 16),
+                                      ],
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _sectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-    );
-  }
-
-  Widget _choiceChip({required String label, required bool isSelected, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withOpacity(0.25) : AppTheme.surfaceDark,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppTheme.primaryLight : Colors.white10,
-            width: isSelected ? 1.5 : 1,
+  Widget _buildSectionCard({required String title, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
           ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : Colors.white70,
-          ),
-        ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }
 
-  Widget _modeOption({
-    required String title,
+  Widget _buildSelectableChip({
+    required String label,
     required String subtitle,
     required IconData icon,
     required bool isSelected,
@@ -477,31 +567,44 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withOpacity(0.2) : AppTheme.surfaceDark,
-          borderRadius: BorderRadius.circular(16),
+          color:
+              isSelected ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppTheme.primaryLight : Colors.white10,
-            width: isSelected ? 2 : 1,
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 1.5 : 1,
           ),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 28, color: isSelected ? AppTheme.primaryLight : Colors.white54),
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+            ),
             const SizedBox(height: 8),
             Text(
-              title,
+              label,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.white70,
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color:
+                    isSelected ? AppTheme.primary : AppTheme.textMuted,
+              ),
+            ),
           ],
         ),
       ),

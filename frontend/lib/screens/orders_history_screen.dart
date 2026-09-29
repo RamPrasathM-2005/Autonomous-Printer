@@ -47,8 +47,9 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Print Job History'),
+        title: const Text('Print Job Receipts'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -58,9 +59,11 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _loadOrders,
-        color: AppTheme.primaryLight,
+        color: AppTheme.primary,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              )
             : _errorMessage != null
                 ? Center(
                     child: Padding(
@@ -68,11 +71,13 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 48),
+                          const Icon(Icons.error_outline_rounded,
+                              color: AppTheme.danger, size: 48),
                           const SizedBox(height: 12),
                           Text(_errorMessage!, textAlign: TextAlign.center),
                           const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadOrders, child: const Text('Try Again')),
+                          ElevatedButton(
+                              onPressed: _loadOrders, child: const Text('Try Again')),
                         ],
                       ),
                     ),
@@ -84,17 +89,23 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: const [
-                              Icon(Icons.receipt_long_rounded, size: 56, color: Colors.white24),
+                              Icon(Icons.receipt_long_rounded,
+                                  size: 56, color: AppTheme.textMuted),
                               SizedBox(height: 16),
                               Text(
                                 'No Print Orders Yet',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
                               ),
                               SizedBox(height: 6),
                               Text(
-                                'Upload a document to create your first print job.',
+                                'Upload a document to start your first self-service print.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 13, color: Colors.white54),
+                                style: TextStyle(
+                                    fontSize: 13, color: AppTheme.textSecondary),
                               ),
                             ],
                           ),
@@ -105,15 +116,23 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                         itemCount: _orders.length,
                         itemBuilder: (ctx, index) {
                           final o = _orders[index];
-                          return Card(
+                          return Container(
                             margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceWhite,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppTheme.border),
+                            ),
                             child: InkWell(
                               onTap: () {
-                                if (o.isWaitingOtp || o.isPrinting || o.isCompleted) {
+                                if (o.isWaitingOtp ||
+                                    o.isPrinting ||
+                                    o.isCompleted) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (ctx) => OtpReleaseScreen(orderId: o.id),
+                                      builder: (ctx) =>
+                                          OtpReleaseScreen(orderId: o.id),
                                     ),
                                   );
                                 }
@@ -125,15 +144,16 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          o.id,
+                                          o.id.substring(0, 8).toUpperCase(),
                                           style: const TextStyle(
                                             fontFamily: 'monospace',
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w700,
                                             fontSize: 13,
-                                            color: AppTheme.primaryLight,
+                                            color: AppTheme.primary,
                                           ),
                                         ),
                                         StatusBadge(status: o.status),
@@ -142,41 +162,57 @@ class _OrdersHistoryScreenState extends State<OrdersHistoryScreen> {
                                     const SizedBox(height: 10),
                                     Row(
                                       children: [
-                                        const Icon(Icons.print_outlined, size: 16, color: Colors.white54),
+                                        const Icon(Icons.print_outlined,
+                                            size: 16,
+                                            color: AppTheme.textSecondary),
                                         const SizedBox(width: 6),
                                         Text(
-                                          'Station: ${o.printServerId}',
-                                          style: const TextStyle(fontSize: 13, color: Colors.white70),
+                                          'Kiosk: ${o.printServerId}',
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.textPrimary,
+                                          ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
-                                        const Icon(Icons.layers_outlined, size: 16, color: Colors.white54),
+                                        const Icon(Icons.layers_outlined,
+                                            size: 16,
+                                            color: AppTheme.textSecondary),
                                         const SizedBox(width: 6),
                                         Text(
                                           '${o.copies} copies • ${o.totalPages} pages • ${o.printSettings.colour ? "Color" : "B/W"}',
-                                          style: const TextStyle(fontSize: 13, color: Colors.white54),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.textSecondary,
+                                          ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 12),
-                                    const Divider(color: Colors.white10, height: 1),
+                                    const Divider(height: 1),
                                     const SizedBox(height: 10),
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          o.createdAt.isNotEmpty ? o.createdAt.split('T').first : '',
-                                          style: const TextStyle(fontSize: 12, color: Colors.white38),
+                                          o.createdAt.isNotEmpty
+                                              ? o.createdAt.split('T').first
+                                              : '',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textMuted,
+                                          ),
                                         ),
                                         Text(
                                           o.formattedAmount,
                                           style: const TextStyle(
                                             fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.success,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppTheme.textPrimary,
                                           ),
                                         ),
                                       ],
