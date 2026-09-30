@@ -79,14 +79,19 @@ def seed():
             printer = Printer(
                 id="printer_central_01",
                 server_id="PRINT-SERVER-001",
-                cups_printer_name="Default_Office_Printer",
-                display_name="Canon imageRUNNER ADVANCE",
-                supports_color=True,
+                cups_printer_name="HP_LaserJet_400_M401dn_F36EC0",
+                display_name="HP LaserJet 400 M401dn",
+                supports_color=False,
                 supports_duplex=True,
                 is_active=True
             )
             db.add(printer)
-            print("  - Created printer: Default_Office_Printer (Color, Duplex)")
+            print("  - Created printer: HP_LaserJet_400_M401dn_F36EC0 (Duplex)")
+        else:
+            printer.cups_printer_name = "HP_LaserJet_400_M401dn_F36EC0"
+            printer.display_name = "HP LaserJet 400 M401dn"
+            printer.supports_color = False
+            printer.supports_duplex = True
 
         db.commit()
         print("[SUCCESS] Database seeding complete!")

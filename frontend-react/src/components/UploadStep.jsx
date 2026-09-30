@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, Trash2, ArrowRight, Loader2, AlertCircle, FileCheck } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, ArrowRight, Loader2, AlertCircle, CheckCircle, Printer } from 'lucide-react';
 import { api } from '../api';
 
 export default function UploadStep({ onNext }) {
@@ -37,7 +37,7 @@ export default function UploadStep({ onNext }) {
   const validateAndSetFile = (file) => {
     setError(null);
     const validExtensions = ['pdf', 'png', 'jpg', 'jpeg'];
-    const ext = file.name.split('.').last || file.name.split('.').pop().toLowerCase();
+    const ext = file.name.split('.').pop().toLowerCase();
     if (!validExtensions.includes(ext)) {
       setError('Please upload a PDF or Image file (.pdf, .png, .jpg, .jpeg)');
       return;
@@ -69,15 +69,45 @@ export default function UploadStep({ onNext }) {
 
   return (
     <div>
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '0.6rem' }}>
-          Upload Documents to Print
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1rem', maxWidth: '600px', margin: '0 auto' }}>
-          Secure autonomous print pipeline. Upload your PDF or images and customize color, copies, and paper sizing.
+      {/* Kiosk Connection Banner - Exactly matches Flutter _buildStationCard() */}
+      <div className="station-card-banner">
+        <div className="station-banner-left">
+          <div className="station-icon-circle">
+            <Printer size={20} />
+          </div>
+          <div>
+            <div className="station-name-text">PRINT-SERVER-001 • Central Library Station</div>
+            <div className="station-sub-text">HP_LaserJet_400_M401dn_F36EC0 • Ready (Tray 2)</div>
+          </div>
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'var(--success-surface)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          color: '#059669',
+          padding: '4px 10px',
+          borderRadius: '9999px',
+          fontSize: '0.75rem',
+          fontWeight: 700
+        }}>
+          <span className="pulsing-dot" />
+          ONLINE
+        </div>
+      </div>
+
+      {/* Section Title & Subtitle */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+          Select Documents
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.2rem' }}>
+          Upload your PDF or image files to start printing.
         </p>
       </div>
 
+      {/* Dropzone */}
       <div
         className={`dropzone ${dragActive ? 'drag-active' : ''}`}
         onDragEnter={handleDrag}
@@ -94,7 +124,7 @@ export default function UploadStep({ onNext }) {
           onChange={handleChange}
         />
         <div className="dropzone-icon">
-          <UploadCloud size={34} />
+          <UploadCloud size={32} />
         </div>
         <div className="dropzone-title">Drop your document here</div>
         <div className="dropzone-subtitle">Supports PDF, PNG, JPG up to 50MB</div>
@@ -110,39 +140,56 @@ export default function UploadStep({ onNext }) {
         </button>
       </div>
 
+      {/* Error alert */}
       {error && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.75rem',
-          background: 'rgba(239, 68, 68, 0.1)',
+          background: 'var(--danger-surface)',
           border: '1px solid rgba(239, 68, 68, 0.3)',
-          color: '#f87171',
-          padding: '1rem 1.25rem',
+          color: 'var(--danger)',
+          padding: '0.85rem 1.25rem',
           borderRadius: 'var(--radius-md)',
-          margin: '1.5rem 0'
+          margin: '1.25rem 0',
+          fontSize: '0.88rem',
+          fontWeight: 500
         }}>
-          <AlertCircle size={20} />
+          <AlertCircle size={18} />
           <span>{error}</span>
         </div>
       )}
 
+      {/* Selected File Card */}
       {selectedFile && (
-        <div style={{ marginTop: '2rem' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>
-            Selected Document
-          </h3>
+        <div style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              Selected File
+            </span>
+            <span style={{
+              background: 'var(--primary-surface)',
+              color: 'var(--primary)',
+              padding: '3px 10px',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: 700
+            }}>
+              1 file selected
+            </span>
+          </div>
+
           <div className="doc-card">
             <div className="doc-info">
               <div className="doc-icon-box">
-                <FileText size={24} />
+                <FileText size={22} />
               </div>
               <div>
                 <div className="doc-name">{selectedFile.name}</div>
                 <div className="doc-meta">
                   <span>{formatSize(selectedFile.size)}</span>
                   <span>•</span>
-                  <span>Ready to process</span>
+                  <span>Ready for printing</span>
                 </div>
               </div>
             </div>
@@ -151,21 +198,21 @@ export default function UploadStep({ onNext }) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--text-dim)',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
                 padding: '0.5rem',
-                borderRadius: 'var(--radius-sm)',
-                transition: 'color 0.2s'
+                borderRadius: '8px',
+                transition: 'color 0.15s'
               }}
-              onMouseEnter={(e) => e.target.style.color = '#ef4444'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--text-dim)'}
+              onMouseEnter={(e) => e.target.style.color = 'var(--danger)'}
+              onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
               title="Remove document"
             >
-              <Trash2 size={20} />
+              <Trash2 size={18} />
             </button>
           </div>
 
-          <div style={{ marginTop: '2rem' }}>
+          <div style={{ marginTop: '1.75rem' }}>
             <button
               className="btn-primary"
               onClick={handleUploadAndProceed}
@@ -173,13 +220,13 @@ export default function UploadStep({ onNext }) {
             >
               {uploading ? (
                 <>
-                  <Loader2 size={20} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                  <span>Processing & Uploading...</span>
+                  <Loader2 size={18} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                  <span>Uploading & Analyzing Document...</span>
                 </>
               ) : (
                 <>
                   <span>Configure Print Options</span>
-                  <ArrowRight size={20} />
+                  <ArrowRight size={18} />
                 </>
               )}
             </button>

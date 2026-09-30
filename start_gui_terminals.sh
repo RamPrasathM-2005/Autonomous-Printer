@@ -31,7 +31,7 @@ gnome-terminal --geometry=80x20+50+50 --title="[1] FastAPI Backend (Port 8000)" 
 gnome-terminal --geometry=80x20+650+50 --title="[2] Flask Print Agent & Kiosk (Port 5001)" -- bash -c "
   echo -e '\033[1;34m=====================================================\033[0m'
   echo -e '\033[1;34m   [PRINT AGENT] Hardware CUPS Controller (Port 5001)\033[0m'
-  echo -e '\033[1;34m   Printer: HP_LaserJet_400_M401dn_E9A0F4            \033[0m'
+  echo -e '\033[1;34m   Printer: HP_LaserJet_400_M401dn_F36EC0            \033[0m'
   echo -e '\033[1;34m   Kiosk:   http://127.0.0.1:5001/kiosk              \033[0m'
   echo -e '\033[1;34m=====================================================\033[0m'
   echo ''

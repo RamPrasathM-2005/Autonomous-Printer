@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { KeyRound, Copy, Check, Printer, ArrowRight, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { KeyRound, Copy, Check, Printer, ArrowRight, RotateCcw, AlertCircle, CheckCircle2, Loader2, Clock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../api';
 
@@ -9,6 +9,20 @@ export default function OtpStep({ finalData, onReset }) {
   const [releasing, setReleasing] = useState(false);
   const [printSuccess, setPrintSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const [secondsLeft, setSecondsLeft] = useState(900); // 15 mins
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatCountdown = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(otp);
@@ -34,143 +48,157 @@ export default function OtpStep({ finalData, onReset }) {
     }
   };
 
+  const otpDigits = (otp || '------').split('');
+
   return (
-    <div style={{ maxWidth: '650px', margin: '0 auto', textAlign: 'center' }}>
+    <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
       <div style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '0.5rem',
-        padding: '0.4rem 1rem',
-        borderRadius: 'var(--radius-full)',
-        background: 'rgba(16, 185, 129, 0.12)',
-        color: '#34d399',
+        gap: '0.45rem',
+        padding: '0.35rem 0.95rem',
+        borderRadius: '9999px',
+        background: 'var(--success-surface)',
+        color: '#059669',
         fontWeight: 700,
-        fontSize: '0.85rem',
-        marginBottom: '1rem'
+        fontSize: '0.8rem',
+        marginBottom: '0.85rem'
       }}>
-        <CheckCircle2 size={16} /> Order Paid & Ready for Release
+        <CheckCircle2 size={16} /> Payment Confirmed
       </div>
 
-      <h1 style={{ fontSize: '2.4rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-        Your Secure Print OTP
-      </h1>
-      <p style={{ color: 'var(--text-muted)', fontSize: '1rem', maxWidth: '500px', margin: '0 auto' }}>
-        Enter this 6-digit code at any campus print terminal, or release it directly to the active hardware printer below.
+      <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px', marginBottom: '0.35rem' }}>
+        Your Kiosk Release Code
+      </h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto' }}>
+        Enter this 6-digit code on the Ubuntu printer station terminal, or click Auto Release below.
       </p>
 
-      {/* Big OTP Card */}
-      <div className="otp-card">
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          One-Time Passcode
+      {/* Big 6-Digit Display Card - Exactly matches Flutter */}
+      <div className="otp-display-card">
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 700 }}>
+          6-DIGIT RELEASE CODE
         </div>
-        <div className="otp-code">
-          {otp.split('').join(' ')}
+
+        {/* 6 Digit Boxes */}
+        <div className="otp-box-row">
+          {otpDigits.map((digit, idx) => (
+            <div key={idx} className="otp-digit-box">
+              {digit}
+            </div>
+          ))}
         </div>
-        <div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
             onClick={handleCopy}
             className="btn-secondary"
-            style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem 1.25rem' }}
+            style={{ borderRadius: '12px', padding: '0.45rem 1rem', fontSize: '0.82rem' }}
           >
             {copied ? (
               <>
-                <Check size={16} color="#10b981" />
+                <Check size={15} color="#10b981" />
                 <span style={{ color: '#10b981' }}>Copied to Clipboard</span>
               </>
             ) : (
               <>
-                <Copy size={16} />
+                <Copy size={15} />
                 <span>Copy Passcode</span>
               </>
             )}
           </button>
+
+          <div className="countdown-badge">
+            <Clock size={14} />
+            <span>Valid for: {formatCountdown(secondsLeft)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Printer Destination Card */}
+      <div className="card-white" style={{ textAlign: 'left', marginBottom: '1.25rem' }}>
+        <div className="summary-row">
+          <span>Active Printer Queue</span>
+          <span style={{ fontWeight: 700, color: 'var(--primary)' }}>HP_LaserJet_400_M401dn_F36EC0</span>
+        </div>
+        <div className="summary-row">
+          <span>Order ID</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{order?.id || 'ORD-NEW'}</span>
+        </div>
+        <div className="summary-row">
+          <span>Kiosk URL</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>http://127.0.0.1:5001/kiosk</span>
         </div>
       </div>
 
       {error && (
         <div style={{
-          background: 'rgba(239, 68, 68, 0.1)',
+          background: 'var(--danger-surface)',
           border: '1px solid rgba(239, 68, 68, 0.3)',
-          color: '#f87171',
-          padding: '0.9rem',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '1.5rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem'
+          color: 'var(--danger)',
+          padding: '0.85rem',
+          borderRadius: '12px',
+          marginBottom: '1.25rem',
+          fontSize: '0.85rem'
         }}>
-          <AlertCircle size={18} />
-          <span>{error}</span>
+          {error}
         </div>
       )}
 
       {printSuccess ? (
         <div style={{
-          background: 'rgba(16, 185, 129, 0.12)',
-          border: '1px solid rgba(16, 185, 129, 0.3)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '2rem',
-          marginBottom: '2rem'
+          background: 'var(--success-surface)',
+          border: '1px solid rgba(16, 185, 129, 0.4)',
+          borderRadius: '18px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          color: '#065f46'
         }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            background: 'var(--success)',
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem auto'
-          }}>
-            <Printer size={32} />
-          </div>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '0.5rem', color: '#34d399' }}>
-            Document Sent to Printer!
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-            Job submitted to <strong>HP_LaserJet_400_M401dn_F36EC0</strong>. Paper will feed and print automatically.
+          <CheckCircle2 size={36} color="#10b981" style={{ margin: '0 auto 0.5rem auto' }} />
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#065f46', marginBottom: '0.25rem' }}>
+            Printing Dispatched!
+          </h3>
+          <p style={{ fontSize: '0.85rem' }}>
+            Job submitted to HP_LaserJet_400_M401dn_F36EC0 via CUPS. Please collect your document from the printer output tray.
           </p>
         </div>
       ) : (
-        <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
           <button
             className="btn-primary"
             onClick={handleDirectRelease}
             disabled={releasing}
-            style={{
-              padding: '1.1rem 2rem',
-              fontSize: '1.1rem',
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              boxShadow: '0 4px 20px rgba(16, 185, 129, 0.35)'
-            }}
           >
             {releasing ? (
               <>
-                <Loader2 size={22} style={{ animation: 'spin 1s linear infinite' }} />
-                <span>Releasing Job to HP Printer...</span>
+                <Loader2 size={18} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                <span>Releasing Job to HP LaserJet...</span>
               </>
             ) : (
               <>
-                <Printer size={22} />
-                <span>Release & Print to Hardware Now</span>
+                <Printer size={18} />
+                <span>Release to Physical Printer Now</span>
               </>
             )}
           </button>
         </div>
       )}
 
-      <div>
-        <button
-          onClick={onReset}
-          className="btn-secondary"
-          style={{ padding: '0.75rem 1.5rem' }}
-        >
-          <RotateCcw size={16} />
-          <span>Print Another Document</span>
-        </button>
-      </div>
+      <button
+        onClick={onReset}
+        className="btn-secondary"
+        style={{ width: '100%', padding: '0.75rem' }}
+      >
+        <RotateCcw size={16} />
+        <span>Start New Print Order</span>
+      </button>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

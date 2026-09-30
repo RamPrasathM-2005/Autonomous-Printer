@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 
 export default function PaymentStep({ orderData, onBack, onNext }) {
@@ -8,150 +7,135 @@ export default function PaymentStep({ orderData, onBack, onNext }) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
 
-  const handlePay = async () => {
+  const handleSimulatePayment = async () => {
     setProcessing(true);
     setError(null);
 
     try {
-      // 1. Initialize payment order with backend
-      const initResp = await api.createPayment(order.id);
-
-      // 2. Simulate Razorpay verification (or live gateway)
-      await api.verifyPayment({
+      // 1. Create payment order
+      const payOrder = await api.createPayment(order.id);
+      
+      // 2. Verify payment (generates release OTP)
+      const verifyData = await api.verifyPayment({
         orderId: order.id,
-        razorpayOrderId: initResp.razorpayOrderId || `order_sim_${Date.now()}`,
-        razorpayPaymentId: `pay_sim_${Date.now()}`,
-        razorpaySignature: 'simulated_signature'
-      });
-
-      // 3. Fetch newly generated OTP for order
-      const otpResp = await api.getOrderOtp(order.id);
-
-      // Trigger confetti celebration!
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
+        razorpayOrderId: payOrder.razorpayOrderId || `rzp_${order.id}`,
+        razorpayPaymentId: `pay_demo_${Date.now()}`,
+        razorpaySignature: 'demo_valid_signature_hash',
       });
 
       onNext({
         order,
         document,
-        otp: otpResp.otp,
-        expiresAt: otpResp.expiresAt
+        otp: verifyData.otp,
+        expiresAt: verifyData.expires_at || verifyData.expiresAt,
       });
     } catch (err) {
-      setError(err.message || 'Payment processing failed');
+      setError(err.message || 'Payment processing failed. Please retry.');
     } finally {
       setProcessing(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <button
-        onClick={onBack}
-        className="btn-secondary"
-        style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem', marginBottom: '1.5rem' }}
-      >
-        <ArrowLeft size={16} /> Back to Options
-      </button>
-
-      <div className="glass-panel" style={{ padding: '2.5rem' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            background: 'rgba(99, 102, 241, 0.15)',
-            color: '#818cf8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem auto'
-          }}>
-            <CreditCard size={30} />
-          </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Complete Your Payment</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.3rem' }}>
-            Instant digital checkout. An OTP release code will be generated upon confirmation.
-          </p>
-        </div>
-
-        {error && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
-            padding: '0.85rem 1.25rem',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '1.5rem'
-          }}>
-            {error}
-          </div>
-        )}
-
-        <div style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          padding: '1.25rem',
-          marginBottom: '2rem'
-        }}>
-          <div className="summary-row">
-            <span>Order Reference</span>
-            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{order.id}</span>
-          </div>
-          <div className="summary-row">
-            <span>Document</span>
-            <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
-              {document.originalFilename || document.original_filename}
-            </span>
-          </div>
-          <div className="summary-row">
-            <span>Copies & Configuration</span>
-            <span style={{ color: 'var(--text-main)' }}>
-              {printSettings.copies} copies • {printSettings.colour ? 'Color' : 'B&W'} • {printSettings.paperSize}
-            </span>
-          </div>
-          <div className="summary-total" style={{ margin: '1rem 0 0 0', padding: '0.75rem 0 0 0' }}>
-            <span style={{ fontWeight: 700 }}>Total Amount</span>
-            <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#34d399' }}>₹{totalAmount}</span>
-          </div>
-        </div>
-
+    <div>
+      <div style={{ marginBottom: '1.25rem' }}>
         <button
-          className="btn-primary"
-          onClick={handlePay}
-          disabled={processing}
-          style={{ padding: '1rem 2rem', fontSize: '1.1rem' }}
+          onClick={onBack}
+          className="btn-secondary"
+          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', marginBottom: '0.4rem' }}
         >
-          {processing ? (
-            <>
-              <Loader2 size={22} style={{ animation: 'spin 1s linear infinite' }} />
-              <span>Verifying & Generating OTP...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles size={20} />
-              <span>Pay & Generate OTP (₹{totalAmount})</span>
-            </>
-          )}
+          <ArrowLeft size={15} /> Back
         </button>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+          Payment & Release
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+          Complete payment to receive your 6-digit physical print release OTP.
+        </p>
+      </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem',
-          marginTop: '1.25rem',
-          color: 'var(--text-dim)',
-          fontSize: '0.8rem'
-        }}>
-          <ShieldCheck size={16} />
-          <span>256-Bit Encrypted Secure Transaction</span>
+      {/* Order Summary Card */}
+      <div className="card-white">
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.85rem', color: 'var(--text-primary)' }}>
+          Order Summary
+        </h3>
+        <div className="summary-row">
+          <span>Order ID</span>
+          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{order.id}</span>
+        </div>
+        <div className="summary-row">
+          <span>Document</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            {document.originalFilename || document.original_filename || 'document.pdf'}
+          </span>
+        </div>
+        <div className="summary-row">
+          <span>Print Settings</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            {printSettings.copies} copies • {printSettings.colour ? 'Color' : 'Grayscale'} • {printSettings.sides === 'two-sided-long-edge' ? 'Duplex' : 'Single'}
+          </span>
+        </div>
+        <div className="summary-row">
+          <span>Print Station Queue</span>
+          <span style={{ fontWeight: 700, color: 'var(--primary)' }}>HP_LaserJet_400_M401dn_F36EC0</span>
+        </div>
+        <div className="summary-total">
+          <span>Total Payable Amount</span>
+          <span className="price-tag">₹{totalAmount}</span>
         </div>
       </div>
+
+      {/* Payment Method Card */}
+      <div className="card-white" style={{ background: 'var(--primary-surface)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <ShieldCheck size={22} color="var(--primary)" />
+          <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
+            Instant Touchless Pay
+          </span>
+        </div>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Supports UPI, Google Pay, PhonePe, Cards, or NetBanking. Once payment is confirmed, an instant 6-digit OTP will be issued to release your print at the machine.
+        </p>
+      </div>
+
+      {error && (
+        <div style={{
+          background: 'var(--danger-surface)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          color: 'var(--danger)',
+          padding: '0.85rem 1.25rem',
+          borderRadius: '14px',
+          marginBottom: '1.25rem',
+          fontSize: '0.88rem'
+        }}>
+          {error}
+        </div>
+      )}
+
+      <button
+        className="btn-primary"
+        onClick={handleSimulatePayment}
+        disabled={processing}
+      >
+        {processing ? (
+          <>
+            <Loader2 size={18} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+            <span>Processing Payment...</span>
+          </>
+        ) : (
+          <>
+            <CreditCard size={18} />
+            <span>Pay ₹{totalAmount} & Get Release OTP</span>
+          </>
+        )}
+      </button>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

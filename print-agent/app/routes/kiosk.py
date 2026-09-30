@@ -312,7 +312,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       <div class="station-subtitle">PRINT STATION</div>
       <div class="status-badge">
         <span class="status-dot"></span>
-        <span id="printer-name">HP_LaserJet_400_M401dn_E9A0F4</span>
+        <span id="printer-name">HP_LaserJet_400_M401dn_F36EC0</span>
         <span style="opacity: 0.6;">(READY)</span>
       </div>
     </div>
