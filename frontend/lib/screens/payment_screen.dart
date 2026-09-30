@@ -187,69 +187,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
   );
 
-  Widget _progress() => Padding(
-    padding: const EdgeInsets.only(bottom: 24),
-    child: Wrap(
-      spacing: 20,
-      runSpacing: 12,
-      children: [
-        for (final (index, label) in [
-          'Upload',
-          'Options',
-          'Payment',
-          'Release',
-          'Print',
-        ].indexed)
-          Semantics(
-            label: '$label, step ${index + 1} of 5',
-            selected: index == 2,
-            excludeSemantics: true,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: index == 2
-                        ? AppTheme.primary
-                        : AppTheme.surfaceSubtle,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: index < 2
-                      ? const Icon(
-                          Icons.check,
-                          size: 14,
-                          color: AppTheme.primary,
-                        )
-                      : Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: index == 2
-                                ? Colors.white
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: index == 2 ? FontWeight.w600 : FontWeight.w400,
-                    color: index == 2
-                        ? AppTheme.primary
-                        : AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +391,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _progress(),
                 LayoutBuilder(
                   builder: (context, constraints) {
                     if (constraints.maxWidth < 760) {
