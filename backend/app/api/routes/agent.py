@@ -76,7 +76,7 @@ def release_job_kiosk(
     Public endpoint for station touchscreen or mobile client.
     Verifies OTP and triggers printing without requiring agent device authentication.
     """
-    print(f"[BACKEND] Kiosk OTP release requested for OTP: {req.otp}")
+    print("[BACKEND] Kiosk OTP release requested.")
     job = otp_service.verify_and_release_job(
         db=db,
         server_id=None,
@@ -92,11 +92,13 @@ def release_job_kiosk(
         db.commit()
 
     # Try notifying print agent directly on localhost if online
-    try:
-        import requests
-        requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=1)
-    except Exception:
-        pass
+    for port in (5001, 5000):
+        try:
+            import requests
+            requests.post(f"http://127.0.0.1:{port}/local/release", json={"otp": req.otp}, timeout=1)
+            break
+        except Exception:
+            pass
 
     # Ensure background completion transition
     if order:
