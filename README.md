@@ -44,6 +44,18 @@ A production-ready, self-hosted autonomous printing platform connecting a modern
 
 ---
 
+## 📖 Component Documentation & Run Guides
+
+Each sub-service in this repository contains its own dedicated, step-by-step setup and running instructions:
+
+| Component | Technology | Directory | Run Guide |
+| :--- | :--- | :--- | :--- |
+| **Backend API** | FastAPI (Python 3.12+), MySQL, SQLAlchemy | `backend/` | 📖 [Backend Run Guide](backend/README.md) |
+| **Frontend Client** | Flutter 3.x (Web, Android APK, Windows) | `frontend/` | 📱 [Frontend Run Guide](frontend/README.md) |
+| **Print Agent** | Flask, CUPS daemon (Python 3.12+) | `print-agent/` | 🖨️ [Print Agent Run Guide](print-agent/README.md) |
+
+---
+
 ## 🚀 Main User & Kiosk Workflow
 
 1. **Station Selection**: Discover active kiosk stations via `GET /api/print-servers` or scan a kiosk QR code.
