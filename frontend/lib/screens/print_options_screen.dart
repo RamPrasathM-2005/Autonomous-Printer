@@ -14,7 +14,7 @@ class PrintOptionsScreen extends StatefulWidget {
     super.key,
     List<UploadedDocument>? documents,
     UploadedDocument? document,
-    this.selectedStationId = 'station-1',
+    this.selectedStationId = 'PRINT-SERVER-001',
   }) : documents = documents ?? (document != null ? [document] : []);
 
   UploadedDocument get primaryDocument => documents.isNotEmpty
@@ -42,6 +42,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   bool _isValidating = false;
   String? _validationError;
   bool _showCostBreakdown = false;
+  int _visualizerMode = 0; // 0: 3D Smart Printer, 1: Document/Photo Preview
 
   @override
   void initState() {
@@ -76,9 +77,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         _selectedDocIndex = index;
         _rangeController.text = _configs[index].customRange;
       });
-      // Auto-scroll selected tab into view smoothly
       if (_tabScrollController.hasClients) {
-        final target = (index * 150.0)
+        final target = (index * 160.0)
             .clamp(0.0, _tabScrollController.position.maxScrollExtent);
         _tabScrollController.animateTo(
           target,
@@ -86,18 +86,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           curve: Curves.easeOut,
         );
       }
-    }
-  }
-
-  void _nextDocument() {
-    if (_selectedDocIndex < _configs.length - 1) {
-      _selectDocument(_selectedDocIndex + 1);
-    }
-  }
-
-  void _prevDocument() {
-    if (_selectedDocIndex > 0) {
-      _selectDocument(_selectedDocIndex - 1);
     }
   }
 
@@ -121,17 +109,35 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         copies: current.copies,
         colour: current.isColor,
         sides: current.sides,
-        paperSize: 'A4',
+        paperSize: current.paperSize,
         orientation: current.orientation,
         pageRange: current.isCustomRange && current.customRange.trim().isNotEmpty
             ? current.customRange.trim()
-            : 'all',
+            : current.rangeOption,
       );
+
+      final List<Map<String, dynamic>> itemsPayload = _configs.map((c) {
+        final pr = (c.isCustomRange && c.customRange.trim().isNotEmpty)
+            ? c.customRange.trim()
+            : c.rangeOption;
+        return {
+          'document_id': c.document.id,
+          'settings': {
+            'copies': c.copies,
+            'colour': c.isColor,
+            'sides': c.sides,
+            'paper_size': c.paperSize,
+            'orientation': c.orientation,
+            'page_range': pr,
+          },
+        };
+      }).toList();
 
       final order = await _apiService.createOrder(
         documentId: widget.primaryDocument.id,
         printServerId: widget.selectedStationId,
         printSettings: settings,
+        items: itemsPayload,
       );
 
       setState(() {
@@ -164,7 +170,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Print Settings'),
+        title: const Text('Fast Print Mode'),
+        elevation: 0,
+        backgroundColor: AppTheme.surfaceWhite,
       ),
       body: Column(
         children: [
@@ -172,709 +180,491 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Multi-PDF Tab Selector (If more than 1 document)
-                  if (_configs.length > 1) ...[
-                    Row(
-                      children: [
-                        const Icon(Icons.picture_as_pdf_rounded,
-                            size: 18, color: AppTheme.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Documents (${_selectedDocIndex + 1}/${_configs.length})',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Multi-Document Tab Selector Bar (If multiple files uploaded)
+                      if (_configs.length > 1) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Configuring Document ${_selectedDocIndex + 1} of ${_configs.length}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              '${_configs.length} Files Uploaded',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 48,
+                          child: ListView.separated(
+                            controller: _tabScrollController,
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _configs.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (ctx, index) {
+                              final cfg = _configs[index];
+                              final isSelected = index == _selectedDocIndex;
+                              return InkWell(
+                                onTap: () => _selectDocument(index),
+                                borderRadius: BorderRadius.circular(12),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? AppTheme.primary : AppTheme.surfaceWhite,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? AppTheme.primary : AppTheme.border,
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                    boxShadow: isSelected ? AppTheme.buttonShadow : AppTheme.cardShadow,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        cfg.document.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                                        size: 16,
+                                        color: isSelected ? Colors.white : AppTheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        cfg.document.filename,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
+                        const SizedBox(height: 20),
                       ],
-                    ),
-                    const SizedBox(height: 8),
 
-                    // Horizontal PDF tabs (Clean, smooth scrolling without <> arrow buttons)
-                    SizedBox(
-                      height: 46,
-                      child: ListView.separated(
-                        controller: _tabScrollController,
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _configs.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (ctx, index) {
-                          final cfg = _configs[index];
-                          final isSelected = index == _selectedDocIndex;
+                      // Active Document Summary Card (Inspired by Image 2 Header Card)
+                      _buildDocumentHeaderCard(),
 
-                          final Color tabBg = isSelected
-                              ? AppTheme.primary
-                              : AppTheme.surfaceWhite;
-                          final Color tabBorder = isSelected
-                              ? AppTheme.primary
-                              : AppTheme.border;
-                          final Color tabText = isSelected
-                              ? Colors.white
-                              : AppTheme.textPrimary;
-                          final Color badgeBg = isSelected
-                              ? Colors.white.withValues(alpha: 0.22)
-                              : AppTheme.surfaceSubtle;
-                          final Color badgeText = isSelected
-                              ? Colors.white
-                              : AppTheme.textSecondary;
-                          final IconData tabIcon = isSelected
-                              ? Icons.picture_as_pdf_rounded
-                              : Icons.picture_as_pdf_outlined;
-                          final Color iconColor = isSelected
-                              ? Colors.white
-                              : AppTheme.textSecondary;
+                      const SizedBox(height: 20),
 
-                          return InkWell(
-                            onTap: () => _selectDocument(index),
-                            borderRadius: BorderRadius.circular(10),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: tabBg,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: tabBorder,
-                                  width: isSelected ? 1.5 : 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: AppTheme.primary
-                                              .withValues(alpha: 0.25),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ]
-                                    : null,
+                      // Interactive 3D Smart Printer & Document Visualizer (Reference Image 2)
+                      _buildInteractiveVisualizerCard(),
+
+                      const SizedBox(height: 20),
+
+                      // Segment 1: Color Mode Selector (Color or Grayscale)
+                      _buildSectionContainer(
+                        title: 'Color Mode',
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildSegmentPill(
+                                label: 'Color',
+                                icon: Icons.color_lens_rounded,
+                                isSelected: _currentConfig.isColor,
+                                accentColor: const Color(0xFF6366F1),
+                                onTap: () => _updateActiveSetting(() => _currentConfig.isColor = true),
                               ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildSegmentPill(
+                                label: 'Grayscale',
+                                icon: Icons.tonality_rounded,
+                                isSelected: !_currentConfig.isColor,
+                                accentColor: const Color(0xFF475569),
+                                onTap: () => _updateActiveSetting(() => _currentConfig.isColor = false),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Segment 2: Paper Size & Orientation (Reference Image 3: Paper Size segment)
+                      _buildSectionContainer(
+                        title: 'Paper Size & Layout',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Paper Size',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: ['A4', 'Letter', 'Legal'].map((size) {
+                                final isSelected = _currentConfig.paperSize == size;
+                                return Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: _buildPillChip(
+                                      label: size,
+                                      isSelected: isSelected,
+                                      onTap: () => _updateActiveSetting(() => _currentConfig.paperSize = size),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Orientation',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildSegmentPill(
+                                    label: 'Portrait',
+                                    icon: Icons.crop_portrait_rounded,
+                                    isSelected: _currentConfig.orientation == 'portrait',
+                                    onTap: () => _updateActiveSetting(() => _currentConfig.orientation = 'portrait'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildSegmentPill(
+                                    label: 'Landscape',
+                                    icon: Icons.crop_landscape_rounded,
+                                    isSelected: _currentConfig.orientation == 'landscape',
+                                    onTap: () => _updateActiveSetting(() => _currentConfig.orientation = 'landscape'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Segment 3: Duplex & Copies Counter Card (Reference Image 3: Copies stepper card)
+                      Row(
+                        children: [
+                          // Copies Counter (Reference Image 3: - 1 + Pill Card)
+                          Expanded(
+                            flex: 1,
+                            child: _buildSectionContainer(
+                              title: 'Copies',
                               child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(
-                                    tabIcon,
-                                    size: 16,
-                                    color: iconColor,
+                                  IconButton.filledTonal(
+                                    onPressed: _currentConfig.copies > 1
+                                        ? () => _updateActiveSetting(() => _currentConfig.copies--)
+                                        : null,
+                                    icon: const Icon(Icons.remove_rounded),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: AppTheme.surfaceSubtle,
+                                      foregroundColor: AppTheme.textPrimary,
+                                    ),
                                   ),
-                                  const SizedBox(width: 8),
                                   Text(
-                                    cfg.document.filename,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: tabText,
+                                    '${_currentConfig.copies}',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.textPrimary,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 7, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: badgeBg,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${cfg.document.pages}p',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: badgeText,
-                                      ),
+                                  IconButton.filledTonal(
+                                    onPressed: () => _updateActiveSetting(() => _currentConfig.copies++),
+                                    icon: const Icon(Icons.add_rounded),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: AppTheme.primarySurface,
+                                      foregroundColor: AppTheme.primary,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // Currently active document banner with ONLY Next and Previous buttons
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceWhite,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(9),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primarySurface,
-                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
-                            Icons.description_rounded,
-                            color: AppTheme.primary,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _currentConfig.document.filename,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppTheme.textPrimary,
+                          const SizedBox(width: 12),
+                          // Print Quality Pill Card
+                          Expanded(
+                            flex: 1,
+                            child: _buildSectionContainer(
+                              title: 'Print Quality',
+                              child: DropdownButtonFormField<String>(
+                                value: _currentConfig.printQuality,
+                                decoration: const InputDecoration(
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                items: const [
+                                  DropdownMenuItem(value: 'Standard', child: Text('Standard (300 DPI)')),
+                                  DropdownMenuItem(value: 'High (600 DPI)', child: Text('High Quality')),
+                                  DropdownMenuItem(value: 'Draft', child: Text('Draft Fast')),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    _updateActiveSetting(() => _currentConfig.printQuality = val);
+                                  }
+                                },
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Document ${_selectedDocIndex + 1} of ${_configs.length} • ${_currentConfig.document.pages} Pages',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_configs.length > 1) ...[
-                          const SizedBox(width: 8),
-                          // Dedicated Next & Previous navigation buttons right by the PDF name
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: _selectedDocIndex > 0
-                                    ? _prevDocument
-                                    : null,
-                                icon: const Icon(Icons.arrow_back_rounded,
-                                    size: 14),
-                                label: const Text('Prev'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  visualDensity: VisualDensity.compact,
-                                  foregroundColor: AppTheme.textPrimary,
-                                  disabledForegroundColor: AppTheme.textMuted,
-                                  side: BorderSide(
-                                    color: _selectedDocIndex > 0
-                                        ? AppTheme.border
-                                        : AppTheme.border
-                                            .withValues(alpha: 0.4),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: _selectedDocIndex < _configs.length - 1
-                                    ? _nextDocument
-                                    : null,
-                                icon: const Icon(Icons.arrow_forward_rounded,
-                                    size: 14),
-                                label: const Text('Next'),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  visualDensity: VisualDensity.compact,
-                                  backgroundColor: AppTheme.primary,
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor:
-                                      AppTheme.surfaceSubtle,
-                                  disabledForegroundColor: AppTheme.textMuted,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  const SizedBox(height: 20),
+                      const SizedBox(height: 16),
 
-                  const Text(
-                    'Step 2: Configure Job Options',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Option 1: Number of Copies
-                  _buildSectionCard(
-                    title: 'Number of Copies',
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total sets to print',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.textSecondary,
-                          ),
+                      // Segment 4: Sides & Page Range Options
+                      _buildSectionContainer(
+                        title: 'Sides & Page Selection',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Print Sides',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildPillChip(
+                                    label: 'Single-sided',
+                                    isSelected: _currentConfig.sides == 'one-sided',
+                                    onTap: () => _updateActiveSetting(() => _currentConfig.sides = 'one-sided'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildPillChip(
+                                    label: 'Double-sided',
+                                    isSelected: _currentConfig.sides != 'one-sided',
+                                    onTap: () => _updateActiveSetting(() => _currentConfig.sides = 'two-sided-long-edge'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Page Range',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildRangeChip('All Pages (${_currentConfig.document.pages})', 'all'),
+                                _buildRangeChip('Odd Pages Only', 'odd'),
+                                _buildRangeChip('Even Pages Only', 'even'),
+                                _buildRangeChip('Custom Range', 'custom'),
+                              ],
+                            ),
+                            if (_currentConfig.isCustomRange) ...[
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _rangeController,
+                                decoration: const InputDecoration(
+                                  hintText: 'e.g. 1-5, 8, 11-13',
+                                  prefixIcon: Icon(Icons.format_list_numbered_rounded, size: 20),
+                                ),
+                                onChanged: (text) {
+                                  _updateActiveSetting(() {
+                                    _currentConfig.customRange = text;
+                                  });
+                                },
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
+
+                      if (_validationError != null) ...[
+                        const SizedBox(height: 16),
                         Container(
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppTheme.border),
-                            borderRadius: BorderRadius.circular(10),
+                            color: AppTheme.dangerSurface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
                           ),
                           child: Row(
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove, size: 18),
-                                onPressed: _currentConfig.copies > 1
-                                    ? () => _updateActiveSetting(
-                                        () => _currentConfig.copies--)
-                                    : null,
-                              ),
-                              Container(
-                                constraints: const BoxConstraints(minWidth: 36),
-                                alignment: Alignment.center,
+                              const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
                                 child: Text(
-                                  '${_currentConfig.copies}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                  ),
+                                  _validationError!,
+                                  style: const TextStyle(color: AppTheme.danger, fontSize: 13, fontWeight: FontWeight.w500),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add, size: 18),
-                                onPressed: _currentConfig.copies < 50
-                                    ? () => _updateActiveSetting(
-                                        () => _currentConfig.copies++)
-                                    : null,
                               ),
                             ],
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
+                ),
+              ),
+            ),
+          ),
 
-                  const SizedBox(height: 14),
-
-                  // Option 2: Color Mode
-                  _buildSectionCard(
-                    title: 'Color Mode',
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Black & White',
-                            subtitle: '₹2.00 / page',
-                            icon: Icons.monochrome_photos_outlined,
-                            isSelected: !_currentConfig.isColor,
-                            onTap: () => _updateActiveSetting(
-                                () => _currentConfig.isColor = false),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Full Color',
-                            subtitle: '₹10.00 / page',
-                            icon: Icons.palette_outlined,
-                            isSelected: _currentConfig.isColor,
-                            onTap: () => _updateActiveSetting(
-                                () => _currentConfig.isColor = true),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Option 3: Print Sides
-                  _buildSectionCard(
-                    title: 'Print Sides (Duplex)',
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Single-Sided',
-                            subtitle: 'Standard',
-                            icon: Icons.description_outlined,
-                            isSelected: _currentConfig.sides == 'one-sided',
-                            onTap: () => _updateActiveSetting(
-                                () => _currentConfig.sides = 'one-sided'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Double-Sided',
-                            subtitle: '10% Duplex discount',
-                            icon: Icons.auto_stories_outlined,
-                            isSelected: _currentConfig.sides != 'one-sided',
-                            onTap: () => _updateActiveSetting(() =>
-                                _currentConfig.sides = 'two-sided-long-edge'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Option 4: Orientation
-                  _buildSectionCard(
-                    title: 'Orientation (A4 Paper)',
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Portrait',
-                            subtitle: 'Vertical layout',
-                            icon: Icons.portrait_rounded,
-                            isSelected:
-                                _currentConfig.orientation == 'portrait',
-                            onTap: () => _updateActiveSetting(
-                                () => _currentConfig.orientation = 'portrait'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildSelectableChip(
-                            label: 'Landscape',
-                            subtitle: 'Horizontal layout',
-                            icon: Icons.landscape_rounded,
-                            isSelected:
-                                _currentConfig.orientation == 'landscape',
-                            onTap: () => _updateActiveSetting(
-                                () => _currentConfig.orientation = 'landscape'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Option 5: Page Range
-                  _buildSectionCard(
-                    title: 'Page Range for this Document',
-                    child: Column(
-                      children: [
-                        Row(
+          // Bottom Action & Total Summary Bar (Reference Image 3 Action Bar)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceWhite,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  _updateActiveSetting(() {
-                                    _currentConfig.isCustomRange = false;
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10, horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: !_currentConfig.isCustomRange
-                                        ? AppTheme.primarySurface
-                                        : AppTheme.surfaceWhite,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: !_currentConfig.isCustomRange
-                                          ? AppTheme.primary
-                                          : AppTheme.border,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        !_currentConfig.isCustomRange
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_unchecked,
-                                        size: 16,
-                                        color: !_currentConfig.isCustomRange
-                                            ? AppTheme.primary
-                                            : AppTheme.textSecondary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'All Pages',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  _updateActiveSetting(() {
-                                    _currentConfig.isCustomRange = true;
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 10, horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: _currentConfig.isCustomRange
-                                        ? AppTheme.primarySurface
-                                        : AppTheme.surfaceWhite,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: _currentConfig.isCustomRange
-                                          ? AppTheme.primary
-                                          : AppTheme.border,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        _currentConfig.isCustomRange
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_unchecked,
-                                        size: 16,
-                                        color: _currentConfig.isCustomRange
-                                            ? AppTheme.primary
-                                            : AppTheme.textSecondary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Text(
-                                        'Custom Range',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_currentConfig.isCustomRange) ...[
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _rangeController,
-                            decoration: const InputDecoration(
-                              hintText: 'e.g. 1-3 or 1,2,5',
-                              prefixIcon: Icon(Icons.format_list_numbered,
-                                  size: 20),
-                            ),
-                            onChanged: (text) {
-                              _updateActiveSetting(() {
-                                _currentConfig.customRange = text;
-                              });
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  if (_validationError != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.dangerSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: AppTheme.danger.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline,
-                              color: AppTheme.danger, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _validationError!,
-                              style: const TextStyle(
-                                  color: AppTheme.danger, fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  // Price Preview & Submit Card
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceWhite,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Flexible(
-                                        child: Text(
-                                          'Total Estimated Cost',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: AppTheme.textSecondary,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (_configs.length > 1) ...[
-                                        const SizedBox(width: 6),
-                                        InkWell(
-                                          onTap: () {
-                                            setState(() {
-                                              _showCostBreakdown =
-                                                  !_showCostBreakdown;
-                                            });
-                                          },
-                                          child: Icon(
-                                            _showCostBreakdown
-                                                ? Icons.expand_less
-                                                : Icons.expand_more,
-                                            size: 18,
-                                            color: AppTheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppTheme.primary,
-                                    ),
-                                  ),
-                                  Text(
-                                    '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppTheme.textSecondary,
-                                    ),
+                            Row(
+                              children: [
+                                const Flexible(
+                                  child: Text(
+                                    'Total Estimated Price',
+                                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            ElevatedButton(
-                              onPressed: _isValidating ? null : _submitOrder,
-                              child: _isValidating
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Row(
-                                      children: [
-                                        Text('Proceed to Pay'),
-                                        SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward_rounded,
-                                            size: 16),
-                                      ],
+                                ),
+                                if (_configs.length > 1) ...[
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
+                                    child: Icon(
+                                      _showCostBreakdown ? Icons.expand_less : Icons.expand_more,
+                                      size: 18,
+                                      color: AppTheme.primary,
                                     ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.primary,
+                                letterSpacing: -0.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-
-                        // Expandable per-document price breakdown
-                        if (_showCostBreakdown && _configs.length > 1) ...[
-                          const Divider(height: 24),
-                          Column(
-                            children: _configs.map((c) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${c.document.filename} (${c.copies}x, ${c.isColor ? "Color" : "B/W"}, ${c.orientation == "landscape" ? "Landscape" : "Portrait"})',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Text(
-                                      '₹${c.estimatedCost.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _isValidating ? null : _submitOrder,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                        ],
-                      ],
-                    ),
+                          elevation: 0,
+                          shadowColor: AppTheme.primary.withOpacity(0.4),
+                        ),
+                        child: _isValidating
+                            ? const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Preparing Order...'),
+                                ],
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.print_rounded, size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Print Now',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.timer_outlined, size: 12, color: Colors.white),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          '~15s',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                ],
+                ),
               ),
             ),
           ),
@@ -883,13 +673,308 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildSectionCard({required String title, required Widget child}) {
+  Widget _buildDocumentHeaderCard() {
+    final doc = _currentConfig.document;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: doc.isPdf
+                  ? Container(
+                      color: const Color(0xFFFEF2F2),
+                      child: const Center(
+                        child: Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFDC2626), size: 28),
+                      ),
+                    )
+                  : Image.asset(
+                      'assets/images/mountain_preview.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFEFF6FF),
+                        child: const Icon(Icons.image_rounded, color: Color(0xFF2563EB), size: 28),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  doc.filename,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${doc.pages} Page(s)',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(doc.size / (1024 * 1024)).toStringAsFixed(2)} MB',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            tooltip: 'Add / Change Document',
+            style: IconButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.all(10),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInteractiveVisualizerCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.success,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Hardware Preview',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildVisualizerToggleBtn('3D Printer', 0),
+                      _buildVisualizerToggleBtn('Document View', 1),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Container(
+            height: 240,
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _visualizerMode == 0
+                    ? Container(
+                        key: const ValueKey('printer_view'),
+                        width: double.infinity,
+                        height: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/images/smart_printer.jpg',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.print_rounded,
+                                size: 64,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.success),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Autonomous Station Ready',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Container(
+                        key: const ValueKey('doc_view'),
+                        width: double.infinity,
+                        height: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/images/mountain_preview.jpg',
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.image_rounded,
+                                size: 64,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'High Resolution (A4)',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisualizerToggleBtn(String label, int mode) {
+    final isSelected = _visualizerMode == mode;
+    return InkWell(
+      onTap: () => setState(() => _visualizerMode = mode),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.surfaceWhite : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                  )
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionContainer({required String title, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -897,66 +982,120 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
               color: AppTheme.textPrimary,
+              letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
     );
   }
 
-  Widget _buildSelectableChip({
+  Widget _buildSegmentPill({
     required String label,
-    required String subtitle,
     required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color? accentColor,
+  }) {
+    final activeColor = accentColor ?? AppTheme.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? activeColor : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: isSelected ? activeColor : AppTheme.textSecondary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  color: isSelected ? activeColor : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillChip({
+    required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRangeChip(String label, String option) {
+    final isSelected = _currentConfig.rangeOption == option;
+    return InkWell(
+      onTap: () => _updateActiveSetting(() => _currentConfig.rangeOption = option),
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color:
-              isSelected ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? AppTheme.primary : AppTheme.border,
             width: isSelected ? 1.5 : 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color:
-                    isSelected ? AppTheme.primary : AppTheme.textMuted,
-              ),
-            ),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+          ),
         ),
       ),
     );

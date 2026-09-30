@@ -71,6 +71,13 @@ class PrintAgentService {
     }
   }
 
+  Future<Map<String, dynamic>> releasePrintJob({
+    required String stationId,
+    required String otp,
+  }) async {
+    return await releaseWithOtp(otp);
+  }
+
   Future<Map<String, dynamic>> releaseJobWithOtp(String otp) async {
     try {
       final res = await releaseWithOtp(otp);

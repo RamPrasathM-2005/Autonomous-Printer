@@ -16,9 +16,26 @@ class FileService:
         clean_key = storage_key.lstrip("/\\")
         target_path = (self.storage_root / clean_key).resolve()
 
+        try:
+            target_path.relative_to(self.storage_root)
+        except ValueError:
+            raise StorageException("Path traversal detected in storage key")
+
         # Check if already present in agent storage
         if target_path.exists() and target_path.is_file():
             return target_path
+
+        # Check root storage path
+        root_storage = (Path(__file__).resolve().parent.parent.parent.parent / "storage" / clean_key).resolve()
+        if root_storage.exists() and root_storage.is_file():
+            agent_logger.info(f"Resolved file from root storage: {root_storage}")
+            return root_storage
+
+        # Check root storage/documents
+        root_docs = (Path(__file__).resolve().parent.parent.parent.parent / "storage" / "documents" / Path(clean_key).name).resolve()
+        if root_docs.exists() and root_docs.is_file():
+            agent_logger.info(f"Resolved file from root documents storage: {root_docs}")
+            return root_docs
 
         # Check backend storage path
         backend_storage = (Path(__file__).resolve().parent.parent.parent.parent / "backend" / "storage" / clean_key).resolve()

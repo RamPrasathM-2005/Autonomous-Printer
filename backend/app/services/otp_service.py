@@ -94,6 +94,26 @@ class OTPService:
         )
 
         if not matching_candidates:
+            if server_id:
+                active_otp = (
+                    db.query(OTP)
+                    .join(Order, Order.id == OTP.order_id)
+                    .join(PrintJob, PrintJob.order_id == Order.id)
+                    .filter(PrintJob.server_id == server_id, OTP.active == True)
+                    .order_by(OTP.id.desc())
+                    .first()
+                )
+                if active_otp:
+                    active_otp.attempt_count += 1
+                    if active_otp.attempt_count >= settings.MAX_OTP_ATTEMPTS:
+                        active_otp.active = False
+                        db.commit()
+                        raise AppException(
+                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            error_code="TOO_MANY_ATTEMPTS",
+                            message="Maximum OTP attempts exceeded. Please request a new OTP."
+                        )
+                    db.commit()
             db.commit()
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,

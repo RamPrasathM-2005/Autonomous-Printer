@@ -15,6 +15,7 @@ class UploadedDocument {
 
   String get id => documentId;
   String get filename => originalFilename;
+  bool get isPdf => originalFilename.toLowerCase().endsWith('.pdf');
 
   String get formattedSize {
     if (size < 1024) return '$size B';
@@ -37,11 +38,12 @@ class DocumentPrintConfig {
   final UploadedDocument document;
   int copies;
   bool isColor;
-  String sides; // 'one-sided' or 'two-sided-long-edge'
-  String paperSize; // Fixed to 'A4'
-  String orientation; // 'portrait' or 'landscape'
-  bool isCustomRange;
+  String sides; // 'one-sided', 'two-sided-long-edge', 'two-sided-short-edge'
+  String paperSize; // 'A4', 'Letter', 'Legal'
+  String printQuality; // 'Standard', 'High (600 DPI)', 'Draft'
+  String rangeOption; // 'all', 'odd', 'even', 'custom'
   String customRange;
+  String orientation; // 'portrait', 'landscape'
 
   DocumentPrintConfig({
     required this.document,
@@ -49,10 +51,13 @@ class DocumentPrintConfig {
     this.isColor = false,
     this.sides = 'one-sided',
     this.paperSize = 'A4',
-    this.orientation = 'portrait',
-    this.isCustomRange = false,
+    this.printQuality = 'Standard',
+    this.rangeOption = 'all',
     this.customRange = '',
+    this.orientation = 'portrait',
   });
+
+  bool get isCustomRange => rangeOption == 'custom';
 
   String get colorDescription => isColor ? 'Full Color' : 'Black & White';
   String get sidesDescription => sides == 'one-sided' ? 'Single-Sided' : 'Double-Sided';
@@ -60,27 +65,39 @@ class DocumentPrintConfig {
       (isCustomRange && customRange.trim().isNotEmpty) ? customRange.trim() : 'All Pages';
 
   int get calculatedPages {
-    if (!isCustomRange || customRange.trim().isEmpty) {
-      return document.pages > 0 ? document.pages : 1;
-    }
-    final text = customRange.trim();
-    final parts = text.split('-');
-    if (parts.length == 2) {
-      int? start = int.tryParse(parts[0].trim());
-      int? end = int.tryParse(parts[1].trim());
-      if (start != null && end != null && end >= start) {
-        return (end - start + 1);
+    final total = document.pages;
+    if (rangeOption == 'all') return total;
+    if (rangeOption == 'odd') return (total / 2).ceil();
+    if (rangeOption == 'even') return (total / 2).floor();
+    if (rangeOption == 'custom' && customRange.isNotEmpty) {
+      try {
+        int count = 0;
+        final parts = customRange.split(',');
+        for (var part in parts) {
+          part = part.trim();
+          if (part.contains('-')) {
+            final range = part.split('-');
+            if (range.length == 2) {
+              final start = int.parse(range[0]);
+              final end = int.parse(range[1]);
+              count += (end - start + 1).clamp(0, total);
+            }
+          } else {
+            final page = int.parse(part);
+            if (page >= 1 && page <= total) count++;
+          }
+        }
+        return count > 0 ? count : total;
+      } catch (_) {
+        return total;
       }
     }
-    return document.pages > 0 ? document.pages : 1;
+    return total;
   }
 
   double get estimatedCost {
-    final rate = isColor ? 10.0 : 2.0;
-    double cost = calculatedPages * copies * rate;
-    if (sides != 'one-sided') {
-      cost = cost * 0.9; // 10% duplex discount
-    }
-    return cost;
+    final perPageBase = isColor ? 5.0 : 2.0;
+    final totalPg = calculatedPages;
+    return totalPg * copies * perPageBase;
   }
 }
