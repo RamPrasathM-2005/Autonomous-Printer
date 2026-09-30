@@ -6,69 +6,6 @@ import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import 'payment_screen.dart';
 
-class DocumentPrintConfig {
-  final UploadedDocument document;
-  int copies;
-  bool isColor;
-  String sides; // 'one-sided', 'two-sided-long-edge', 'two-sided-short-edge'
-  String paperSize; // 'A4', 'Letter', 'Legal'
-  String printQuality; // 'Standard', 'High (600 DPI)', 'Draft'
-  String rangeOption; // 'all', 'odd', 'even', 'custom'
-  String customRange;
-  String orientation; // 'portrait', 'landscape'
-
-  DocumentPrintConfig({
-    required this.document,
-    this.copies = 1,
-    this.isColor = false,
-    this.sides = 'one-sided',
-    this.paperSize = 'A4',
-    this.printQuality = 'Standard',
-    this.rangeOption = 'all',
-    this.customRange = '',
-    this.orientation = 'portrait',
-  });
-
-  bool get isCustomRange => rangeOption == 'custom';
-
-  int get calculatedPages {
-    final total = document.pages;
-    if (rangeOption == 'all') return total;
-    if (rangeOption == 'odd') return (total / 2).ceil();
-    if (rangeOption == 'even') return (total / 2).floor();
-    if (rangeOption == 'custom' && customRange.isNotEmpty) {
-      try {
-        int count = 0;
-        final parts = customRange.split(',');
-        for (var part in parts) {
-          part = part.trim();
-          if (part.contains('-')) {
-            final range = part.split('-');
-            if (range.length == 2) {
-              final start = int.parse(range[0]);
-              final end = int.parse(range[1]);
-              count += (end - start + 1).clamp(0, total);
-            }
-          } else {
-            final page = int.parse(part);
-            if (page >= 1 && page <= total) count++;
-          }
-        }
-        return count > 0 ? count : total;
-      } catch (_) {
-        return total;
-      }
-    }
-    return total;
-  }
-
-  double get estimatedCost {
-    final perPageBase = isColor ? 5.0 : 2.0;
-    final totalPg = calculatedPages;
-    return totalPg * copies * perPageBase;
-  }
-}
-
 class PrintOptionsScreen extends StatefulWidget {
   final List<UploadedDocument> documents;
   final String selectedStationId;
@@ -178,10 +115,28 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
             : current.rangeOption,
       );
 
+      final List<Map<String, dynamic>> itemsPayload = _configs.map((c) {
+        final pr = (c.isCustomRange && c.customRange.trim().isNotEmpty)
+            ? c.customRange.trim()
+            : c.rangeOption;
+        return {
+          'document_id': c.document.id,
+          'settings': {
+            'copies': c.copies,
+            'colour': c.isColor,
+            'sides': c.sides,
+            'paper_size': c.paperSize,
+            'orientation': c.orientation,
+            'page_range': pr,
+          },
+        };
+      }).toList();
+
       final order = await _apiService.createOrder(
         documentId: widget.primaryDocument.id,
         printServerId: widget.selectedStationId,
         printSettings: settings,
+        items: itemsPayload,
       );
 
       setState(() {
@@ -221,10 +176,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 2),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -306,14 +260,19 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         const SizedBox(height: 20),
                       ],
 
-                      // Active Document Summary Card (Inspired by Image 3 Header Card)
+                      // Active Document Summary Card
                       _buildDocumentHeaderCard(),
 
                       const SizedBox(height: 20),
 
-                      // Segment 1: Color Mode Selector (Reference Image 3: Color | Grayscale | Text | Sticker)
+                      // Document Preview Card (PDF Sheet Preview or Image Canvas)
+                      _buildDocumentPreviewCard(),
+
+                      const SizedBox(height: 20),
+
+                      // Segment 1: Color Mode Selector (Color or Grayscale)
                       _buildSectionContainer(
-                        title: 'Print Color Mode',
+                        title: 'Color Mode',
                         child: Row(
                           children: [
                             Expanded(
@@ -321,17 +280,17 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 label: 'Color',
                                 icon: Icons.color_lens_rounded,
                                 isSelected: _currentConfig.isColor,
-                                accentColor: const Color(0xFF8B5CF6),
+                                accentColor: const Color(0xFF6366F1),
                                 onTap: () => _updateActiveSetting(() => _currentConfig.isColor = true),
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: _buildSegmentPill(
-                                label: 'Grayscale / B&W',
+                                label: 'Grayscale',
                                 icon: Icons.tonality_rounded,
                                 isSelected: !_currentConfig.isColor,
-                                accentColor: const Color(0xFF64748B),
+                                accentColor: const Color(0xFF475569),
                                 onTap: () => _updateActiveSetting(() => _currentConfig.isColor = false),
                               ),
                             ),
@@ -400,27 +359,42 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                       const SizedBox(height: 16),
 
-                      // Segment 3: Duplex & Copies Counter Card (Reference Image 3: Copies stepper card)
-                      Row(
-                        children: [
-                          // Copies Counter (Reference Image 3: - 1 + Pill Card)
-                          Expanded(
-                            flex: 1,
-                            child: _buildSectionContainer(
-                              title: 'Copies',
+                      // Segment 3: Copies Stepper
+                      _buildSectionContainer(
+                        title: 'Number of Copies',
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Select copies to print',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceSubtle,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppTheme.border),
+                              ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton.filledTonal(
+                                  IconButton(
                                     onPressed: _currentConfig.copies > 1
                                         ? () => _updateActiveSetting(() => _currentConfig.copies--)
                                         : null,
                                     icon: const Icon(Icons.remove_rounded),
                                     style: IconButton.styleFrom(
-                                      backgroundColor: AppTheme.surfaceSubtle,
+                                      backgroundColor: AppTheme.surfaceWhite,
                                       foregroundColor: AppTheme.textPrimary,
+                                      elevation: 1,
                                     ),
                                   ),
+                                  const SizedBox(width: 16),
                                   Text(
                                     '${_currentConfig.copies}',
                                     style: const TextStyle(
@@ -429,43 +403,21 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                       color: AppTheme.textPrimary,
                                     ),
                                   ),
-                                  IconButton.filledTonal(
+                                  const SizedBox(width: 16),
+                                  IconButton(
                                     onPressed: () => _updateActiveSetting(() => _currentConfig.copies++),
                                     icon: const Icon(Icons.add_rounded),
                                     style: IconButton.styleFrom(
-                                      backgroundColor: AppTheme.primarySurface,
-                                      foregroundColor: AppTheme.primary,
+                                      backgroundColor: AppTheme.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 1,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Print Quality Pill Card
-                          Expanded(
-                            flex: 1,
-                            child: _buildSectionContainer(
-                              title: 'Print Quality',
-                              child: DropdownButtonFormField<String>(
-                                value: _currentConfig.printQuality,
-                                decoration: const InputDecoration(
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 'Standard', child: Text('Standard (300 DPI)')),
-                                  DropdownMenuItem(value: 'High (600 DPI)', child: Text('High Quality')),
-                                  DropdownMenuItem(value: 'Draft', child: Text('Draft Fast')),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    _updateActiveSetting(() => _currentConfig.printQuality = val);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -584,46 +536,56 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Row(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'Total Estimated Price',
-                                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                              ),
-                              if (_configs.length > 1) ...[
-                                const SizedBox(width: 4),
-                                InkWell(
-                                  onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
-                                  child: Icon(
-                                    _showCostBreakdown ? Icons.expand_less : Icons.expand_more,
-                                    size: 18,
-                                    color: AppTheme.primary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                const Flexible(
+                                  child: Text(
+                                    'Total Estimated Price',
+                                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                if (_configs.length > 1) ...[
+                                  const SizedBox(width: 4),
+                                  InkWell(
+                                    onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
+                                    child: Icon(
+                                      _showCostBreakdown ? Icons.expand_less : Icons.expand_more,
+                                      size: 18,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.primary,
-                              letterSpacing: -0.5,
                             ),
-                          ),
-                          Text(
-                            '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
-                            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.primary,
+                                letterSpacing: -0.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 12),
                       ElevatedButton(
                         onPressed: _isValidating ? null : _submitOrder,
                         style: ElevatedButton.styleFrom(
@@ -652,18 +614,42 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   Text('Preparing Order...'),
                                 ],
                               )
-                            : const Row(
+                            : Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    'Proceed to Payment',
+                                  const Icon(Icons.print_rounded, size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Print Now',
                                     style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.3,
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward_rounded, size: 18),
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.timer_outlined, size: 12, color: Colors.white),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          '~15s',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                       ),
@@ -691,19 +677,29 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
-              color: doc.isPdf ? const Color(0xFFFEF2F2) : const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: doc.isPdf ? const Color(0xFFFECACA) : const Color(0xFFBFDBFE),
-              ),
+              border: Border.all(color: AppTheme.border),
             ),
-            child: Icon(
-              doc.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-              color: doc.isPdf ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
-              size: 28,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: doc.isPdf
+                  ? Container(
+                      color: const Color(0xFFFEF2F2),
+                      child: const Center(
+                        child: Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFDC2626), size: 28),
+                      ),
+                    )
+                  : Image.asset(
+                      'assets/images/mountain_preview.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFEFF6FF),
+                        child: const Icon(Icons.image_rounded, color: Color(0xFF2563EB), size: 28),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(width: 14),
@@ -745,8 +741,284 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            tooltip: 'Add / Change Document',
+            style: IconButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.all(10),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 20),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDocumentPreviewCard() {
+    final doc = _currentConfig.document;
+    final isPdf = doc.isPdf;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isPdf ? const Color(0xFFFEF2F2) : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                        size: 16,
+                        color: isPdf ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      isPdf ? 'PDF Document Preview' : 'Image Document Preview',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _currentConfig.isColor
+                        ? const Color(0xFFEEF2FF)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _currentConfig.isColor
+                          ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _currentConfig.isColor ? Icons.color_lens_rounded : Icons.tonality_rounded,
+                        size: 13,
+                        color: _currentConfig.isColor ? const Color(0xFF6366F1) : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _currentConfig.isColor ? 'Color' : 'Grayscale',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _currentConfig.isColor ? const Color(0xFF6366F1) : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Container(
+            height: 250,
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: isPdf ? _buildPdfPreviewCanvas() : _buildImagePreviewCanvas(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPdfPreviewCanvas() {
+    final doc = _currentConfig.document;
+    final isColor = _currentConfig.isColor;
+
+    return Center(
+      child: Container(
+        width: 175,
+        height: 220,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 36,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isColor ? const Color(0xFFDC2626) : const Color(0xFF64748B),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                Text(
+                  _currentConfig.paperSize,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              doc.filename,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isColor ? const Color(0xFF0F172A) : const Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${_currentConfig.calculatedPages} pg • ${_currentConfig.pageRangeDescription}',
+              style: const TextStyle(
+                fontSize: 8,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 8),
+            for (int i = 0; i < 5; i++) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                width: i % 2 == 0 ? double.infinity : 110,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: isColor
+                      ? (i == 0 ? const Color(0xFF818CF8) : const Color(0xFFE2E8F0))
+                      : const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+            const Spacer(),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isColor ? const Color(0xFFEEF2FF) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  isColor ? '● Color Mode' : '● Grayscale Mode',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: isColor ? const Color(0xFF4F46E5) : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePreviewCanvas() {
+    final isColor = _currentConfig.isColor;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        ColorFiltered(
+          colorFilter: isColor
+              ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply)
+              : const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+          child: Image.asset(
+            'assets/images/mountain_preview.jpg',
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (_, __, ___) => Center(
+              child: Icon(
+                Icons.image_rounded,
+                size: 64,
+                color: isColor ? AppTheme.primary : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isColor ? Icons.color_lens_rounded : Icons.tonality_rounded,
+                  size: 13,
+                  color: isColor ? const Color(0xFFA5B4FC) : Colors.white,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isColor ? 'Preview: Full Color Image' : 'Preview: Grayscale B&W Image',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -792,9 +1064,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.1) : AppTheme.surfaceSubtle,
+          color: isSelected ? activeColor.withValues(alpha: 0.1) : AppTheme.surfaceSubtle,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? activeColor : AppTheme.border,
@@ -803,15 +1075,20 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 20, color: isSelected ? activeColor : AppTheme.textSecondary),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                color: isSelected ? activeColor : AppTheme.textPrimary,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  color: isSelected ? activeColor : AppTheme.textPrimary,
+                ),
               ),
             ),
           ],
