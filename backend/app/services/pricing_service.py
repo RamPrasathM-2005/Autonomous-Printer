@@ -11,8 +11,18 @@ class PricingService:
         Validates that all page numbers are in [1, total_doc_pages].
         Deduplicates and returns sorted list of 1-based page numbers.
         """
-        if not page_range_str or not page_range_str.strip() or page_range_str.strip().upper() == "ALL":
+        if not page_range_str or not page_range_str.strip():
             return list(range(1, total_doc_pages + 1))
+
+        clean_str = page_range_str.strip().lower()
+        if clean_str in ["all", "none"]:
+            return list(range(1, total_doc_pages + 1))
+        if clean_str == "odd":
+            odd_pages = [p for p in range(1, total_doc_pages + 1) if p % 2 != 0]
+            return odd_pages if odd_pages else [1]
+        if clean_str == "even":
+            even_pages = [p for p in range(1, total_doc_pages + 1) if p % 2 == 0]
+            return even_pages if even_pages else [1]
 
         pages_set = set()
         parts = [p.strip() for p in page_range_str.split(",") if p.strip()]
@@ -98,14 +108,20 @@ class PricingService:
     def calculate_price(
         selected_pages_count: int,
         copies: int,
+        is_colour: bool = False,
         per_page_rate: Optional[float] = None,
         base_fee: Optional[float] = None
     ) -> float:
         """
         Calculates price = pages * copies * per_page_rate + base_fee
+        Standard rate: ₹5.00 for Color, ₹2.00 for Grayscale (monochrome).
+        Convenience / Platform fee: ₹0.00 (FREE).
         """
-        rate = per_page_rate if per_page_rate is not None else settings.PER_PAGE_RATE
-        fee = base_fee if base_fee is not None else settings.BASE_FEE
+        if per_page_rate is not None:
+            rate = per_page_rate
+        else:
+            rate = 10.00 if is_colour else 2.00
+        fee = base_fee if base_fee is not None else 0.00
         amount = round((selected_pages_count * copies * rate) + fee, 2)
         return amount
 

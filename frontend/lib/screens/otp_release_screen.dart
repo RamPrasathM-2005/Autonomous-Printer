@@ -5,7 +5,6 @@ import '../config/theme.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
-import '../services/kiosk_launcher.dart';
 import '../services/print_agent_service.dart';
 import 'print_progress_screen.dart';
 
@@ -207,6 +206,21 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                         textAlign: TextAlign.center,
                       ),
+                      if (_errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.dangerSurface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: AppTheme.danger, fontSize: 13),
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 24),
 

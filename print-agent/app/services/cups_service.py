@@ -34,12 +34,38 @@ class CupsService:
         if page_range:
             options["page-ranges"] = str(page_range)
 
-        # Color mode
-        colour = settings.get("colour", False)
-        if colour:
+        # Color mode: Color vs Grayscale (Monochrome)
+        raw_colour = settings.get("colour")
+        if raw_colour is None:
+            raw_colour = settings.get("isColor")
+        if raw_colour is None:
+            c_mode = str(settings.get("colorMode") or settings.get("color_mode") or "").strip().upper()
+            raw_colour = (c_mode in ("COLOR", "COLOUR", "RGB"))
+
+        is_color = False
+        if isinstance(raw_colour, bool):
+            is_color = raw_colour
+        elif isinstance(raw_colour, (int, float)):
+            is_color = bool(raw_colour)
+        elif isinstance(raw_colour, str):
+            is_color = raw_colour.strip().lower() in ("true", "1", "color", "colour", "rgb", "yes")
+
+        if is_color:
+            # IPP standard & cross-vendor CUPS Color options
             options["print-color-mode"] = "color"
+            options["ColorModel"] = "RGB"
+            options["BRColor"] = "Color"
+            options["HPColorMode"] = "Color"
+            options["OutputMode"] = "Color"
+            options["CNColor"] = "Color"
         else:
+            # IPP standard & cross-vendor CUPS Grayscale / Monochrome options
             options["print-color-mode"] = "monochrome"
+            options["ColorModel"] = "Gray"
+            options["BRColor"] = "Mono"
+            options["HPColorMode"] = "Grayscale"
+            options["OutputMode"] = "Grayscale"
+            options["CNColor"] = "Mono"
 
         # Duplex / Sides
         sides = settings.get("sides", "one-sided")
@@ -68,6 +94,19 @@ class CupsService:
         """
         options = self.build_cups_options(settings)
         agent_logger.info(f"Submitting {file_path.name} to printer '{self.printer_name}' with options: {options}")
+
+        # Store a verified copy in system storage so the user can inspect printed files
+        try:
+            printed_dir = Path(__file__).resolve().parent.parent.parent.parent / "storage" / "printed_outputs"
+            printed_dir.mkdir(parents=True, exist_ok=True)
+            mode_tag = "COLOR" if options.get("print-color-mode") == "color" else "GRAYSCALE"
+            saved_copy = printed_dir / f"PRINTED_{mode_tag}_{file_path.name}"
+            import shutil
+            if file_path.exists() and file_path.resolve() != saved_copy.resolve():
+                shutil.copy2(file_path, saved_copy)
+                agent_logger.info(f"Preserved physical print file in storage: {saved_copy}")
+        except Exception as copy_err:
+            agent_logger.warning(f"Could not save copy to printed_outputs: {copy_err}")
 
         # If in Mock mode or Windows without native CUPS
         if self.mock_mode or (os.name == 'nt' and not self.has_pycups):

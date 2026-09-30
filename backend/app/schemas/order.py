@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from app.db.models.order import OrderStatus
 
@@ -30,12 +30,35 @@ class PrintSettingsSchema(BaseModel):
             data["sides"] = "two-sided-long-edge" if data.pop("duplex") else "one-sided"
         return data
 
-class OrderCreateRequest(BaseModel):
+class OrderItemConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     documentId: str = Field(..., alias="documentId")
+    settings: PrintSettingsSchema = Field(default_factory=PrintSettingsSchema)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_item(cls, data: Any):
+        if not isinstance(data, dict):
+            return data
+        if "document_id" in data and "documentId" not in data:
+            data["documentId"] = data.pop("document_id")
+        if "settings" in data and isinstance(data["settings"], (PrintSettingsSchema, dict)):
+            return data
+        settings_dict = {}
+        for k in ["copies", "pageRange", "page_range", "colour", "colorMode", "color_mode", "sides", "duplex", "paperSize", "paper_size", "orientation"]:
+            if k in data:
+                settings_dict[k] = data[k]
+        data["settings"] = settings_dict
+        return data
+
+class OrderCreateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    documentId: Optional[str] = Field(default=None, alias="documentId")
     printServerId: str = Field(..., alias="printServerId")
-    settings: PrintSettingsSchema
+    settings: Optional[PrintSettingsSchema] = None
+    items: Optional[List[OrderItemConfig]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -46,9 +69,14 @@ class OrderCreateRequest(BaseModel):
             data["documentId"] = data.pop("document_id")
         if "print_server_id" in data and "printServerId" not in data:
             data["printServerId"] = data.pop("print_server_id")
+
+        if "items" in data and isinstance(data["items"], list) and len(data["items"]) > 0:
+            if not data.get("documentId"):
+                first_item = data["items"][0]
+                data["documentId"] = first_item.get("documentId") or first_item.get("document_id")
         
         # If settings is missing, automatically construct it from top-level fields
-        if "settings" not in data or not isinstance(data["settings"], dict):
+        if "settings" not in data or (not isinstance(data["settings"], dict) and not isinstance(data["settings"], PrintSettingsSchema)):
             settings_dict = {}
             for k in ["copies", "pageRange", "page_range", "colour", "colorMode", "color_mode", "sides", "duplex", "paperSize", "paper_size", "orientation"]:
                 if k in data:

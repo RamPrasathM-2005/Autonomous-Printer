@@ -7,7 +7,6 @@ import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
-import 'print_options_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -335,30 +334,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             ],
 
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Print Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                const Expanded(
+                                  child: Text(
+                                    'Print Subtotal',
+                                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                                 Text('₹${widget.order.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
                               ],
                             ),
                             const SizedBox(height: 6),
                             const Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Platform & Convenience Fee', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                Expanded(
+                                  child: Text(
+                                    'Platform & Convenience Fee',
+                                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                                 Text('₹0.00 (FREE)', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w700)),
                               ],
                             ),
                             const Divider(height: 24),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Total Payable',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.textPrimary,
+                                const Expanded(
+                                  child: Text(
+                                    'Total Payable',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 Text(
@@ -440,7 +454,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                     child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                                   ),
                                   SizedBox(width: 12),
-                                  Text('Verifying Payment & Generating OTP...'),
+                                  Flexible(
+                                    child: Text(
+                                      'Verifying Payment & Generating OTP...',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ],
                               )
                             : Row(
@@ -448,9 +468,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                 children: [
                                   const Icon(Icons.payment_rounded, size: 20),
                                   const SizedBox(width: 10),
-                                  Text(
-                                    'Pay ₹${widget.order.amount.toStringAsFixed(2)} via Razorpay',
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                  Flexible(
+                                    child: Text(
+                                      'Pay ₹${widget.order.amount.toStringAsFixed(2)} via Razorpay',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                    ),
                                   ),
                                 ],
                               ),

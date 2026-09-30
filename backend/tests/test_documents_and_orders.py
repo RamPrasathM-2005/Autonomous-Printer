@@ -37,7 +37,7 @@ def test_order_creation_and_pricing_without_login(client, test_print_server):
     doc_id = up_res.json()["documentId"]
 
     # 2. Create order selecting pages "1-3,5" (total 4 pages), copies = 2
-    # Price formula: 4 pages * 2 copies * 2.50 rate + 1.00 fee = 21.00
+    # Price formula: 4 pages * 2 copies * 2.00 rate = 16.00
     order_res = client.post(
         "/api/orders",
         json={
@@ -57,7 +57,7 @@ def test_order_creation_and_pricing_without_login(client, test_print_server):
     order_data = order_res.json()
     assert order_data["totalPages"] == 4
     assert order_data["copies"] == 2
-    assert order_data["amount"] == 21.0
+    assert order_data["amount"] == 16.0
     assert order_data["status"] == "CREATED"
 
 def test_order_invalid_page_range_exceeds(client, test_print_server):

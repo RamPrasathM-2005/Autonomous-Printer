@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     MAX_OTP_ATTEMPTS: int = 5
     MAX_PRINT_RETRIES: int = 2
 
-    PER_PAGE_RATE: float = 2.50
-    BASE_FEE: float = 1.00
+    PER_PAGE_RATE: float = 2.00
+    BASE_FEE: float = 0.00
 
     RAZORPAY_KEY_ID: str = "rzp_test_RFxhjAiTxwrpAJ"
     RAZORPAY_KEY_SECRET: str = "f7jSae5XJ4V6EfZIYTUpWB7q"

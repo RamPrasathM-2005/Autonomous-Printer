@@ -93,24 +93,22 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-        allowMultiple: true,
       );
 
-      if (files != null && files.files.isNotEmpty) {
-        for (final file in files.files) {
-          if (file.bytes != null) {
-            // Avoid duplicate file additions
-            if (!_selectedFiles.any((f) => f.name == file.name && f.size == file.bytes!.length)) {
-              _selectedFiles.add(
-                SelectedDocItem(
-                  name: file.name,
-                  size: file.bytes!.length,
-                  bytes: file.bytes!,
-                  progress: 1.0,
-                  isCompleted: true,
-                ),
-              );
-            }
+      if (files.isNotEmpty) {
+        for (final file in files) {
+          final fileBytes = await file.readAsBytes();
+          // Avoid duplicate file additions
+          if (!_selectedFiles.any((f) => f.name == file.name && f.size == fileBytes.length)) {
+            _selectedFiles.add(
+              SelectedDocItem(
+                name: file.name,
+                size: fileBytes.length,
+                bytes: fileBytes,
+                progress: 1.0,
+                isCompleted: true,
+              ),
+            );
           }
         }
         setState(() {});
@@ -220,37 +218,54 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'QwikPrint',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: AppTheme.textPrimary,
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'QwikPrint',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
-                ),
-                Text(
-                  'Autonomous Self-Service Kiosk',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textSecondary,
+                  Text(
+                    'Autonomous Self-Service Kiosk',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: _loadStations,
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
-            tooltip: 'Refresh Kiosk Status',
-          ),
+          _isLoadingStations
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  onPressed: _loadStations,
+                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
+                  tooltip: 'Refresh Kiosk Status',
+                ),
           const SizedBox(width: 8),
         ],
       ),
@@ -462,10 +477,10 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                           shadowColor: AppTheme.primary.withOpacity(0.4),
                         ),
                         child: _isUploading
-                            ? const Row(
+                            ? Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  SizedBox(
+                                  const SizedBox(
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
@@ -473,8 +488,11 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   ),
-                                  SizedBox(width: 10),
-                                  Text('Uploading...', style: TextStyle(fontWeight: FontWeight.w700)),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _uploadStatusText.isNotEmpty ? _uploadStatusText : 'Uploading...',
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
                                 ],
                               )
                             : const Row(
@@ -502,6 +520,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       ),
     );
   }
+
+
 
   Widget _buildStationCard() {
     final isOnline = _selectedStation?.status.toLowerCase() == 'online';
@@ -534,12 +554,16 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               children: [
                 Row(
                   children: [
-                    Text(
-                      _selectedStation?.name ?? 'Central Kiosk Station',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
+                    Flexible(
+                      child: Text(
+                        _selectedStation?.name ?? 'Central Kiosk Station',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -563,6 +587,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 const SizedBox(height: 2),
                 Text(
                   _selectedStation?.location ?? 'Location: Main Campus Library Terminal #1',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppTheme.textSecondary,

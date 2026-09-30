@@ -107,12 +107,14 @@ class ApiService {
     required String documentId,
     required String printServerId,
     required PrintSettings printSettings,
+    List<Map<String, dynamic>>? items,
   }) async {
     final uri = Uri.parse('$_baseUrl/api/orders');
-    final payload = {
+    final payload = <String, dynamic>{
       'document_id': documentId,
       'print_server_id': printServerId,
       'print_settings': printSettings.toJson(),
+      if (items != null && items.isNotEmpty) 'items': items,
     };
 
     final response = await http

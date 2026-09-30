@@ -7,7 +7,17 @@ from app.utils.file_security import resolve_safe_storage_path
 
 class StorageService:
     def __init__(self, storage_root: Optional[str] = None):
-        self.storage_root = Path(storage_root or settings.STORAGE_ROOT).resolve()
+        configured = storage_root or settings.STORAGE_ROOT
+        conf_path = Path(configured)
+        if not conf_path.is_absolute():
+            # Check if root project storage directory exists
+            project_root_storage = Path(__file__).resolve().parent.parent.parent.parent / "storage"
+            if project_root_storage.exists() and project_root_storage.is_dir():
+                self.storage_root = project_root_storage.resolve()
+            else:
+                self.storage_root = conf_path.resolve()
+        else:
+            self.storage_root = conf_path.resolve()
         self._ensure_directories()
 
     def _ensure_directories(self):
@@ -25,7 +35,17 @@ class StorageService:
         return temp_dir
 
     def resolve_storage_key(self, storage_key: str) -> Path:
-        return resolve_safe_storage_path(self.storage_root, storage_key)
+        primary_path = resolve_safe_storage_path(self.storage_root, storage_key)
+        if primary_path.exists():
+            return primary_path
+        # Check backend/storage fallback if exists
+        alt_storage = Path(__file__).resolve().parent.parent.parent / "storage"
+        if alt_storage.exists():
+            clean_key = storage_key.lstrip("/\\")
+            alt_path = (alt_storage / clean_key).resolve()
+            if alt_path.exists():
+                return alt_path
+        return primary_path
 
     def save_file_atomically(self, source_temp_path: Path, target_storage_key: str) -> Path:
         """
