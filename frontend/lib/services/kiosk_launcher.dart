@@ -1,17 +1,11 @@
-import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
-
-@JS('openKioskScreen')
-external void _openKioskScreen(JSString otp);
+import 'kiosk_launcher_stub.dart'
+    if (dart.library.js_interop) 'kiosk_launcher_web.dart';
 
 class KioskLauncher {
   static void openKioskScreen([String otp = '']) {
     if (kIsWeb) {
-      try {
-        _openKioskScreen(otp.toJS);
-      } catch (e) {
-        debugPrint('[KioskLauncher] Error opening kiosk: $e');
-      }
+      openKioskScreenPlatform(otp);
     }
   }
 }
