@@ -50,22 +50,8 @@ class CupsService:
         elif isinstance(raw_colour, str):
             is_color = raw_colour.strip().lower() in ("true", "1", "color", "colour", "rgb", "yes")
 
-        if is_color:
-            # IPP standard & cross-vendor CUPS Color options
-            options["print-color-mode"] = "color"
-            options["ColorModel"] = "RGB"
-            options["BRColor"] = "Color"
-            options["HPColorMode"] = "Color"
-            options["OutputMode"] = "Color"
-            options["CNColor"] = "Color"
-        else:
-            # IPP standard & cross-vendor CUPS Grayscale / Monochrome options
-            options["print-color-mode"] = "monochrome"
-            options["ColorModel"] = "Gray"
-            options["BRColor"] = "Mono"
-            options["HPColorMode"] = "Grayscale"
-            options["OutputMode"] = "Grayscale"
-            options["CNColor"] = "Mono"
+        # Color mode (Monochrome HP LaserJet)
+        options["print-color-mode"] = "monochrome"
 
         # Duplex / Sides
         sides = settings.get("sides", "one-sided")
@@ -90,9 +76,8 @@ class CupsService:
         options["media"] = paper_size
         options["PageSize"] = paper_size
         options["fit-to-page"] = "True"
-        options["InputSlot"] = "Tray2"
 
-        # Tray / InputSlot (Tray 1, Tray 2, Tray 3)
+        # Paper tray: Auto selection by default so it picks whichever tray has paper
         tray = settings.get("tray") or settings.get("inputSlot") or settings.get("input_slot") or settings.get("paper_source")
         if tray:
             tray_str = str(tray).strip().lower()
@@ -102,6 +87,10 @@ class CupsService:
                 options["InputSlot"] = "Tray2"
             elif "3" in tray_str:
                 options["InputSlot"] = "Tray3"
+            else:
+                options["InputSlot"] = "Auto"
+        else:
+            options["InputSlot"] = "Auto"
 
         # Print Resolution / Quality (FastRes1200, 600dpi, ProRes1200)
         res = settings.get("resolution") or settings.get("printQuality") or settings.get("print_quality")
@@ -153,7 +142,7 @@ class CupsService:
             agent_logger.info(f"[MOCK_CUPS] Successfully submitted simulated print job ID: {mock_id}")
             return mock_id
 
-        # Native pycups submission if installed
+        # 1. Native pycups submission if installed
         if self.has_pycups:
             try:
                 conn = self.cups.Connection(host=config.CUPS_SERVER)
@@ -163,12 +152,12 @@ class CupsService:
                     f"Job_{file_path.name}",
                     options
                 )
+                agent_logger.info(f"pycups successfully submitted job ID: {job_id}")
                 return str(job_id)
             except Exception as e:
-                agent_logger.warning(f"pycups printer not reachable ({e}). Falling back to simulated print.")
-                return f"cups-sim-{uuid.uuid4().hex[:8]}"
+                agent_logger.warning(f"pycups printFile failed ({e}). Attempting CLI lp fallback...")
 
-        # CLI 'lp' command fallback
+        # 2. CLI 'lp' command fallback
         try:
             cmd = ["lp", "-d", self.printer_name]
             for opt_k, opt_v in options.items():
@@ -177,11 +166,12 @@ class CupsService:
 
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             output = result.stdout.strip()
-            cups_id = output.split()[3] if len(output.split()) >= 4 else f"cups-{uuid.uuid4().hex[:6]}"
+            cups_id = output.split()[3] if len(output.split()) >= 4 else f"{uuid.uuid4().hex[:6]}"
+            agent_logger.info(f"CLI lp successfully submitted job ID: {cups_id}")
             return cups_id
         except Exception as e:
-            agent_logger.warning(f"CUPS lp command failed or no physical printer connected ({e}). Auto-falling back to simulated print.")
-            return f"cups-sim-{uuid.uuid4().hex[:8]}"
+            agent_logger.error(f"CUPS submission failed on physical printer '{self.printer_name}': {e}")
+            raise CupsException(f"Failed to print to physical printer '{self.printer_name}': {e}")
 
     def monitor_job(self, cups_job_id: str) -> str:
         """

@@ -8,7 +8,7 @@ class ApiConfig {
 
   // Smart defaults: 127.0.0.1 works on Web, Desktop, and Physical Mobile (via adb reverse)
   static String get defaultBackendUrl => 'http://127.0.0.1:8000';
-  static String get defaultAgentUrl => 'http://127.0.0.1:5000';
+  static String get defaultAgentUrl => 'http://127.0.0.1:5001';
 
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
@@ -25,8 +25,8 @@ class ApiConfig {
       storedBackend = 'http://127.0.0.1:8000';
       await prefs.setString(_keyBackendUrl, storedBackend);
     }
-    if (storedAgent != null && storedAgent.contains('10.0.2.2')) {
-      storedAgent = 'http://127.0.0.1:5000';
+    if (storedAgent != null && (storedAgent.contains('10.0.2.2') || storedAgent.contains(':5000'))) {
+      storedAgent = 'http://127.0.0.1:5001';
       await prefs.setString(_keyAgentUrl, storedAgent);
     }
 
