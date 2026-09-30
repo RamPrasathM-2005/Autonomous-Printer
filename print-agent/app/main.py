@@ -36,17 +36,19 @@ def create_app() -> Flask:
     # Register blueprints
     app.register_blueprint(health_bp)
     app.register_blueprint(local_bp)
+    from app.routes.kiosk import kiosk_bp
+    app.register_blueprint(kiosk_bp)
 
     return app
 
 def run_agent():
-    agent_logger.info(f"Starting Flask Print Agent for station: {config.AGENT_ID}")
+    agent_logger.info(f"Starting Flask Print Agent for station: {config.AGENT_ID} on port {config.PORT}")
     # Start background job poller and heartbeat
     job_poller.start()
 
     app = create_app()
     # Local only - not exposed publicly
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=config.PORT, debug=False)
 
 if __name__ == "__main__":
     run_agent()

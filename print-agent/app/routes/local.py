@@ -35,7 +35,16 @@ def local_station_otp_release():
         return jsonify({"error": "INVALID_OTP", "message": "OTP is required"}), 400
 
     # Submit to central FastAPI backend
-    release_data = backend_client.release_job(otp)
+    try:
+        release_data = backend_client.release_job(otp)
+    except Exception as e:
+        from app.utils.errors import OtpReleaseException, BackendCommunicationException
+        if isinstance(e, OtpReleaseException):
+            return jsonify({"error": e.error_code, "message": e.message}), 400
+        elif isinstance(e, BackendCommunicationException):
+            return jsonify({"error": "BACKEND_UNAVAILABLE", "message": "Backend server is currently unavailable. Please try again."}), 503
+        return jsonify({"error": "RELEASE_FAILED", "message": str(e)}), 400
+
     if not release_data:
         return jsonify({"error": "RELEASE_FAILED", "message": "OTP verification failed or no queued job."}), 400
 

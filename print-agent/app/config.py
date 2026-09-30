@@ -17,5 +17,6 @@ class Config:
     CUPS_SERVER: str = os.getenv("CUPS_SERVER", "localhost")
     PRINTER_NAME: str = os.getenv("PRINTER_NAME", "Default_Office_Printer")
     MOCK_CUPS: bool = os.getenv("MOCK_CUPS", "false").lower() in ("true", "1", "yes")
+    PORT: int = int(os.getenv("PORT", "5001"))
 
 config = Config()

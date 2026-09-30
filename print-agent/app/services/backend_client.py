@@ -50,8 +50,20 @@ class BackendClient:
                 return resp.json()
             else:
                 agent_logger.warning(f"OTP release failed ({resp.status_code}): {resp.text}")
-                return None
+                err_code = "INVALID_OTP"
+                err_msg = "Invalid OTP code. Please check and try again."
+                try:
+                    data = resp.json()
+                    err_code = data.get("error") or data.get("error_code") or data.get("detail", {}).get("error_code") or err_code
+                    err_msg = data.get("message") or data.get("detail", {}).get("message") or err_msg
+                except Exception:
+                    pass
+                from app.utils.errors import OtpReleaseException
+                raise OtpReleaseException(err_msg, error_code=err_code)
         except Exception as e:
+            from app.utils.errors import OtpReleaseException
+            if isinstance(e, OtpReleaseException):
+                raise
             agent_logger.error(f"Failed to submit OTP to backend: {e}")
             raise BackendCommunicationException(str(e))
 

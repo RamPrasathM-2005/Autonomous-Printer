@@ -15,3 +15,7 @@ class CupsException(AgentException):
 class BackendCommunicationException(AgentException):
     def __init__(self, message: str):
         super().__init__(message, error_code="BACKEND_COMMUNICATION_ERROR")
+
+class OtpReleaseException(AgentException):
+    def __init__(self, message: str, error_code: str = "INVALID_OTP"):
+        super().__init__(message, error_code=error_code)

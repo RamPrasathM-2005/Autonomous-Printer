@@ -133,8 +133,15 @@ class OTPService:
 
         otp_rec, order_rec, job_rec, doc_rec = matching_entry
 
-        # IDEMPOTENCY: If already released, printing, or completed, return successfully
-        if order_rec.status in (OrderStatus.RELEASED, OrderStatus.PRINTING, OrderStatus.COMPLETED):
+        if order_rec.status == OrderStatus.COMPLETED or job_rec.status == PrintJobStatus.COMPLETED:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="ALREADY_PRINTED",
+                message="This order has already been printed."
+            )
+
+        # IDEMPOTENCY: If already released or printing, return successfully
+        if order_rec.status in (OrderStatus.RELEASED, OrderStatus.PRINTING):
             return job_rec
 
         # Check attempts lockout

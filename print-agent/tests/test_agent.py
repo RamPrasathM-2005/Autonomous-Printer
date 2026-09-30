@@ -82,3 +82,50 @@ def test_local_release_endpoint(agent_client):
         assert res.status_code == 200
         data = res.get_json()
         assert data["status"] == "RELEASED"
+
+def test_kiosk_page_endpoint(agent_client):
+    res = agent_client.get("/kiosk")
+    assert res.status_code == 200
+    html = res.get_data(as_text=True)
+    assert "AUTONOMOUS PRINT" in html
+    assert "PRINT STATION" in html
+    assert "Enter your 6-digit OTP" in html
+    assert "pressKey" in html
+    assert "submitOtp" in html
+
+def test_local_release_invalid_otp(agent_client):
+    from app.utils.errors import OtpReleaseException
+    with patch("app.routes.local.backend_client.release_job") as mock_release:
+        mock_release.side_effect = OtpReleaseException("Invalid OTP entered.", error_code="INVALID_OTP")
+        res = agent_client.post("/local/release", json={"otp": "999999"})
+        assert res.status_code == 400
+        data = res.get_json()
+        assert data["error"] == "INVALID_OTP"
+
+def test_local_release_expired_otp(agent_client):
+    from app.utils.errors import OtpReleaseException
+    with patch("app.routes.local.backend_client.release_job") as mock_release:
+        mock_release.side_effect = OtpReleaseException("OTP expired.", error_code="OTP_EXPIRED")
+        res = agent_client.post("/local/release", json={"otp": "111111"})
+        assert res.status_code == 400
+        data = res.get_json()
+        assert data["error"] == "OTP_EXPIRED"
+
+def test_local_release_already_printed(agent_client):
+    from app.utils.errors import OtpReleaseException
+    with patch("app.routes.local.backend_client.release_job") as mock_release:
+        mock_release.side_effect = OtpReleaseException("This order has already been printed.", error_code="ALREADY_PRINTED")
+        res = agent_client.post("/local/release", json={"otp": "222222"})
+        assert res.status_code == 400
+        data = res.get_json()
+        assert data["error"] == "ALREADY_PRINTED"
+
+def test_local_release_backend_unavailable(agent_client):
+    from app.utils.errors import BackendCommunicationException
+    with patch("app.routes.local.backend_client.release_job") as mock_release:
+        mock_release.side_effect = BackendCommunicationException("Connection refused")
+        res = agent_client.post("/local/release", json={"otp": "123456"})
+        assert res.status_code == 503
+        data = res.get_json()
+        assert data["error"] == "BACKEND_UNAVAILABLE"
+

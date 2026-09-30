@@ -91,14 +91,20 @@ def release_job_kiosk(
         job.status = PrintJobStatus.PRINTING
         db.commit()
 
-    # Try notifying print agent directly on localhost if online
+    # Try notifying print agent directly on localhost if online (port 5001, fallback 5000)
     notified_agent = False
     try:
         import requests
-        resp = requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=5)
-        if resp.status_code == 200:
-            notified_agent = True
-            print(f"[KIOSK] Real print agent notified for job {job.id}")
+        try:
+            resp = requests.post("http://127.0.0.1:5001/local/release", json={"otp": req.otp}, timeout=5)
+            if resp.status_code == 200:
+                notified_agent = True
+                print(f"[KIOSK] Real print agent on 5001 notified for job {job.id}")
+        except Exception:
+            resp = requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=5)
+            if resp.status_code == 200:
+                notified_agent = True
+                print(f"[KIOSK] Real print agent on 5000 notified for job {job.id}")
     except Exception as e:
         print(f"[KIOSK] Print agent local release notice: {e}")
 

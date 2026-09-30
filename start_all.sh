@@ -59,7 +59,7 @@ PIDS+=($!)
 sleep 2
 
 # 4. Launch Print Agent
-echo "[2/3] Launching Print Agent on http://127.0.0.1:5000 ..."
+echo "[2/3] Launching Print Agent on http://127.0.0.1:5001 ..."
 (cd "$SCRIPT_DIR/print-agent" && "$PYTHON_EXE" app/main.py) &
 PIDS+=($!)
 sleep 2
@@ -78,16 +78,17 @@ elif command -v flutter &> /dev/null; then
     (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 127.0.0.1) &
     PIDS+=($!)
 else
-    echo "[3/3] Flutter frontend not built yet. Kiosk UI is directly available at: http://127.0.0.1:8000/kiosk"
+    echo "[3/3] Flutter frontend not built yet. Kiosk UI is directly available at: http://127.0.0.1:5001/kiosk"
 fi
 
 echo ""
 echo "========================================================"
 echo " All services running! Press Ctrl+C to stop all."
 echo "   * Backend Swagger:   http://127.0.0.1:8000/docs"
-echo "   * Kiosk Terminal:    http://127.0.0.1:8000/kiosk"
-echo "   * Print Agent API:   http://127.0.0.1:5000"
+echo "   * Kiosk Terminal:    http://127.0.0.1:5001/kiosk"
+echo "   * Print Agent API:   http://127.0.0.1:5001"
 echo "   * Flutter Web App:   http://127.0.0.1:3000"
+echo "   * React Web App:     http://127.0.0.1:3100"
 echo "========================================================"
 echo ""
 
