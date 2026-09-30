@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, Trash2, ArrowRight, Loader2, AlertCircle, CheckCircle, Printer } from 'lucide-react';
+import { UploadCloud, FileText, Trash2, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 
 export default function UploadStep({ onNext }) {
@@ -69,42 +69,29 @@ export default function UploadStep({ onNext }) {
 
   return (
     <div>
-      {/* Kiosk Connection Banner - Exactly matches Flutter _buildStationCard() */}
-      <div className="station-card-banner">
-        <div className="station-banner-left">
-          <div className="station-icon-circle">
-            <Printer size={20} />
-          </div>
-          <div>
-            <div className="station-name-text">PRINT-SERVER-001 • Central Library Station</div>
-            <div className="station-sub-text">HP_LaserJet_400_M401dn_F36EC0 • Ready (Tray 2)</div>
-          </div>
+      {/* Section Title & Subtitle - Matches Flutter UploadScreen */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+            Select Documents
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.2rem' }}>
+            Upload your PDF or image files to start printing.
+          </p>
         </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'var(--success-surface)',
-          border: '1px solid rgba(16, 185, 129, 0.3)',
-          color: '#059669',
-          padding: '4px 10px',
-          borderRadius: '9999px',
-          fontSize: '0.75rem',
-          fontWeight: 700
-        }}>
-          <span className="pulsing-dot" />
-          ONLINE
-        </div>
-      </div>
-
-      {/* Section Title & Subtitle */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-          Select Documents
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.2rem' }}>
-          Upload your PDF or image files to start printing.
-        </p>
+        {selectedFile && (
+          <span style={{
+            background: 'var(--primary-surface)',
+            color: 'var(--primary)',
+            padding: '4px 12px',
+            borderRadius: '20px',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            border: '1px solid rgba(79, 70, 229, 0.2)'
+          }}>
+            1 file selected
+          </span>
+        )}
       </div>
 
       {/* Dropzone */}
@@ -163,22 +150,6 @@ export default function UploadStep({ onNext }) {
       {/* Selected File Card */}
       {selectedFile && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Selected File
-            </span>
-            <span style={{
-              background: 'var(--primary-surface)',
-              color: 'var(--primary)',
-              padding: '3px 10px',
-              borderRadius: '20px',
-              fontSize: '0.75rem',
-              fontWeight: 700
-            }}>
-              1 file selected
-            </span>
-          </div>
-
           <div className="doc-card">
             <div className="doc-info">
               <div className="doc-icon-box">
@@ -187,9 +158,19 @@ export default function UploadStep({ onNext }) {
               <div>
                 <div className="doc-name">{selectedFile.name}</div>
                 <div className="doc-meta">
+                  <span style={{
+                    background: 'var(--primary-surface)',
+                    color: 'var(--primary)',
+                    padding: '1px 6px',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    fontSize: '0.72rem'
+                  }}>
+                    {selectedFile.name.split('.').pop().toUpperCase()}
+                  </span>
                   <span>{formatSize(selectedFile.size)}</span>
                   <span>•</span>
-                  <span>Ready for printing</span>
+                  <span>Ready to print</span>
                 </div>
               </div>
             </div>

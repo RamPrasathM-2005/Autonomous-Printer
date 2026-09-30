@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard, ShieldCheck, Loader2 } from 'lucide-react';
 import { api } from '../api';
 
 export default function PaymentStep({ orderData, onBack, onNext }) {
@@ -47,22 +47,53 @@ export default function PaymentStep({ orderData, onBack, onNext }) {
           <ArrowLeft size={15} /> Back
         </button>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-          Payment & Release
+          Review Invoice & Pay
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-          Complete payment to receive your 6-digit physical print release OTP.
+          Confirm details and proceed with instant digital payment.
         </p>
       </div>
 
-      {/* Order Summary Card */}
-      <div className="card-white">
-        <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.85rem', color: 'var(--text-primary)' }}>
-          Order Summary
-        </h3>
-        <div className="summary-row">
-          <span>Order ID</span>
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{order.id}</span>
+      {/* High Trust Security Card - Matches Flutter */}
+      <div style={{
+        padding: '0.9rem 1.25rem',
+        borderRadius: '16px',
+        background: 'var(--success-surface)',
+        border: '1px solid rgba(16, 185, 129, 0.3)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.85rem',
+        marginBottom: '1.25rem'
+      }}>
+        <ShieldCheck size={24} color="#059669" />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#065f46' }}>
+            100% Encrypted Payment
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#047857', marginTop: '1px' }}>
+            Instant 6-digit release OTP generated immediately after payment.
+          </div>
         </div>
+      </div>
+
+      {/* Order Summary Invoice Card - Matches Flutter */}
+      <div className="card-white">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Invoice Summary
+          </h3>
+          <span style={{
+            background: 'var(--primary-surface)',
+            color: 'var(--primary)',
+            padding: '3px 8px',
+            borderRadius: '6px',
+            fontSize: '0.75rem',
+            fontWeight: 700
+          }}>
+            Order #{order.id}
+          </span>
+        </div>
+
         <div className="summary-row">
           <span>Document</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -70,32 +101,21 @@ export default function PaymentStep({ orderData, onBack, onNext }) {
           </span>
         </div>
         <div className="summary-row">
-          <span>Print Settings</span>
+          <span>Pages / Sheets</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            {printSettings.copies} copies • {printSettings.colour ? 'Color' : 'Grayscale'} • {printSettings.sides === 'two-sided-long-edge' ? 'Duplex' : 'Single'}
+            {pagesToPrint} pages × {printSettings.copies} copies = {pagesToPrint * printSettings.copies} sheets
           </span>
         </div>
         <div className="summary-row">
-          <span>Print Station Queue</span>
-          <span style={{ fontWeight: 700, color: 'var(--primary)' }}>HP_LaserJet_400_M401dn_F36EC0</span>
+          <span>Print Format</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            {printSettings.colour ? 'Full Color' : 'Grayscale'} • {printSettings.sides === 'two-sided-long-edge' ? 'Duplex' : 'Single-Sided'} • {printSettings.paperSize || 'A4'}
+          </span>
         </div>
         <div className="summary-total">
           <span>Total Payable Amount</span>
           <span className="price-tag">₹{totalAmount}</span>
         </div>
-      </div>
-
-      {/* Payment Method Card */}
-      <div className="card-white" style={{ background: 'var(--primary-surface)', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <ShieldCheck size={22} color="var(--primary)" />
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
-            Instant Touchless Pay
-          </span>
-        </div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-          Supports UPI, Google Pay, PhonePe, Cards, or NetBanking. Once payment is confirmed, an instant 6-digit OTP will be issued to release your print at the machine.
-        </p>
       </div>
 
       {error && (
@@ -120,7 +140,7 @@ export default function PaymentStep({ orderData, onBack, onNext }) {
         {processing ? (
           <>
             <Loader2 size={18} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-            <span>Processing Payment...</span>
+            <span>Processing Instant Payment...</span>
           </>
         ) : (
           <>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Palette, Copy, Layers, FileSpreadsheet, RotateCw, Calculator, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Palette, Copy, Layers, FileSpreadsheet, RotateCw, Calculator, Loader2, Eye, FileText } from 'lucide-react';
 import { api } from '../api';
 
 export default function OptionsStep({ document, onBack, onNext }) {
@@ -83,24 +83,98 @@ export default function OptionsStep({ document, onBack, onNext }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-        <div>
-          <button
-            onClick={onBack}
-            className="btn-secondary"
-            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', marginBottom: '0.4rem' }}
-          >
-            <ArrowLeft size={15} /> Back
-          </button>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-            Configure Print Options
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-            Document: <strong>{document.originalFilename || document.original_filename || 'document.pdf'}</strong> ({totalDocPages} pages)
-          </p>
+      <div style={{ marginBottom: '1.25rem' }}>
+        <button
+          onClick={onBack}
+          className="btn-secondary"
+          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', marginBottom: '0.4rem' }}
+        >
+          <ArrowLeft size={15} /> Back
+        </button>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+          Configure Print Options
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+          Select color mode, sides, copies, and orientation for your document.
+        </p>
+      </div>
+
+      {/* Active Document Header Card - Matches Flutter _buildDocumentHeaderCard() */}
+      <div className="card-white" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div className="doc-icon-box">
+            <FileText size={22} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)' }}>
+              {document.originalFilename || document.original_filename || 'document.pdf'}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '8px', marginTop: '2px' }}>
+              <span>{totalDocPages} Pages</span>
+              <span>•</span>
+              <span>Standard Print Ready</span>
+            </div>
+          </div>
+        </div>
+        <div style={{
+          background: 'var(--primary-surface)',
+          color: 'var(--primary)',
+          padding: '4px 10px',
+          borderRadius: '8px',
+          fontSize: '0.75rem',
+          fontWeight: 700
+        }}>
+          Active Document
         </div>
       </div>
 
+      {/* Document Sheet Visualizer Card - Matches Flutter _buildDocumentPreviewCard() */}
+      <div className="card-white" style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
+        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '1rem' }}>
+          Page Layout Preview
+        </div>
+        
+        {/* Visual Sheet Preview Box */}
+        <div style={{
+          margin: '0 auto',
+          width: orientation === 'portrait' ? '120px' : '160px',
+          height: orientation === 'portrait' ? '160px' : '120px',
+          background: '#ffffff',
+          borderRadius: '10px',
+          border: '2px solid #cbd5e1',
+          boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          transition: 'all 0.25s ease',
+          position: 'relative'
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '6px',
+            right: '6px',
+            fontSize: '0.65rem',
+            fontWeight: 800,
+            background: isColor ? '#ec4899' : '#64748b',
+            color: 'white',
+            padding: '2px 5px',
+            borderRadius: '4px'
+          }}>
+            {isColor ? 'COLOR' : 'B&W'}
+          </div>
+          <FileText size={28} color={isColor ? 'var(--primary)' : '#64748b'} />
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            {paperSize}
+          </div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+            {orientation}
+          </div>
+        </div>
+      </div>
+
+      {/* Options Grid */}
       <div className="options-grid">
         {/* Color Mode */}
         <div className="option-group">
@@ -155,7 +229,7 @@ export default function OptionsStep({ document, onBack, onNext }) {
         <div className="option-group">
           <div className="option-group-title">
             <Layers size={18} color="var(--primary)" />
-            <span>Duplex Sides</span>
+            <span>Sides</span>
           </div>
           <div className="pill-selector">
             <button
@@ -262,14 +336,10 @@ export default function OptionsStep({ document, onBack, onNext }) {
         </div>
       </div>
 
-      {/* Summary Box */}
+      {/* Invoice Summary Card */}
       <div className="summary-card">
         <div className="summary-row">
-          <span>Active Station</span>
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>PRINT-SERVER-001 (HP_LaserJet_400_M401dn_F36EC0)</span>
-        </div>
-        <div className="summary-row">
-          <span>Total Sheets to Print</span>
+          <span>Sheets to Print</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{pagesToPrint * copies} sheets</span>
         </div>
         <div className="summary-row">

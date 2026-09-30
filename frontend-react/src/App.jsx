@@ -4,10 +4,8 @@ import UploadStep from './components/UploadStep';
 import OptionsStep from './components/OptionsStep';
 import PaymentStep from './components/PaymentStep';
 import OtpStep from './components/OtpStep';
-import KioskMode from './components/KioskMode';
 
 export default function App() {
-  const [currentView, setView] = useState('flow'); // 'flow' or 'kiosk'
   const [step, setStep] = useState(1); // 1: Upload, 2: Options, 3: Payment, 4: OTP
   const [document, setDocument] = useState(null);
   const [orderData, setOrderData] = useState(null);
@@ -37,59 +35,53 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Header currentView={currentView} setView={setView} />
+      <Header />
 
       <main className="main-content">
-        {currentView === 'kiosk' ? (
-          <KioskMode />
-        ) : (
-          <>
-            {/* Step Progress Bar */}
-            <div className="steps-wrapper">
-              <div className={`step-item ${step === 1 ? 'active' : step > 1 ? 'completed' : ''}`}>
-                <div className="step-circle">{step > 1 ? '✓' : '1'}</div>
-                <span>Upload</span>
-              </div>
-              <div className={`step-line ${step > 1 ? 'filled' : ''}`} />
-              <div className={`step-item ${step === 2 ? 'active' : step > 2 ? 'completed' : ''}`}>
-                <div className="step-circle">{step > 2 ? '✓' : '2'}</div>
-                <span>Configure</span>
-              </div>
-              <div className={`step-line ${step > 2 ? 'filled' : ''}`} />
-              <div className={`step-item ${step === 3 ? 'active' : step > 3 ? 'completed' : ''}`}>
-                <div className="step-circle">{step > 3 ? '✓' : '3'}</div>
-                <span>Payment</span>
-              </div>
-              <div className={`step-line ${step > 3 ? 'filled' : ''}`} />
-              <div className={`step-item ${step === 4 ? 'active' : ''}`}>
-                <div className="step-circle">4</div>
-                <span>Release</span>
-              </div>
-            </div>
+        {/* Step Progress Bar - Exactly matches Flutter WorkflowStepper */}
+        <div className="steps-wrapper">
+          <div className={`step-item ${step === 1 ? 'active' : step > 1 ? 'completed' : ''}`}>
+            <div className="step-circle">{step > 1 ? '✓' : '1'}</div>
+            <span>Upload</span>
+          </div>
+          <div className={`step-line ${step > 1 ? 'filled' : ''}`} />
+          <div className={`step-item ${step === 2 ? 'active' : step > 2 ? 'completed' : ''}`}>
+            <div className="step-circle">{step > 2 ? '✓' : '2'}</div>
+            <span>Options</span>
+          </div>
+          <div className={`step-line ${step > 2 ? 'filled' : ''}`} />
+          <div className={`step-item ${step === 3 ? 'active' : step > 3 ? 'completed' : ''}`}>
+            <div className="step-circle">{step > 3 ? '✓' : '3'}</div>
+            <span>Payment</span>
+          </div>
+          <div className={`step-line ${step > 3 ? 'filled' : ''}`} />
+          <div className={`step-item ${step === 4 ? 'active' : ''}`}>
+            <div className="step-circle">4</div>
+            <span>Release</span>
+          </div>
+        </div>
 
-            {/* Step Views */}
-            {step === 1 && <UploadStep onNext={handleDocumentUploaded} />}
-            {step === 2 && (
-              <OptionsStep
-                document={document}
-                onBack={() => setStep(1)}
-                onNext={handleOptionsConfigured}
-              />
-            )}
-            {step === 3 && (
-              <PaymentStep
-                orderData={orderData}
-                onBack={() => setStep(2)}
-                onNext={handlePaymentCompleted}
-              />
-            )}
-            {step === 4 && (
-              <OtpStep
-                finalData={finalData}
-                onReset={handleReset}
-              />
-            )}
-          </>
+        {/* Step Views */}
+        {step === 1 && <UploadStep onNext={handleDocumentUploaded} />}
+        {step === 2 && (
+          <OptionsStep
+            document={document}
+            onBack={() => setStep(1)}
+            onNext={handleOptionsConfigured}
+          />
+        )}
+        {step === 3 && (
+          <PaymentStep
+            orderData={orderData}
+            onBack={() => setStep(2)}
+            onNext={handlePaymentCompleted}
+          />
+        )}
+        {step === 4 && (
+          <OtpStep
+            finalData={finalData}
+            onReset={handleReset}
+          />
         )}
       </main>
     </div>

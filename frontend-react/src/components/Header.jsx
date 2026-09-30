@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, RefreshCw, UploadCloud, Terminal } from 'lucide-react';
+import { Printer, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 
-export default function Header({ currentView, setView }) {
+export default function Header() {
   const [stationInfo, setStationInfo] = useState({
     name: 'HP_LaserJet_400_M401dn_F36EC0',
     state: 'READY',
@@ -25,59 +25,43 @@ export default function Header({ currentView, setView }) {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 6000);
+    const interval = setInterval(fetchStatus, 8000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <header className="header-bar">
-      <div className="logo-wrapper" onClick={() => setView('flow')} style={{ cursor: 'pointer' }}>
+      <div className="logo-wrapper">
         <div className="logo-icon">
           <Printer size={22} strokeWidth={2.4} />
         </div>
         <div>
-          <div className="logo-title">QwikPrint</div>
-          <div className="logo-subtitle">Autonomous Self-Service Kiosk</div>
+          <div className="logo-title">Autonomous Printer</div>
+          <div className="logo-subtitle">Self-Service Autonomous Kiosk</div>
         </div>
       </div>
 
-      <nav className="nav-tabs">
-        <button
-          className={`nav-tab ${currentView === 'flow' ? 'active' : ''}`}
-          onClick={() => setView('flow')}
-        >
-          <UploadCloud size={16} />
-          Print Order
-        </button>
-        <button
-          className={`nav-tab ${currentView === 'kiosk' ? 'active' : ''}`}
-          onClick={() => setView('kiosk')}
-        >
-          <Terminal size={16} />
-          Station Terminal
-        </button>
-      </nav>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <div className="station-badge">
           <span className="pulsing-dot" />
-          <span>{stationInfo.name}</span>
-          <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>({stationInfo.state})</span>
+          <span>Station Online</span>
         </div>
         <button
           onClick={fetchStatus}
           style={{
-            background: 'transparent',
-            border: 'none',
+            background: 'var(--surface-subtle)',
+            border: '1px solid var(--border)',
+            borderRadius: '10px',
             color: 'var(--text-secondary)',
             cursor: 'pointer',
-            padding: '4px',
+            padding: '6px 8px',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            transition: 'all 0.15s ease'
           }}
-          title="Refresh Station Status"
+          title="Refresh Kiosk Status"
         >
-          <RefreshCw size={17} className={isRefreshing ? 'animate-spin' : ''} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
         </button>
       </div>
     </header>
