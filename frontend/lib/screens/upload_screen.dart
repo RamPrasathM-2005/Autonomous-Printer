@@ -10,6 +10,7 @@ import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
+import '../services/document_bytes_cache.dart';
 import 'print_options_screen.dart';
 
 import 'payment_screen.dart';
@@ -298,6 +299,7 @@ class _UploadScreenState extends State<UploadScreen>
           bytes: item.bytes,
           filename: item.name,
         );
+        DocumentBytesCache.put(doc.id, Uint8List.fromList(item.bytes));
 
         setState(() {
           item.isCompleted = true;
@@ -342,23 +344,25 @@ class _UploadScreenState extends State<UploadScreen>
         titleSpacing: 20,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/images/logo.jpg',
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.print_rounded,
-                color: Colors.white,
-                size: 22,
+                  child: const Icon(
+                    Icons.print_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),

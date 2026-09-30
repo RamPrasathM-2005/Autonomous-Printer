@@ -8,7 +8,7 @@ import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
-import 'otp_release_screen.dart';
+import 'payment_success_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -62,13 +62,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  Future<void> _showConfirmedOrder() async {
+  Future<void> _showConfirmedOrder({String? paymentId}) async {
     final order = await _api.getOrder(widget.order.id);
     if (!mounted) return;
-    if (order.status == 'WAITING_FOR_OTP') {
+    if (order.status == 'WAITING_FOR_OTP' || order.status == 'PAID') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => OtpReleaseScreen(orderId: order.id)),
+        MaterialPageRoute(
+          builder: (_) => PaymentSuccessScreen(
+            order: order,
+            configs: widget.configs,
+            documents: widget.documents,
+            paymentId: paymentId,
+          ),
+        ),
       );
     } else {
       setState(
@@ -111,7 +118,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         razorpayPaymentId: result.razorpayPaymentId,
         razorpaySignature: result.razorpaySignature,
       );
-      await _showConfirmedOrder();
+      await _showConfirmedOrder(paymentId: result.razorpayPaymentId);
     } catch (e) {
       if (mounted) {
         setState(
