@@ -87,91 +87,35 @@ class CupsService:
 
         return options
 
-    def submit_job(self, file_path: Path, settings: Dict[str, Any]) -> str:
-        """
-        Submits file to CUPS printer with formatted options.
-        Returns the CUPS Job ID.
-        """
+    def submit_job(self, file_path, settings, allow_mock=False):
         options = self.build_cups_options(settings)
-        agent_logger.info(f"Submitting {file_path.name} to printer '{self.printer_name}' with options: {options}")
-
-        # Store a verified copy in system storage so the user can inspect printed files
+        if self.mock_mode:
+            if not allow_mock:
+                raise CupsException('Mock printing was not authorized by the backend')
+            return 'mock-' + uuid.uuid4().hex
+        if not self.has_pycups:
+            raise CupsException('A real CUPS printer is required. No simulated fallback is permitted.')
         try:
-            printed_dir = Path(__file__).resolve().parent.parent.parent.parent / "storage" / "printed_outputs"
-            printed_dir.mkdir(parents=True, exist_ok=True)
-            mode_tag = "COLOR" if options.get("print-color-mode") == "color" else "GRAYSCALE"
-            saved_copy = printed_dir / f"PRINTED_{mode_tag}_{file_path.name}"
-            import shutil
-            if file_path.exists() and file_path.resolve() != saved_copy.resolve():
-                shutil.copy2(file_path, saved_copy)
-                agent_logger.info(f"Preserved physical print file in storage: {saved_copy}")
-        except Exception as copy_err:
-            agent_logger.warning(f"Could not save copy to printed_outputs: {copy_err}")
+            conn = self.cups.Connection(host=config.CUPS_SERVER)
+            return str(conn.printFile(self.printer_name, str(file_path), 'Secure print job', options))
+        except Exception:
+            # Submission may have reached CUPS before the connection failed.
+            raise CupsException('Printer submission outcome unknown; operator review required')
 
-        # If in Mock mode or Windows without native CUPS
-        if self.mock_mode or (os.name == 'nt' and not self.has_pycups):
-            mock_id = f"cups-{uuid.uuid4().hex[:8]}"
-            agent_logger.info(f"[MOCK_CUPS] Successfully submitted simulated print job ID: {mock_id}")
-            return mock_id
-
-        # Native pycups submission if installed
-        if self.has_pycups:
-            try:
-                conn = self.cups.Connection(host=config.CUPS_SERVER)
-                job_id = conn.printFile(
-                    self.printer_name,
-                    str(file_path),
-                    f"Job_{file_path.name}",
-                    options
-                )
-                return str(job_id)
-            except Exception as e:
-                agent_logger.warning(f"pycups printer not reachable ({e}). Falling back to simulated print.")
-                return f"cups-sim-{uuid.uuid4().hex[:8]}"
-
-        # CLI 'lp' command fallback
+    def monitor_job(self, cups_job_id):
+        if cups_job_id.startswith('mock-'):
+            return 'COMPLETED' if self.mock_mode else 'UNKNOWN'
+        if not self.has_pycups:
+            return 'UNKNOWN'
         try:
-            cmd = ["lp", "-d", self.printer_name]
-            for opt_k, opt_v in options.items():
-                cmd.extend(["-o", f"{opt_k}={opt_v}"])
-            cmd.append(str(file_path))
-
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            output = result.stdout.strip()
-            cups_id = output.split()[3] if len(output.split()) >= 4 else f"cups-{uuid.uuid4().hex[:6]}"
-            return cups_id
-        except Exception as e:
-            agent_logger.warning(f"CUPS lp command failed or no physical printer connected ({e}). Auto-falling back to simulated print.")
-            return f"cups-sim-{uuid.uuid4().hex[:8]}"
-
-    def monitor_job(self, cups_job_id: str) -> str:
-        """
-        Checks status of CUPS job.
-        Returns: COMPLETED, PROCESSING, or FAILED
-        """
-        import time
-
-        if self.mock_mode or cups_job_id.startswith("cups-"):
-            time.sleep(2)  # Realistic print spooling delay for UI progress
-            return "COMPLETED"
-
-        if self.has_pycups:
-            try:
-                conn = self.cups.Connection(host=config.CUPS_SERVER)
-                jobs = conn.getJobs()
-                if int(cups_job_id) not in jobs:
-                    return "COMPLETED"
-                job_info = jobs[int(cups_job_id)]
-                # cups.IPP_JOB_PROCESSING = 5, cups.IPP_JOB_COMPLETED = 9
-                state = job_info.get("job-state", 0)
-                if state in (7, 8):  # CANCELED, ABORTED
-                    return "FAILED"
-                elif state == 9:
-                    return "COMPLETED"
-                return "PROCESSING"
-            except Exception:
-                return "COMPLETED"
-
-        return "COMPLETED"
+            conn = self.cups.Connection(host=config.CUPS_SERVER)
+            state = conn.getJobAttributes(int(cups_job_id)).get('job-state')
+            if state == 9: return 'COMPLETED'
+            if state in (7, 8): return 'FAILED'
+            if state in (3, 4, 5, 6): return 'PROCESSING'
+            return 'UNKNOWN'
+        except Exception:
+            # Missing/purged printer jobs do not prove physical completion.
+            return 'UNKNOWN'
 
 cups_service = CupsService()

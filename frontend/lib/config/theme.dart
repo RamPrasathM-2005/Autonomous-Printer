@@ -8,7 +8,9 @@ class AppTheme {
   static const Color primarySurface = Color(0xFFEEF2FF); // Soft Indigo Tint
 
   static const Color secondary = Color(0xFF0F172A); // Deep Slate
-  static const Color accent = Color(0xFFEC4899); // Vibrant Rose / Coral Pink (Reference Image 1)
+  static const Color accent = Color(
+    0xFFEC4899,
+  ); // Vibrant Rose / Coral Pink (Reference Image 1)
   static const Color accentSurface = Color(0xFFFCE7F3);
 
   // Surface & Background Colors
@@ -62,13 +64,13 @@ class AppTheme {
   // Box Shadows
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: const Color(0xFF0F172A).withOpacity(0.04),
+      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
       blurRadius: 16,
       spreadRadius: 0,
       offset: const Offset(0, 6),
     ),
     BoxShadow(
-      color: const Color(0xFF0F172A).withOpacity(0.02),
+      color: const Color(0xFF0F172A).withValues(alpha: 0.02),
       blurRadius: 4,
       spreadRadius: 0,
       offset: const Offset(0, 2),
@@ -77,7 +79,7 @@ class AppTheme {
 
   static final List<BoxShadow> buttonShadow = [
     BoxShadow(
-      color: primary.withOpacity(0.25),
+      color: primary.withValues(alpha: 0.25),
       blurRadius: 12,
       spreadRadius: 0,
       offset: const Offset(0, 4),
@@ -86,7 +88,7 @@ class AppTheme {
 
   static final List<BoxShadow> accentShadow = [
     BoxShadow(
-      color: accent.withOpacity(0.25),
+      color: accent.withValues(alpha: 0.25),
       blurRadius: 12,
       spreadRadius: 0,
       offset: const Offset(0, 4),
@@ -155,16 +157,16 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceWhite,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: border),

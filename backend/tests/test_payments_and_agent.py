@@ -1,130 +1,94 @@
+import hashlib
+import hmac
 import json
-from tests.conftest import create_sample_pdf
+import pytest
+from app.config.settings import settings
+from app.db.models.otp import OTP
+from app.db.models.payment import Payment, PaymentStatus
+from app.db.models.print_job import PrintJob
+from app.db.models.security import WebhookEvent
+from app.services.payment_service import payment_service
+from tests.conftest import create_order, start_payment, paid_order, proof
 
-def test_full_payment_otp_and_agent_workflow(client, test_print_server, test_agent_token):
-    # 1. Upload Document WITHOUT LOGIN
-    pdf_bytes = create_sample_pdf(3)
-    up_res = client.post(
-        "/api/documents/upload",
-        files={"file": ("report.pdf", pdf_bytes, "application/pdf")}
-    )
-    assert up_res.status_code == 201
-    doc_id = up_res.json()["documentId"]
+@pytest.mark.parametrize('signature',['test_sig','dev_simulated_sig','', '0'*64])
+def test_forged_payment_does_not_issue_otp(client,test_print_server,signature):
+    order=create_order(client,test_print_server)
+    pay=start_payment(client,order)
+    res=client.post('/api/payments/verify',json={'orderId':order['id'],'razorpayOrderId':pay['razorpayOrderId'],
+        'razorpayPaymentId':'pay_forged','razorpaySignature':signature})
+    assert res.status_code in (400,422)
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==409
 
-    # 2. Create Order WITHOUT LOGIN
-    order_res = client.post(
-        "/api/orders",
-        json={
-            "document_id": doc_id,
-            "print_server_id": test_print_server.id,
-            "settings": {"copies": 1, "page_range": "1-3"}
-        }
-    )
-    assert order_res.status_code == 201
-    order_id = order_res.json()["id"]
-    order_amount = order_res.json()["amount"]
-    amount_paise = int(order_amount * 100)
+@pytest.mark.parametrize('field,value',[('amount',1),('currency','USD'),('order_id','order_other'),('captured',False),('status','authorized'),('amount_refunded',1)])
+def test_valid_signature_cannot_override_provider_state(client,test_print_server,fake_gateway,field,value):
+    order=create_order(client,test_print_server);pay=start_payment(client,order)
+    remote=fake_gateway.capture(pay['razorpayOrderId']);valid=proof(order,remote)
+    remote[field]=value
+    res=client.post('/api/payments/verify',json=valid)
+    assert res.status_code==409,res.text
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==409
 
-    # 3. Create Payment WITHOUT LOGIN
-    pay_res = client.post(
-        "/api/payments/create",
-        json={"order_id": order_id}
-    )
-    assert pay_res.status_code == 201
-    rzp_order_id = pay_res.json()["razorpayOrderId"]
+def test_capture_idempotent_and_otp_single_use(client,test_print_server,test_agent_token,fake_gateway,db_session):
+    order,remote=paid_order(client,test_print_server,fake_gateway)
+    otp=client.get('/api/orders/'+order['id']+'/otp').json()['otp']
+    assert client.post('/api/payments/verify',json=proof(order,remote)).status_code==200
+    assert db_session.query(OTP).count()==1 and db_session.query(PrintJob).count()==1
+    headers={'Authorization':'Bearer '+test_agent_token}
+    release=client.post('/api/agent/release',headers=headers,json={'otp':otp})
+    assert release.status_code==200,release.text
+    job=release.json()['jobId']
+    assert client.post('/api/agent/release',headers=headers,json={'otp':otp}).status_code==400
+    claim=client.post('/api/agent/jobs/'+job+'/claim',headers=headers)
+    assert claim.status_code==200
+    assert client.post('/api/agent/jobs/'+job+'/claim',headers=headers).status_code==409
+    assert client.post('/api/agent/jobs/'+job+'/status',headers=headers,
+        json={'status':'COMPLETED','claimToken':'bad'*16,'cupsJobId':'123'}).status_code==403
+    report=client.post('/api/agent/jobs/'+job+'/status',headers=headers,
+        json={'status':'COMPLETED','claimToken':claim.json()['claimToken'],'cupsJobId':'123'})
+    assert report.status_code==200,report.text
+    assert client.get('/api/orders/'+order['id']).json()['status']=='COMPLETED'
+    assert client.post('/api/payments/verify',json=proof(order,remote)).status_code==200
+    assert client.get('/api/orders/'+order['id']).json()['status']=='COMPLETED'
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==409
 
-    # 4. Simulate Webhook (Razorpay to FastAPI)
-    webhook_payload = {
-        "event": "payment.captured",
-        "payload": {
-            "payment": {
-                "entity": {
-                    "id": "pay_test_rzp_123",
-                    "order_id": rzp_order_id,
-                    "amount": amount_paise,
-                    "status": "captured"
-                }
-            }
-        }
-    }
-    raw_webhook = json.dumps(webhook_payload).encode('utf-8')
-    wh_res = client.post(
-        "/api/payments/webhook",
-        headers={"X-Razorpay-Signature": "test_sig", "Content-Type": "application/json"},
-        content=raw_webhook
-    )
-    assert wh_res.status_code == 200
-    assert wh_res.json()["status"] == "success"
+def test_gateway_outage_never_creates_fake_payment(client,test_print_server,fake_gateway,db_session):
+    order=create_order(client,test_print_server);fake_gateway.unavailable=True
+    assert client.post('/api/payments/create',json={'orderId':order['id']}).status_code==502
+    row=db_session.query(Payment).one()
+    assert row.razorpay_order_id is None and row.creation_state=='UNKNOWN'
+    assert client.post('/api/payments/create',json={'orderId':order['id']}).status_code==409
+    assert fake_gateway.creates==0
 
-    # Verify idempotency: duplicate webhook should succeed gracefully
-    wh_dup = client.post(
-        "/api/payments/webhook",
-        headers={"X-Razorpay-Signature": "test_sig", "Content-Type": "application/json"},
-        content=raw_webhook
-    )
-    assert wh_dup.status_code == 200
+def test_reconcile_recovers_lost_checkout_callback(client,test_print_server,fake_gateway):
+    order=create_order(client,test_print_server);pay=start_payment(client,order)
+    fake_gateway.capture(pay['razorpayOrderId'])
+    res=client.post('/api/payments/reconcile',json={'orderId':order['id']})
+    assert res.status_code==200,res.text
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==200
 
-    # 5. User checks OTP directly on phone WITHOUT LOGIN
-    otp_res = client.get(f"/api/orders/{order_id}/otp")
-    assert otp_res.status_code == 200
-    otp_code = otp_res.json()["otp"]
-    assert len(otp_code) == 6
+def webhook(client,body,event_id='evt_1',signature=None):
+    raw=json.dumps(body).encode()
+    sig=signature if signature is not None else hmac.new(settings.RAZORPAY_WEBHOOK_SECRET.encode(),raw,hashlib.sha256).hexdigest()
+    return client.post('/api/payments/webhook',content=raw,headers={'Content-Type':'application/json',
+        'X-Razorpay-Signature':sig,'X-Razorpay-Event-Id':event_id})
 
-    # 6. Agent Heartbeat
-    hb_res = client.post(
-        "/api/agent/heartbeat",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"printerState": "READY", "paperState": "AVAILABLE"}
-    )
-    assert hb_res.status_code == 200
-    assert hb_res.json()["status"] == "OK"
+@pytest.mark.parametrize('signature',['test_sig','dev_simulated_sig','', '0'*64])
+def test_webhook_always_requires_hmac(client,signature):
+    assert webhook(client,{'event':'payment.captured'},signature=signature).status_code==400
 
-    # 7. Agent enters wrong OTP at physical kiosk -> 400
-    wrong_res = client.post(
-        "/api/agent/release",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"otp": "000000"}
-    )
-    assert wrong_res.status_code == 400
-    assert wrong_res.json()["error"] == "INVALID_OTP"
-
-    # 8. Agent enters correct OTP at physical kiosk -> 200 and RELEASED
-    rel_res = client.post(
-        "/api/agent/release",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"otp": otp_code}
-    )
-    assert rel_res.status_code == 200
-    job_data = rel_res.json()
-    assert job_data["status"] == "RELEASED"
-    job_id = job_data["jobId"]
-    assert "storageKey" in job_data
-
-    # 9. Agent polls jobs -> released job should appear
-    jobs_res = client.get(
-        "/api/agent/jobs",
-        headers={"Authorization": f"Bearer {test_agent_token}"}
-    )
-    assert jobs_res.status_code == 200
-    assert any(j["jobId"] == job_id for j in jobs_res.json())
-
-    # 10. Agent reports status: PRINTING
-    status_p = client.post(
-        f"/api/agent/jobs/{job_id}/status",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "PRINTING", "cupsJobId": "cups-42"}
-    )
-    assert status_p.status_code == 200
-
-    # 11. Agent reports status: COMPLETED
-    status_c = client.post(
-        f"/api/agent/jobs/{job_id}/status",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "COMPLETED"}
-    )
-    assert status_c.status_code == 200
-
-    # 12. Verify final order status is COMPLETED
-    order_final = client.get(f"/api/orders/{order_id}")
-    assert order_final.status_code == 200
-    assert order_final.json()["status"] == "COMPLETED"
+def test_webhook_durable_duplicate_and_reorder(client,test_print_server,fake_gateway,db_session):
+    from app.worker import process_event
+    order=create_order(client,test_print_server);pay=start_payment(client,order)
+    remote=fake_gateway.capture(pay['razorpayOrderId'])
+    body={'event':'payment.captured','payload':{'payment':{'entity':remote}}}
+    assert webhook(client,body).status_code==202
+    assert webhook(client,body).status_code==202
+    assert db_session.query(WebhookEvent).count()==1
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==409
+    process_event(db_session,db_session.get(WebhookEvent,'evt_1'))
+    assert client.get('/api/orders/'+order['id']+'/otp').status_code==200
+    body['event']='payment.failed'
+    assert webhook(client,body).status_code==409
+    assert webhook(client,body,event_id='evt_2').status_code==202
+    process_event(db_session,db_session.get(WebhookEvent,'evt_2'))
+    assert db_session.query(Payment).one().status==PaymentStatus.CAPTURED

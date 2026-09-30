@@ -15,11 +15,10 @@ class PaymentInitiateResponse {
 
   factory PaymentInitiateResponse.fromJson(Map<String, dynamic> json) {
     final rawKey = json['keyId'] ?? json['key_id'] ?? '';
-    final keyId = (rawKey is String && rawKey.isNotEmpty)
-        ? rawKey
-        : 'rzp_test_RFxhjAiTxwrpAJ';
+    final keyId = (rawKey is String && rawKey.isNotEmpty) ? rawKey : '';
 
-    final rawOrderId = json['razorpayOrderId'] ?? json['razorpay_order_id'] ?? '';
+    final rawOrderId =
+        json['razorpayOrderId'] ?? json['razorpay_order_id'] ?? '';
     final rzpOrderId = (rawOrderId is String && rawOrderId.isNotEmpty)
         ? rawOrderId
         : '';
@@ -27,7 +26,9 @@ class PaymentInitiateResponse {
     return PaymentInitiateResponse(
       orderId: json['orderId'] ?? json['order_id'] ?? '',
       razorpayOrderId: rzpOrderId,
-      amount: (json['amount'] is num) ? (json['amount'] as num).toDouble() : 0.0,
+      amount: (json['amount'] is num)
+          ? (json['amount'] as num).toDouble()
+          : 0.0,
       currency: json['currency'] ?? 'INR',
       keyId: keyId,
     );

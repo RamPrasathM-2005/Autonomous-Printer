@@ -1,101 +1,58 @@
-import os
-import sys
-from pathlib import Path
 from contextlib import asynccontextmanager
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from fastapi import FastAPI, Request, status
+import re
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-
+from cryptography.fernet import Fernet
 from app.config.settings import settings
 from app.config.database import engine
 from app.db.base import Base
-from app.services.storage_service import storage_service
-from app.utils.errors import (
-    AppException,
-    app_exception_handler,
-    validation_exception_handler,
-    general_exception_handler,
-)
-
-from app.api.routes.documents import router as documents_router
-from app.api.routes.print_servers import router as print_servers_router
-from app.api.routes.orders import router as orders_router
-from app.api.routes.payments import router as payments_router
-from app.api.routes.agent import router as agent_router
-from app.api.routes.maintenance import router as maintenance_router
-from app.api.routes.kiosk import router as kiosk_router
+from app.security_middleware import RequestSecurityMiddleware
+from app.utils.errors import AppException, app_exception_handler, validation_exception_handler, general_exception_handler
+from app.api.routes import documents, print_servers, orders, payments, agent, maintenance, sessions
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: ensure tables and storage dirs exist
-    Base.metadata.create_all(bind=engine)
-    storage_service._ensure_directories()
+async def lifespan(app):
+    if len(settings.JWT_SECRET_KEY) < 32 or len(settings.OTP_HASH_KEY) < 32:
+        raise RuntimeError('Configure independent random JWT_SECRET_KEY and OTP_HASH_KEY (32+ characters).')
+    Fernet(settings.OTP_ENCRYPTION_KEY.encode())
+    if not re.fullmatch(r'rzp_(test|live)_[A-Za-z0-9]+', settings.RAZORPAY_KEY_ID) or not settings.RAZORPAY_KEY_SECRET:
+        raise RuntimeError('Configure genuine Razorpay test or live API credentials.')
+    if settings.JWT_SECRET_KEY == settings.OTP_HASH_KEY:
+        raise RuntimeError('JWT and OTP hash keys must be independent.')
+    if settings.ALLOW_MOCK_PRINTING and not settings.RAZORPAY_KEY_ID.startswith('rzp_test_'):
+        raise RuntimeError('Mock printing requires Razorpay test keys; it cannot be enabled for live payments.')
+    if settings.ENVIRONMENT == 'production':
+        if not settings.ALLOWED_ORIGINS or any(not o.startswith('https://') for o in settings.ALLOWED_ORIGINS):
+            raise RuntimeError('Production requires explicit HTTPS browser origins.')
+        if len(settings.RAZORPAY_WEBHOOK_SECRET) < 32 or settings.ALLOW_MOCK_PRINTING:
+            raise RuntimeError('Production requires webhook credentials and real printing.')
+        if not settings.ALLOWED_HOSTS or any('*' in h for h in settings.ALLOWED_HOSTS):
+            raise RuntimeError('Production requires explicit hostnames.')
+    # Schema changes are explicit: python -m app.db.migrate before starting services.
+    Base.metadata.create_all(engine)
     yield
-    # Shutdown
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    description="Smart Self-Service Printing Platform FastAPI Backend",
-    version="1.0.0",
-    lifespan=lifespan
-)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"] if settings.ENVIRONMENT == "development" else [],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-import time
-
-@app.middleware("http")
-async def log_requests_middleware(request: Request, call_next):
-    start = time.time()
-    method = request.method
-    path = request.url.path
-    print(f"[BACKEND_LOG] >>> {method} {path}")
-    try:
-        response = await call_next(request)
-        duration_ms = (time.time() - start) * 1000
-        print(f"[BACKEND_LOG] <<< {method} {path} - Status: {response.status_code} ({duration_ms:.1f}ms)")
-        return response
-    except Exception as e:
-        duration_ms = (time.time() - start) * 1000
-        print(f"[BACKEND_LOG] !!! {method} {path} - Error: {e} ({duration_ms:.1f}ms)")
-        raise
-
-# Exception handlers
+app = FastAPI(title=settings.APP_NAME, version='2.0.0', lifespan=lifespan,
+              docs_url='/docs' if settings.ENVIRONMENT != 'production' else None,
+              redoc_url=None)
+app.add_middleware(RequestSecurityMiddleware)
+app.add_middleware(CORSMiddleware, allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=False, allow_methods=['GET','POST','DELETE','OPTIONS'],
+    allow_headers=['Content-Type','Authorization','Idempotency-Key'])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-if settings.ENVIRONMENT != "development":
-    app.add_exception_handler(Exception, general_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+for module in (sessions, documents, print_servers, orders, payments, agent, maintenance):
+    app.include_router(module.router)
 
-# Routers
-app.include_router(documents_router)
-app.include_router(print_servers_router)
-app.include_router(orders_router)
-app.include_router(payments_router)
-app.include_router(agent_router)
-app.include_router(maintenance_router)
-app.include_router(kiosk_router)
-
-@app.get("/health", tags=["Health"])
-def health_check():
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "environment": settings.ENVIRONMENT
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+@app.get('/health')
+def health():
+    from sqlalchemy import text
+    with engine.connect() as connection:
+        connection.execute(text('SELECT 1'))
+    return {'status': 'healthy', 'app': settings.APP_NAME, 'environment': settings.ENVIRONMENT,
+            'paymentMode': 'test' if settings.RAZORPAY_KEY_ID.startswith('rzp_test_') else 'live',
+            'mockPrinting': settings.ALLOW_MOCK_PRINTING}

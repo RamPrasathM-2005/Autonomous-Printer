@@ -20,7 +20,7 @@ class BackendClient:
         try:
             resp = self.session.post(url, json={
                 "printerState": printer_state,
-                "paperState": paper_state
+                "paperState": paper_state, "mockPrinting": config.MOCK_CUPS
             }, timeout=5)
             if resp.status_code == 200:
                 return True
@@ -42,6 +42,16 @@ class BackendClient:
             agent_logger.error(f"Failed to connect to backend for job polling: {e}")
             return []
 
+    def claim_job(self, job_id):
+        try:
+            resp = self.session.post(f'{self.base_url}/agent/jobs/{job_id}/claim', timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+            return None
+        except requests.RequestException:
+            # Do not submit if the claim response was lost.
+            return None
+
     def release_job(self, otp: str) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/agent/release"
         try:
@@ -61,10 +71,11 @@ class BackendClient:
         status: str,
         cups_job_id: Optional[str] = None,
         error_code: Optional[str] = None,
-        message: Optional[str] = None
+        message: Optional[str] = None,
+        claim_token: Optional[str] = None
     ) -> bool:
         url = f"{self.base_url}/agent/jobs/{job_id}/status"
-        payload = {"status": status}
+        payload = {"status": status, "claimToken": claim_token}
         if cups_job_id:
             payload["cupsJobId"] = str(cups_job_id)
         if error_code:

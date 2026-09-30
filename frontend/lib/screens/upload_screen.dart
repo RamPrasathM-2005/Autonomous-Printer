@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+
+import '../services/api_error.dart';
+
 import 'package:file_picker/file_picker.dart';
+
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import 'print_options_screen.dart';
+import 'payment_screen.dart';
+import 'otp_release_screen.dart';
+import 'print_progress_screen.dart';
 
 class SelectedDocItem {
   final String name;
@@ -40,7 +47,8 @@ class UploadScreen extends StatefulWidget {
   State<UploadScreen> createState() => _UploadScreenState();
 }
 
-class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderStateMixin {
+class _UploadScreenState extends State<UploadScreen>
+    with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
 
   final List<SelectedDocItem> _selectedFiles = [];
@@ -51,6 +59,53 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   PrintServer? _selectedStation;
   bool _isLoadingStations = true;
 
+  Future<void> _resumeOrder() async {
+    try {
+      final orders = await _apiService.listOrders();
+      if (!mounted) return;
+      if (orders.isEmpty) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('No orders yet.')));
+        return;
+      }
+      final order = await showDialog<dynamic>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Your orders'),
+          children: orders
+              .map(
+                (order) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(context, order),
+                  child: Text(
+                    '${order.currency} ${order.amount.toStringAsFixed(2)} - ${order.statusLabel}\n${order.id}',
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      );
+      if (order == null || !mounted) return;
+      final Widget screen;
+      if (order.status == 'CREATED') {
+        screen = PaymentScreen(order: order);
+      } else if (order.status == 'WAITING_FOR_OTP') {
+        screen = OtpReleaseScreen(orderId: order.id);
+      } else {
+        screen = PrintProgressScreen(
+          orderId: order.id,
+          otp: '',
+          printServerId: order.printServerId,
+        );
+      }
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userError(e))));
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +115,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   Future<void> _loadStations() async {
     try {
       final stations = await _apiService.fetchPrintServers();
+      if (!mounted) return;
       setState(() {
         if (stations.isNotEmpty) {
           _selectedStation = stations.firstWhere(
@@ -70,6 +126,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         _isLoadingStations = false;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _isLoadingStations = false;
       });
@@ -99,7 +156,9 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         for (final file in files) {
           final fileBytes = await file.readAsBytes();
           // Avoid duplicate file additions
-          if (!_selectedFiles.any((f) => f.name == file.name && f.size == fileBytes.length)) {
+          if (!_selectedFiles.any(
+            (f) => f.name == file.name && f.size == fileBytes.length,
+          )) {
             _selectedFiles.add(
               SelectedDocItem(
                 name: file.name,
@@ -115,7 +174,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       }
     } catch (e) {
       setState(() {
-        _uploadError = 'File selection notice: ${e.toString()}';
+        _uploadError = 'Unable to open this file. Choose another.';
       });
     }
   }
@@ -129,7 +188,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   Future<void> _handleNext() async {
     if (_selectedFiles.isEmpty) {
       setState(() {
-        _uploadError = 'Please select at least one document to proceed.';
+        _uploadError = 'Select a document.';
       });
       return;
     }
@@ -146,7 +205,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         final item = _selectedFiles[i];
         setState(() {
           item.progress = 0.3;
-          _uploadStatusText = 'Uploading ${i + 1} of ${_selectedFiles.length}: ${item.name}';
+          _uploadStatusText =
+              'Uploading ${i + 1} of ${_selectedFiles.length}: ${item.name}';
         });
 
         // Simulate upload progress steps visually
@@ -187,7 +247,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     } catch (e) {
       setState(() {
         _isUploading = false;
-        _uploadError = e.toString().replaceAll('Exception: ', '');
+        _uploadError = userError(e);
       });
     }
   }
@@ -209,13 +269,17 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.25),
+                    color: AppTheme.primary.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
+              child: const Icon(
+                Icons.print_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             const Expanded(
@@ -234,22 +298,17 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  Text(
-                    'Autonomous Self-Service Kiosk',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
                 ],
               ),
             ),
           ],
         ),
         actions: [
+          if (_apiService.hasSession)
+            TextButton(
+              onPressed: _resumeOrder,
+              child: const Text('Your orders'),
+            ),
           _isLoadingStations
               ? const Center(
                   child: Padding(
@@ -263,8 +322,11 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 )
               : IconButton(
                   onPressed: _loadStations,
-                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
-                  tooltip: 'Refresh Kiosk Status',
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppTheme.textSecondary,
+                  ),
+                  tooltip: 'Refresh station',
                 ),
           const SizedBox(width: 8),
         ],
@@ -296,7 +358,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Select Documents',
+                                'Documents',
                                 style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
@@ -304,23 +366,22 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Upload your PDF or image files to start printing.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
                             ],
                           ),
                           if (_selectedFiles.isNotEmpty)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppTheme.primarySurface,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
                               ),
                               child: Text(
                                 '${_selectedFiles.length} file(s) selected',
@@ -339,15 +400,24 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                       // Error message banner
                       if (_uploadError != null) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.dangerSurface,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                            border: Border.all(
+                              color: AppTheme.danger.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 20),
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                color: AppTheme.danger,
+                                size: 20,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -360,8 +430,13 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.danger),
-                                onPressed: () => setState(() => _uploadError = null),
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: AppTheme.danger,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _uploadError = null),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                               ),
@@ -382,7 +457,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'File Uploading Progress',
+                              'Selected files',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -404,7 +479,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _selectedFiles.length,
-                          separatorBuilder: (ctx, i) => const SizedBox(height: 10),
+                          separatorBuilder: (ctx, i) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (ctx, index) {
                             final file = _selectedFiles[index];
                             return _buildFileItemCard(file, index);
@@ -425,7 +501,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               color: AppTheme.surfaceWhite,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -454,7 +530,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                           const SizedBox(height: 2),
                           Text(
                             _selectedFiles.isEmpty
-                                ? 'Select PDF or images above'
+                                ? 'PDF, PNG or JPG'
                                 : 'Total size: ${_formatFileSize(_totalSizeBytes)}',
                             style: const TextStyle(
                               fontSize: 12,
@@ -465,16 +541,21 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                       ),
                       const Spacer(),
                       ElevatedButton(
-                        onPressed: (_selectedFiles.isEmpty || _isUploading) ? null : _handleNext,
+                        onPressed: (_selectedFiles.isEmpty || _isUploading)
+                            ? null
+                            : _handleNext,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 16,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                           elevation: 0,
-                          shadowColor: AppTheme.primary.withOpacity(0.4),
+                          shadowColor: AppTheme.primary.withValues(alpha: 0.4),
                         ),
                         child: _isUploading
                             ? Row(
@@ -485,13 +566,19 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
-                                    _uploadStatusText.isNotEmpty ? _uploadStatusText : 'Uploading...',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                    _uploadStatusText.isNotEmpty
+                                        ? _uploadStatusText
+                                        : 'Uploading...',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ],
                               )
@@ -499,7 +586,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    'Continue to Options',
+                                    'Continue',
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
@@ -521,8 +608,6 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     );
   }
 
-
-
   Widget _buildStationCard() {
     final isOnline = _selectedStation?.status.toLowerCase() == 'online';
     return Container(
@@ -538,7 +623,9 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
+              color: isOnline
+                  ? AppTheme.successSurface
+                  : AppTheme.warningSurface,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -568,9 +655,14 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
+                        color: isOnline
+                            ? AppTheme.successSurface
+                            : AppTheme.warningSurface,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -578,7 +670,9 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: isOnline ? const Color(0xFF047857) : const Color(0xFFB45309),
+                          color: isOnline
+                              ? const Color(0xFF047857)
+                              : const Color(0xFFB45309),
                         ),
                       ),
                     ),
@@ -586,7 +680,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _selectedStation?.location ?? 'Location: Main Campus Library Terminal #1',
+                  _selectedStation?.location ?? 'Location unavailable',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -609,7 +703,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         color: AppTheme.surfaceWhite,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: AppTheme.primary.withOpacity(0.25),
+          color: AppTheme.primary.withValues(alpha: 0.25),
           width: 2,
         ),
         boxShadow: AppTheme.cardShadow,
@@ -632,7 +726,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                       color: AppTheme.primarySurface,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppTheme.primary.withOpacity(0.15),
+                        color: AppTheme.primary.withValues(alpha: 0.15),
                         width: 2,
                       ),
                     ),
@@ -645,7 +739,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.3),
+                          color: AppTheme.primary.withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -662,39 +756,24 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
 
               const SizedBox(height: 20),
 
-              const Text(
-                'Choose your file to upload',
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Drag and drop or browse PDF, PNG, or JPG files',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
               const SizedBox(height: 20),
 
               // Pink Accent Browse Button (Direct reference from Image 1 & Image 2)
               ElevatedButton(
                 onPressed: _pickFiles,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accent, // Rose/Pink accent from Reference Image 1
+                  backgroundColor: AppTheme
+                      .accent, // Rose/Pink accent from Reference Image 1
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 36,
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                   elevation: 0,
-                  shadowColor: AppTheme.accent.withOpacity(0.4),
+                  shadowColor: AppTheme.accent.withValues(alpha: 0.4),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -720,9 +799,21 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  _buildFormatPill('PDF Document', Icons.picture_as_pdf_rounded, const Color(0xFFE11D48)),
-                  _buildFormatPill('Images (JPG, PNG)', Icons.image_rounded, const Color(0xFF2563EB)),
-                  _buildFormatPill('Up to 50 MB', Icons.check_circle_outline_rounded, const Color(0xFF059669)),
+                  _buildFormatPill(
+                    'PDF Document',
+                    Icons.picture_as_pdf_rounded,
+                    const Color(0xFFE11D48),
+                  ),
+                  _buildFormatPill(
+                    'Images (JPG, PNG)',
+                    Icons.image_rounded,
+                    const Color(0xFF2563EB),
+                  ),
+                  _buildFormatPill(
+                    'Up to 50 MB',
+                    Icons.check_circle_outline_rounded,
+                    const Color(0xFF059669),
+                  ),
                 ],
               ),
             ],
@@ -736,9 +827,9 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -759,8 +850,12 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   }
 
   Widget _buildFileItemCard(SelectedDocItem file, int index) {
-    final badgeColor = file.isPdf ? const Color(0xFFE11D48) : const Color(0xFF2563EB);
-    final badgeIcon = file.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded;
+    final badgeColor = file.isPdf
+        ? const Color(0xFFE11D48)
+        : const Color(0xFF2563EB);
+    final badgeIcon = file.isPdf
+        ? Icons.picture_as_pdf_rounded
+        : Icons.image_rounded;
     final percentInt = (file.progress * 100).toInt();
 
     return Container(
@@ -780,9 +875,9 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.1),
+                  color: badgeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: badgeColor.withOpacity(0.2)),
+                  border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
                 ),
                 child: Icon(badgeIcon, color: badgeColor, size: 24),
               ),
@@ -803,7 +898,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_formatFileSize(file.size)} • ${file.fileExtension}',
+                      '${_formatFileSize(file.size)} â€¢ ${file.fileExtension}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,
@@ -819,13 +914,19 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: file.isCompleted ? AppTheme.accent : AppTheme.textSecondary,
+                  color: file.isCompleted
+                      ? AppTheme.accent
+                      : AppTheme.textSecondary,
                 ),
               ),
               const SizedBox(width: 8),
               IconButton(
                 onPressed: () => _removeFile(index),
-                icon: const Icon(Icons.cancel_rounded, color: AppTheme.textMuted, size: 20),
+                icon: const Icon(
+                  Icons.cancel_rounded,
+                  color: AppTheme.textMuted,
+                  size: 20,
+                ),
                 tooltip: 'Remove file',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),

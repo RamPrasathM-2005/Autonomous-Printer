@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../services/api_error.dart';
+
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/order.dart';
@@ -42,7 +45,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   bool _isValidating = false;
   String? _validationError;
   bool _showCostBreakdown = false;
-  int _visualizerMode = 0; // 0: 3D Smart Printer, 1: Document/Photo Preview
 
   @override
   void initState() {
@@ -50,9 +52,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     final docs = widget.documents.isNotEmpty
         ? widget.documents
         : [widget.primaryDocument];
-    _configs = docs
-        .map((d) => DocumentPrintConfig(document: d))
-        .toList();
+    _configs = docs.map((d) => DocumentPrintConfig(document: d)).toList();
     _rangeController.text = _configs.first.customRange;
   }
 
@@ -78,8 +78,10 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         _rangeController.text = _configs[index].customRange;
       });
       if (_tabScrollController.hasClients) {
-        final target = (index * 160.0)
-            .clamp(0.0, _tabScrollController.position.maxScrollExtent);
+        final target = (index * 160.0).clamp(
+          0.0,
+          _tabScrollController.position.maxScrollExtent,
+        );
         _tabScrollController.animateTo(
           target,
           duration: const Duration(milliseconds: 250),
@@ -111,7 +113,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         sides: current.sides,
         paperSize: current.paperSize,
         orientation: current.orientation,
-        pageRange: current.isCustomRange && current.customRange.trim().isNotEmpty
+        pageRange:
+            current.isCustomRange && current.customRange.trim().isNotEmpty
             ? current.customRange.trim()
             : current.rangeOption,
       );
@@ -160,7 +163,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     } catch (e) {
       setState(() {
         _isValidating = false;
-        _validationError = e.toString().replaceAll('Exception: ', '');
+        _validationError = userError(e);
       });
     }
   }
@@ -170,7 +173,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Fast Print Mode'),
+        title: const Text('Print options'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
       ),
@@ -217,7 +220,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             controller: _tabScrollController,
                             scrollDirection: Axis.horizontal,
                             itemCount: _configs.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 8),
                             itemBuilder: (ctx, index) {
                               final cfg = _configs[index];
                               final isSelected = index == _selectedDocIndex;
@@ -226,30 +230,47 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? AppTheme.primary : AppTheme.surfaceWhite,
+                                    color: isSelected
+                                        ? AppTheme.primary
+                                        : AppTheme.surfaceWhite,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: isSelected ? AppTheme.primary : AppTheme.border,
+                                      color: isSelected
+                                          ? AppTheme.primary
+                                          : AppTheme.border,
                                       width: isSelected ? 1.5 : 1,
                                     ),
-                                    boxShadow: isSelected ? AppTheme.buttonShadow : AppTheme.cardShadow,
+                                    boxShadow: isSelected
+                                        ? AppTheme.buttonShadow
+                                        : AppTheme.cardShadow,
                                   ),
                                   child: Row(
                                     children: [
                                       Icon(
-                                        cfg.document.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                                        cfg.document.isPdf
+                                            ? Icons.picture_as_pdf_rounded
+                                            : Icons.image_rounded,
                                         size: 16,
-                                        color: isSelected ? Colors.white : AppTheme.primary,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : AppTheme.primary,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
                                         cfg.document.filename,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : AppTheme.textPrimary,
                                         ),
                                       ),
                                     ],
@@ -268,13 +289,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                       const SizedBox(height: 20),
 
                       // Interactive 3D Smart Printer & Document Visualizer (Reference Image 2)
-                      _buildInteractiveVisualizerCard(),
-
                       const SizedBox(height: 20),
 
                       // Segment 1: Color Mode Selector (Color or Grayscale)
                       _buildSectionContainer(
-                        title: 'Color Mode',
+                        title: 'Color',
                         child: Row(
                           children: [
                             Expanded(
@@ -283,17 +302,21 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 icon: Icons.color_lens_rounded,
                                 isSelected: _currentConfig.isColor,
                                 accentColor: const Color(0xFF6366F1),
-                                onTap: () => _updateActiveSetting(() => _currentConfig.isColor = true),
+                                onTap: () => _updateActiveSetting(
+                                  () => _currentConfig.isColor = true,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildSegmentPill(
-                                label: 'Grayscale',
+                                label: 'Black & white',
                                 icon: Icons.tonality_rounded,
                                 isSelected: !_currentConfig.isColor,
                                 accentColor: const Color(0xFF475569),
-                                onTap: () => _updateActiveSetting(() => _currentConfig.isColor = false),
+                                onTap: () => _updateActiveSetting(
+                                  () => _currentConfig.isColor = false,
+                                ),
                               ),
                             ),
                           ],
@@ -304,25 +327,32 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                       // Segment 2: Paper Size & Orientation (Reference Image 3: Paper Size segment)
                       _buildSectionContainer(
-                        title: 'Paper Size & Layout',
+                        title: 'Paper and layout',
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Paper Size',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: ['A4', 'Letter', 'Legal'].map((size) {
-                                final isSelected = _currentConfig.paperSize == size;
+                                final isSelected =
+                                    _currentConfig.paperSize == size;
                                 return Expanded(
                                   child: Padding(
                                     padding: const EdgeInsets.only(right: 8.0),
                                     child: _buildPillChip(
                                       label: size,
                                       isSelected: isSelected,
-                                      onTap: () => _updateActiveSetting(() => _currentConfig.paperSize = size),
+                                      onTap: () => _updateActiveSetting(
+                                        () => _currentConfig.paperSize = size,
+                                      ),
                                     ),
                                   ),
                                 );
@@ -331,7 +361,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             const SizedBox(height: 16),
                             const Text(
                               'Orientation',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Row(
@@ -340,8 +374,13 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   child: _buildSegmentPill(
                                     label: 'Portrait',
                                     icon: Icons.crop_portrait_rounded,
-                                    isSelected: _currentConfig.orientation == 'portrait',
-                                    onTap: () => _updateActiveSetting(() => _currentConfig.orientation = 'portrait'),
+                                    isSelected:
+                                        _currentConfig.orientation ==
+                                        'portrait',
+                                    onTap: () => _updateActiveSetting(
+                                      () => _currentConfig.orientation =
+                                          'portrait',
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -349,8 +388,13 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   child: _buildSegmentPill(
                                     label: 'Landscape',
                                     icon: Icons.crop_landscape_rounded,
-                                    isSelected: _currentConfig.orientation == 'landscape',
-                                    onTap: () => _updateActiveSetting(() => _currentConfig.orientation = 'landscape'),
+                                    isSelected:
+                                        _currentConfig.orientation ==
+                                        'landscape',
+                                    onTap: () => _updateActiveSetting(
+                                      () => _currentConfig.orientation =
+                                          'landscape',
+                                    ),
                                   ),
                                 ),
                               ],
@@ -370,11 +414,14 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             child: _buildSectionContainer(
                               title: 'Copies',
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   IconButton.filledTonal(
                                     onPressed: _currentConfig.copies > 1
-                                        ? () => _updateActiveSetting(() => _currentConfig.copies--)
+                                        ? () => _updateActiveSetting(
+                                            () => _currentConfig.copies--,
+                                          )
                                         : null,
                                     icon: const Icon(Icons.remove_rounded),
                                     style: IconButton.styleFrom(
@@ -391,7 +438,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                     ),
                                   ),
                                   IconButton.filledTonal(
-                                    onPressed: () => _updateActiveSetting(() => _currentConfig.copies++),
+                                    onPressed: () => _updateActiveSetting(
+                                      () => _currentConfig.copies++,
+                                    ),
                                     icon: const Icon(Icons.add_rounded),
                                     style: IconButton.styleFrom(
                                       backgroundColor: AppTheme.primarySurface,
@@ -402,30 +451,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          // Print Quality Pill Card
-                          Expanded(
-                            flex: 1,
-                            child: _buildSectionContainer(
-                              title: 'Print Quality',
-                              child: DropdownButtonFormField<String>(
-                                value: _currentConfig.printQuality,
-                                decoration: const InputDecoration(
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 'Standard', child: Text('Standard (300 DPI)')),
-                                  DropdownMenuItem(value: 'High (600 DPI)', child: Text('High Quality')),
-                                  DropdownMenuItem(value: 'Draft', child: Text('Draft Fast')),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    _updateActiveSetting(() => _currentConfig.printQuality = val);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
                         ],
                       ),
 
@@ -433,13 +458,17 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                       // Segment 4: Sides & Page Range Options
                       _buildSectionContainer(
-                        title: 'Sides & Page Selection',
+                        title: 'Sides and pages',
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Print Sides',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Row(
@@ -447,16 +476,23 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 Expanded(
                                   child: _buildPillChip(
                                     label: 'Single-sided',
-                                    isSelected: _currentConfig.sides == 'one-sided',
-                                    onTap: () => _updateActiveSetting(() => _currentConfig.sides = 'one-sided'),
+                                    isSelected:
+                                        _currentConfig.sides == 'one-sided',
+                                    onTap: () => _updateActiveSetting(
+                                      () => _currentConfig.sides = 'one-sided',
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: _buildPillChip(
                                     label: 'Double-sided',
-                                    isSelected: _currentConfig.sides != 'one-sided',
-                                    onTap: () => _updateActiveSetting(() => _currentConfig.sides = 'two-sided-long-edge'),
+                                    isSelected:
+                                        _currentConfig.sides != 'one-sided',
+                                    onTap: () => _updateActiveSetting(
+                                      () => _currentConfig.sides =
+                                          'two-sided-long-edge',
+                                    ),
                                   ),
                                 ),
                               ],
@@ -464,14 +500,21 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             const SizedBox(height: 16),
                             const Text(
                               'Page Range',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                _buildRangeChip('All Pages (${_currentConfig.document.pages})', 'all'),
+                                _buildRangeChip(
+                                  'All Pages (${_currentConfig.document.pages})',
+                                  'all',
+                                ),
                                 _buildRangeChip('Odd Pages Only', 'odd'),
                                 _buildRangeChip('Even Pages Only', 'even'),
                                 _buildRangeChip('Custom Range', 'custom'),
@@ -483,7 +526,10 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 controller: _rangeController,
                                 decoration: const InputDecoration(
                                   hintText: 'e.g. 1-5, 8, 11-13',
-                                  prefixIcon: Icon(Icons.format_list_numbered_rounded, size: 20),
+                                  prefixIcon: Icon(
+                                    Icons.format_list_numbered_rounded,
+                                    size: 20,
+                                  ),
                                 ),
                                 onChanged: (text) {
                                   _updateActiveSetting(() {
@@ -503,16 +549,26 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                           decoration: BoxDecoration(
                             color: AppTheme.dangerSurface,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                            border: Border.all(
+                              color: AppTheme.danger.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 20),
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                color: AppTheme.danger,
+                                size: 20,
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   _validationError!,
-                                  style: const TextStyle(color: AppTheme.danger, fontSize: 13, fontWeight: FontWeight.w500),
+                                  style: const TextStyle(
+                                    color: AppTheme.danger,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -533,7 +589,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
               color: AppTheme.surfaceWhite,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 16,
                   offset: const Offset(0, -4),
                 ),
@@ -554,8 +610,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               children: [
                                 const Flexible(
                                   child: Text(
-                                    'Total Estimated Price',
-                                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                    'Estimated total',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -563,9 +622,14 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 if (_configs.length > 1) ...[
                                   const SizedBox(width: 4),
                                   InkWell(
-                                    onTap: () => setState(() => _showCostBreakdown = !_showCostBreakdown),
+                                    onTap: () => setState(
+                                      () => _showCostBreakdown =
+                                          !_showCostBreakdown,
+                                    ),
                                     child: Icon(
-                                      _showCostBreakdown ? Icons.expand_less : Icons.expand_more,
+                                      _showCostBreakdown
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
                                       size: 18,
                                       color: AppTheme.primary,
                                     ),
@@ -586,8 +650,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              '$_totalCalculatedPages Pages (${_configs.length} Doc${_configs.length > 1 ? "s" : ""})',
-                              style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              '$_totalCalculatedPages ${_totalCalculatedPages == 1 ? 'page' : 'pages'} / ${_configs.length} ${_configs.length == 1 ? 'file' : 'files'}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textSecondary,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -600,12 +667,15 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 16,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                           elevation: 0,
-                          shadowColor: AppTheme.primary.withOpacity(0.4),
+                          shadowColor: AppTheme.primary.withValues(alpha: 0.4),
                         ),
                         child: _isValidating
                             ? const Row(
@@ -616,11 +686,13 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                     height: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   ),
                                   SizedBox(width: 10),
-                                  Text('Preparing Order...'),
+                                  Text('Preparing...'),
                                 ],
                               )
                             : Row(
@@ -629,34 +701,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   const Icon(Icons.print_rounded, size: 20),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Print Now',
+                                    'Continue to payment',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.timer_outlined, size: 12, color: Colors.white),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          '~15s',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
                                     ),
                                   ),
                                 ],
@@ -698,15 +747,23 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                   ? Container(
                       color: const Color(0xFFFEF2F2),
                       child: const Center(
-                        child: Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFDC2626), size: 28),
+                        child: Icon(
+                          Icons.picture_as_pdf_rounded,
+                          color: Color(0xFFDC2626),
+                          size: 28,
+                        ),
                       ),
                     )
                   : Image.asset(
                       'assets/images/mountain_preview.jpg',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         color: const Color(0xFFEFF6FF),
-                        child: const Icon(Icons.image_rounded, color: Color(0xFF2563EB), size: 28),
+                        child: const Icon(
+                          Icons.image_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 28,
+                        ),
                       ),
                     ),
             ),
@@ -730,20 +787,30 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.surfaceSubtle,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${doc.pages} Page(s)',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
+                        '${doc.pages} ${doc.pages == 1 ? 'page' : 'pages'}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${(doc.size / (1024 * 1024)).toStringAsFixed(2)} MB',
-                      style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -766,207 +833,10 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildInteractiveVisualizerCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 10,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Hardware Preview',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  padding: const EdgeInsets.all(2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildVisualizerToggleBtn('3D Printer', 0),
-                      _buildVisualizerToggleBtn('Document View', 1),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Container(
-            height: 240,
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: _visualizerMode == 0
-                    ? Container(
-                        key: const ValueKey('printer_view'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/smart_printer.jpg',
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.print_rounded,
-                                size: 64,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.65),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.success),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Autonomous Station Ready',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Container(
-                        key: const ValueKey('doc_view'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/mountain_preview.jpg',
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.image_rounded,
-                                size: 64,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'High Resolution (A4)',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVisualizerToggleBtn(String label, int mode) {
-    final isSelected = _visualizerMode == mode;
-    return InkWell(
-      onTap: () => setState(() => _visualizerMode = mode),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.surfaceWhite : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                  )
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionContainer({required String title, required Widget child}) {
+  Widget _buildSectionContainer({
+    required String title,
+    required Widget child,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1010,7 +880,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.1) : AppTheme.surfaceSubtle,
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.1)
+              : AppTheme.surfaceSubtle,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? activeColor : AppTheme.border,
@@ -1021,7 +893,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: isSelected ? activeColor : AppTheme.textSecondary),
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? activeColor : AppTheme.textSecondary,
+            ),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
@@ -1077,7 +953,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   Widget _buildRangeChip(String label, String option) {
     final isSelected = _currentConfig.rangeOption == option;
     return InkWell(
-      onTap: () => _updateActiveSetting(() => _currentConfig.rangeOption = option),
+      onTap: () =>
+          _updateActiveSetting(() => _currentConfig.rangeOption = option),
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

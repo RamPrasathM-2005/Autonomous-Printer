@@ -1,143 +1,114 @@
-from datetime import datetime, timezone, timedelta
+import pytest
+from datetime import timedelta
+from app.config.security import hash_token
+from app.db.models.print_server import PrintServer, PrintServerStatus
+from app.db.models.document import Document
 from app.db.models.order import Order, OrderStatus
-from app.db.models.print_job import PrintJob, PrintJobStatus
+from app.db.models.payment import Payment
+from app.db.models.refund import Refund, RefundStatus
 from app.db.models.otp import OTP
-from app.db.models.document import Document, DocumentStatus
-from app.db.models.user import UserRole
-from tests.conftest import create_sample_pdf, get_auth_token
+from app.services.refund_service import refund_service
+from app.services.storage_service import storage_service
+from app.utils.common import now
+from tests.conftest import create_order,paid_order,create_sample_pdf
 
-def test_otp_attempt_lockout(client, test_print_server, test_agent_token, db_session):
-    # Upload & Order & Payment without login
-    pdf_bytes = create_sample_pdf(1)
-    up = client.post("/api/documents/upload", files={"file": ("doc.pdf", pdf_bytes, "application/pdf")}).json()
-    order = client.post("/api/orders", json={"document_id": up["documentId"], "print_server_id": test_print_server.id, "settings": {"copies": 1}}).json()
-    client.post("/api/payments/create", json={"order_id": order["id"]})
+def test_cross_session_orders_documents_payments_denied(client,test_print_server):
+    order=create_order(client,test_print_server)
+    token=client.post('/api/sessions').json()['token']
+    other={'Authorization':'Bearer '+token}
+    for path in ['/api/orders/'+order['id'],'/api/orders/'+order['id']+'/otp','/api/documents/'+order['documentId']]:
+        assert client.get(path,headers=other).status_code==404
+    assert client.post('/api/payments/create',json={'orderId':order['id']},headers=other).status_code==404
+    assert client.get('/api/orders',headers=other).json()==[]
+    assert client.delete('/api/documents/'+order['documentId'],headers=other).status_code==404
+    assert client.post('/api/orders',headers=other,json={'documentId':order['documentId'],'printServerId':test_print_server.id}).status_code==404
 
-    # Webhook triggers OTP
-    import json
-    wh_payload = {"event": "payment.captured", "payload": {"payment": {"entity": {"order_id": f"dummy", "id": "pay_1", "amount": int(order["amount"]*100)}}}}
-    # Trigger directly in DB or via mock
-    from app.services.otp_service import otp_service
-    otp_code = otp_service.generate_and_store_otp(db_session, order["id"])
-    ord_rec = db_session.query(Order).filter(Order.id == order["id"]).first()
-    ord_rec.status = OrderStatus.WAITING_FOR_OTP
-    pj = PrintJob(id="job_lockout_test", order_id=order["id"], server_id=test_print_server.id, status=PrintJobStatus.QUEUED)
-    db_session.add(pj)
+def test_anonymous_upload_and_listing_denied(client):
+    client.headers.pop('Authorization')
+    assert client.get('/api/orders').status_code==401
+    assert client.post('/api/documents/upload',files={'file':('x.pdf',create_sample_pdf(),'application/pdf')}).status_code==401
+
+def test_wrong_station_cannot_release(client,test_print_server,test_agent_token,fake_gateway,db_session):
+    order,_=paid_order(client,test_print_server,fake_gateway)
+    code=client.get('/api/orders/'+order['id']+'/otp').json()['otp']
+    other='another-agent-token-'+ 'z'*32
+    db_session.add(PrintServer(id='OTHER',name='Other',device_token_hash=hash_token(other),status=PrintServerStatus.ONLINE))
     db_session.commit()
+    assert client.post('/api/agent/release',headers={'Authorization':'Bearer '+other},json={'otp':code}).status_code==400
 
-    # Submit 5 wrong OTPs
-    for i in range(5):
-        res = client.post("/api/agent/release", headers={"Authorization": f"Bearer {test_agent_token}"}, json={"otp": f"99999{i}"})
-        if i < 4:
-            assert res.status_code == 400
-        else:
-            assert res.status_code == 429
-            assert res.json()["error"] == "TOO_MANY_ATTEMPTS"
+def test_otp_attempts_limited_without_victim_lockout(client,test_print_server,test_agent_token):
+    for _ in range(5):
+        assert client.post('/api/agent/release',headers={'Authorization':'Bearer '+test_agent_token},json={'otp':'000000'}).status_code==400
+    assert client.post('/api/agent/release',headers={'Authorization':'Bearer '+test_agent_token},json={'otp':'000000'}).status_code==429
 
-def test_print_failure_retry_and_auto_refund(client, test_user, test_print_server, test_agent_token, db_session):
-    from app.services.job_service import job_service
-    from app.schemas.agent import AgentJobStatusUpdate
-    from app.db.models.payment import Payment, PaymentStatus
+def test_order_idempotency(client,test_print_server):
+    up=client.post('/api/documents/upload',files={'file':('x.pdf',create_sample_pdf(),'application/pdf')}).json()
+    body={'documentId':up['documentId'],'printServerId':test_print_server.id}
+    headers={'Idempotency-Key':'repeat-key-123456789'}
+    first=client.post('/api/orders',json=body,headers=headers)
+    repeat=client.post('/api/orders',json=body,headers=headers)
+    assert first.status_code==repeat.status_code==201
+    assert first.json()['id']==repeat.json()['id']
+    body['settings']={'copies':2}
+    assert client.post('/api/orders',json=body,headers=headers).status_code==409
 
-    # Create dummy order in PRINTING status
-    order = Order(
-        id="ORD-TEST-FAIL-RETRY",
-        user_id=test_user.id,
-        document_id="doc_dummy",
-        print_server_id=test_print_server.id,
-        print_settings={"copies": 1},
-        total_pages=1,
-        copies=1,
-        amount=10.0,
-        currency="INR",
-        status=OrderStatus.PRINTING
-    )
-    payment = Payment(
-        id="pay_fail_test",
-        order_id=order.id,
-        user_id=test_user.id,
-        razorpay_order_id="rzp_fail_test",
-        razorpay_payment_id="pay_rzp_mock",
-        amount=10.0,
-        status=PaymentStatus.CAPTURED
-    )
-    job = PrintJob(
-        id="job_fail_test",
-        order_id=order.id,
-        server_id=test_print_server.id,
-        status=PrintJobStatus.PRINTING,
-        retry_count=0
-    )
-    db_session.add_all([order, payment, job])
-    db_session.commit()
+@pytest.mark.parametrize('options',[{'copies':0},{'copies':-1},{'copies':True},{'copies':101},{'colour':'false'},
+ {'sides':'--evil'},{'paperSize':'../../x'},{'orientation':'injected'},{'amount':0}])
+def test_tampered_print_settings_rejected(client,test_print_server,options):
+    assert client.post('/api/orders',json={'documentId':'doc','printServerId':test_print_server.id,'settings':options}).status_code==422
 
-    # Failure 1 -> retry count = 1, status = QUEUED
-    res1 = client.post(
-        f"/api/agent/jobs/{job.id}/status",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "PAPER_JAM", "message": "Paper jammed"}
-    )
-    assert res1.status_code == 200
-    db_session.refresh(job)
-    assert job.status == PrintJobStatus.QUEUED
-    assert job.retry_count == 1
+def test_storage_tampering_blocks_release(client,test_print_server,fake_gateway,db_session):
+    order,_=paid_order(client,test_print_server,fake_gateway)
+    otp=client.get('/api/orders/'+order['id']+'/otp').json()['otp']
+    doc=db_session.get(Document,order['documentId'])
+    storage_service.resolve_storage_key(doc.storage_key).write_bytes(b'changed')
+    res=client.post('/api/orders/'+order['id']+'/release',json={'otp':otp})
+    assert res.status_code==409 and res.json()['error']=='DOCUMENT_INTEGRITY'
 
-    # Transition back to PRINTING for retry run
-    job.status = PrintJobStatus.PRINTING
-    db_session.commit()
+@pytest.mark.parametrize('key',['../outside.pdf','/etc/passwd','C:/secret','documents/../../secret','documents/a.pdf:stream'])
+def test_storage_path_escape_rejected(key):
+    from app.utils.errors import AppException
+    with pytest.raises(AppException): storage_service.resolve_storage_key(key)
 
-    # Failure 2 -> retry count = 2, status = QUEUED
-    client.post(
-        f"/api/agent/jobs/{job.id}/status",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "PAPER_JAM", "message": "Paper jammed again"}
-    )
-    db_session.refresh(job)
-    assert job.retry_count == 2
-    assert job.status == PrintJobStatus.QUEUED
+def test_refund_not_completed_until_provider_processed(client,test_print_server,fake_gateway,db_session):
+    order,remote=paid_order(client,test_print_server,fake_gateway)
+    record=db_session.get(Order,order['id']);record.status=OrderStatus.EXPIRED;db_session.commit()
+    refund=refund_service.process_refund(db_session,order['id'],'Expired')
+    refund_service.process(db_session,refund.id)
+    db_session.refresh(refund)
+    assert refund.status==RefundStatus.PROCESSING
+    assert fake_gateway.refund_creates==1
+    refund_service.process(db_session,refund.id)
+    assert fake_gateway.refund_creates==1
+    fake_gateway.refunds[refund.razorpay_refund_id]['status']='processed'
+    refund_service.process(db_session,refund.id)
+    db_session.refresh(refund)
+    assert refund.status==RefundStatus.COMPLETED
 
-    # Transition back to PRINTING
-    job.status = PrintJobStatus.PRINTING
-    db_session.commit()
+def test_refund_timeout_never_retried_blindly(client,test_print_server,fake_gateway,db_session,monkeypatch):
+    from app.utils.errors import AppException
+    order,_=paid_order(client,test_print_server,fake_gateway)
+    record=db_session.get(Order,order['id']);record.status=OrderStatus.EXPIRED;db_session.commit()
+    refund=refund_service.process_refund(db_session,order['id'],'Expired')
+    original=fake_gateway.request
+    def refund_timeout(method,path,**kwargs):
+        if method=='POST' and path.endswith('/refund'):
+            from app.utils.common import fail
+            fail('GATEWAY_UNAVAILABLE','Response lost',502)
+        return original(method,path,**kwargs)
+    monkeypatch.setattr('app.services.gateway.gateway.request',refund_timeout)
+    with pytest.raises(AppException):refund_service.process(db_session,refund.id)
+    monkeypatch.setattr('app.services.gateway.gateway.request',original)
+    refund_service.process(db_session,refund.id)
+    db_session.refresh(refund)
+    assert refund.status==RefundStatus.PROCESSING
+    assert fake_gateway.refund_creates==0
+    assert 'UNKNOWN' in refund.error_message
 
-    # Failure 3 -> exceeds MAX_PRINT_RETRIES (2) -> FINAL_FAILED & auto-refund!
-    client.post(
-        f"/api/agent/jobs/{job.id}/status",
-        headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "HARDWARE_ERROR", "message": "Hardware error"}
-    )
-    db_session.refresh(job)
-    db_session.refresh(order)
-    assert job.status == PrintJobStatus.FINAL_FAILED
-    assert order.status in [OrderStatus.FAILED, OrderStatus.REFUNDED]
+def test_origin_and_payload_limits(client):
+    assert client.get('/health',headers={'Origin':'https://attacker.example'}).status_code==403
+    assert client.post('/api/payments/webhook',content=b'x'*(256*1024+1)).status_code==413
 
-def test_maintenance_cleanup(client, test_user, db_session):
-    from app.config.security import create_access_token
-    # Elevate test user to ADMIN
-    test_user.role = UserRole.ADMIN
-    db_session.commit()
-
-    admin_token = create_access_token({"sub": str(test_user.id), "role": "ADMIN"})
-
-    # Insert a document in CLEANUP_PENDING
-    doc = Document(
-        id="doc_cleanup_target",
-        user_id=test_user.id,
-        original_filename="old.pdf",
-        stored_filename="old.pdf",
-        storage_key="documents/old.pdf",
-        mime_type="application/pdf",
-        file_size=100,
-        sha256="abc",
-        page_count=1,
-        status=DocumentStatus.CLEANUP_PENDING
-    )
-    db_session.add(doc)
-    db_session.commit()
-
-    res = client.post("/api/maintenance/cleanup", headers={"Authorization": f"Bearer {admin_token}"})
-    assert res.status_code == 200
-    data = res.json()
-    assert "deleted_documents" in data
-    db_session.refresh(doc)
-    assert doc.status == DocumentStatus.DELETED
+def test_removed_public_bypasses(client):
+    assert client.post('/api/agent/release-kiosk',json={'otp':'123456'}).status_code==404
+    assert client.get('/kiosk').status_code==404

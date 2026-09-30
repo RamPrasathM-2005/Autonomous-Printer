@@ -26,7 +26,8 @@ class UploadedDocument {
   factory UploadedDocument.fromJson(Map<String, dynamic> json) {
     return UploadedDocument(
       documentId: json['documentId'] ?? json['id'] ?? '',
-      originalFilename: json['originalFilename'] ?? json['original_filename'] ?? 'file',
+      originalFilename:
+          json['originalFilename'] ?? json['original_filename'] ?? 'file',
       pages: json['pages'] ?? json['page_count'] ?? 1,
       size: json['size'] ?? json['file_size'] ?? 0,
       status: json['status'] ?? 'UPLOADED',
@@ -60,9 +61,12 @@ class DocumentPrintConfig {
   bool get isCustomRange => rangeOption == 'custom';
 
   String get colorDescription => isColor ? 'Full Color' : 'Black & White';
-  String get sidesDescription => sides == 'one-sided' ? 'Single-Sided' : 'Double-Sided';
+  String get sidesDescription =>
+      sides == 'one-sided' ? 'Single-Sided' : 'Double-Sided';
   String get pageRangeDescription =>
-      (isCustomRange && customRange.trim().isNotEmpty) ? customRange.trim() : 'All Pages';
+      (isCustomRange && customRange.trim().isNotEmpty)
+      ? customRange.trim()
+      : 'All Pages';
 
   int get calculatedPages {
     final total = document.pages;

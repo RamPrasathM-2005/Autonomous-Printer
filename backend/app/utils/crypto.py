@@ -5,10 +5,10 @@ from cryptography.fernet import Fernet
 from app.config.settings import settings
 
 def _get_fernet() -> Fernet:
-    # Derive a 32-byte key from JWT_SECRET_KEY
-    key_bytes = hashlib.sha256(settings.JWT_SECRET_KEY.encode('utf-8')).digest()
-    b64_key = base64.urlsafe_b64encode(key_bytes)
-    return Fernet(b64_key)
+    if not settings.OTP_ENCRYPTION_KEY:
+        raise RuntimeError('OTP_ENCRYPTION_KEY is required')
+    return Fernet(settings.OTP_ENCRYPTION_KEY.encode())
+
 
 def encrypt_value(plain_text: str) -> str:
     """Encrypts sensitive short string value."""

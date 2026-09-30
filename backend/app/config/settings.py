@@ -1,3 +1,5 @@
+from decimal import Decimal
+from pydantic import Field
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,9 +9,9 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
 
-    DATABASE_URL: str = "mysql+pymysql://muthukumar_9360:Muthukumar12@127.0.0.1:3306/print_platform"
+    DATABASE_URL: str = "sqlite:///./local.db"
 
-    JWT_SECRET_KEY: str = "CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS"
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
@@ -21,15 +23,30 @@ class Settings(BaseSettings):
     MAX_OTP_ATTEMPTS: int = 5
     MAX_PRINT_RETRIES: int = 2
 
-    PER_PAGE_RATE: float = 2.00
-    BASE_FEE: float = 0.00
+    PER_PAGE_RATE: Decimal = Field(default=Decimal('2.00'), gt=0)
+    BASE_FEE: Decimal = Field(default=Decimal('0.00'), ge=0)
 
-    RAZORPAY_KEY_ID: str = "rzp_test_RFxhjAiTxwrpAJ"
-    RAZORPAY_KEY_SECRET: str = "f7jSae5XJ4V6EfZIYTUpWB7q"
-    RAZORPAY_WEBHOOK_SECRET: str = "rzp_test_webhook_secret"
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""
 
     AGENT_REQUEST_TIMEOUT_SECONDS: int = 10
     HEARTBEAT_TIMEOUT_SECONDS: int = 60
+
+    OTP_ENCRYPTION_KEY: str = ""
+    OTP_HASH_KEY: str = ""
+    SESSION_TTL_HOURS: int = 24
+    DOCUMENT_TTL_HOURS: int = 24
+    MAX_DOCUMENT_PAGES: int = 500
+    MAX_ORDER_PAGES: int = 1000
+    MAX_SESSION_STORAGE_MB: int = 200
+    MAX_IMAGE_PIXELS: int = 40000000
+    COLOR_PAGE_RATE: Decimal = Field(default=Decimal('10.00'), gt=0)
+    ALLOWED_ORIGINS: list[str] = ['http://127.0.0.1:3000', 'http://localhost:3000']
+    ALLOWED_HOSTS: list[str] = ['127.0.0.1', 'localhost', 'testserver']
+    ALLOW_MOCK_PRINTING: bool = False
+    PAYMENT_HTTP_TIMEOUT: int = 10
+    RECONCILE_INTERVAL_SECONDS: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",

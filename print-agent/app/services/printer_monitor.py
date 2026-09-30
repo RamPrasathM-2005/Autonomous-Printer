@@ -12,6 +12,8 @@ class PrinterMonitor:
         In production with CUPS, queries printer IPP attributes.
         Fallback / default returns ('READY', 'AVAILABLE').
         """
+        if config.MOCK_CUPS:
+            return "READY", "AVAILABLE"
         try:
             # If pycups available, query printer attributes
             import cups
@@ -25,6 +27,6 @@ class PrinterMonitor:
         except Exception:
             pass
 
-        return "READY", "AVAILABLE"
+        return "ERROR", "UNKNOWN"
 
 printer_monitor = PrinterMonitor()

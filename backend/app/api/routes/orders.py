@@ -1,145 +1,48 @@
-import uuid
-from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
-
+from fastapi import APIRouter, Depends, Header
 from app.db.session import get_db
 from app.db.models.order import Order, OrderStatus
-from app.db.models.otp import OTP
-from app.db.models.print_job import PrintJob, PrintJobStatus
+from app.db.models.payment import Payment, PaymentStatus
 from app.schemas.order import OrderCreateRequest, OrderResponse, OTPResponse
+from app.schemas.agent import AgentReleaseRequest
 from app.services.order_service import order_service
 from app.services.otp_service import otp_service
-from app.utils.errors import AppException
+from app.services.access_service import current_session, owned_order, rate_limit
+from app.utils.common import fail
 
-router = APIRouter(prefix="/api/orders", tags=["Orders"])
+router = APIRouter(prefix='/api/orders', tags=['Orders'])
 
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-def create_order(
-    req: OrderCreateRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Public order creation - no login required.
-    Creates an order for an uploaded document and calculates authoritative price.
-    """
-    order = order_service.create_order(db=db, req=req, user_id=None)
-    return OrderResponse(
-        id=order.id,
-        user_id=order.user_id,
-        document_id=order.document_id,
-        print_server_id=order.print_server_id,
-        print_settings=order.print_settings,
-        total_pages=order.total_pages,
-        copies=order.copies,
-        amount=float(order.amount),
-        currency=order.currency,
-        status=order.status,
-        created_at=order.created_at
-    )
+def response(order):
+    return OrderResponse(id=order.id, user_id=order.user_id, document_id=order.document_id,
+        print_server_id=order.print_server_id, print_settings=order.print_settings,
+        total_pages=order.total_pages, copies=order.copies, amount=float(order.amount),
+        currency=order.currency, status=order.status, created_at=order.created_at)
 
-@router.get("", response_model=List[OrderResponse])
-def list_orders(db: Session = Depends(get_db)):
-    orders = db.query(Order).order_by(Order.created_at.desc()).limit(50).all()
-    return [
-        OrderResponse(
-            id=o.id,
-            user_id=o.user_id,
-            document_id=o.document_id,
-            print_server_id=o.print_server_id,
-            print_settings=o.print_settings,
-            total_pages=o.total_pages,
-            copies=o.copies,
-            amount=float(o.amount),
-            currency=o.currency,
-            status=o.status,
-            created_at=o.created_at
-        )
-        for o in orders
-    ]
+@router.post('', response_model=OrderResponse, status_code=201)
+def create_order(req: OrderCreateRequest, session=Depends(current_session), db=Depends(get_db),
+                 idempotency_key: str = Header(..., min_length=16, max_length=128, alias='Idempotency-Key')):
+    return response(order_service.create_order(db, req, session_id=session.id, idempotency_key=idempotency_key))
 
-@router.get("/{order_id}", response_model=OrderResponse)
-def get_order(
-    order_id: str,
-    db: Session = Depends(get_db)
-):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise AppException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            error_code="NOT_FOUND",
-            message="Order not found."
-        )
+@router.get('', response_model=list[OrderResponse])
+def list_orders(session=Depends(current_session), db=Depends(get_db)):
+    return [response(o) for o in db.query(Order).filter_by(session_id=session.id).order_by(Order.created_at.desc()).limit(50)]
 
-    return OrderResponse(
-        id=order.id,
-        user_id=order.user_id,
-        document_id=order.document_id,
-        print_server_id=order.print_server_id,
-        print_settings=order.print_settings,
-        total_pages=order.total_pages,
-        copies=order.copies,
-        amount=float(order.amount),
-        currency=order.currency,
-        status=order.status,
-        created_at=order.created_at
-    )
+@router.get('/{order_id}', response_model=OrderResponse)
+def get_order(order_id: str, session=Depends(current_session), db=Depends(get_db)):
+    return response(owned_order(db, order_id, session))
 
-@router.get("/{order_id}/otp", response_model=OTPResponse)
-def get_order_otp(
-    order_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Retrieves the 6-digit release OTP for an order that is WAITING_FOR_OTP.
-    No login required - order ID is the token/handle.
-    """
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise AppException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            error_code="NOT_FOUND",
-            message="Order not found."
-        )
+@router.get('/{order_id}/otp', response_model=OTPResponse)
+def get_order_otp(order_id: str, session=Depends(current_session), db=Depends(get_db)):
+    order = owned_order(db, order_id, session)
+    payment = db.query(Payment).filter_by(order_id=order_id).first()
+    if (order.status != OrderStatus.WAITING_FOR_OTP or not payment or
+            payment.status != PaymentStatus.CAPTURED or not payment.verified_at):
+        fail('OTP_NOT_AVAILABLE', 'A verified captured payment and unreleased order are required.', 409)
+    code, expires = otp_service.get_otp_for_order(db, order.id)
+    return OTPResponse(order_id=order.id, otp=code, expires_at=expires)
 
-    # Check if active OTP exists and is unexpired; if not, generate a fresh one
-    now = datetime.now(timezone.utc)
-    active_otp = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
-    is_expired = False
-    if active_otp:
-        exp = active_otp.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if exp < now:
-            is_expired = True
-            active_otp.active = False
-            db.commit()
-
-    if not active_otp or is_expired or order.status != OrderStatus.WAITING_FOR_OTP:
-        # Provision print job if not already present
-        existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
-        if not existing_job:
-            job_id = f"job_{uuid.uuid4().hex[:12]}"
-            print_job = PrintJob(
-                id=job_id,
-                order_id=order.id,
-                server_id=order.print_server_id,
-                status=PrintJobStatus.QUEUED,
-                retry_count=0,
-                created_at=now
-            )
-            db.add(print_job)
-            db.flush()
-
-        otp_service.generate_and_store_otp(db, order.id)
-        order.status = OrderStatus.WAITING_FOR_OTP
-        order.updated_at = now
-        db.commit()
-
-    plaintext, expires_at = otp_service.get_otp_for_order(db, order.id)
-    return OTPResponse(
-        order_id=order.id,
-        otp=plaintext,
-        expires_at=expires_at
-    )
+@router.post('/{order_id}/release')
+def release_order(order_id: str, req: AgentReleaseRequest, session=Depends(current_session), db=Depends(get_db)):
+    order = owned_order(db, order_id, session)
+    rate_limit(db, 'release-session:' + session.id, 5, 60)
+    job = otp_service.verify_and_release_job(db, order.print_server_id, req.otp, order_id=order.id)
+    return {'status': 'RELEASED', 'orderId': order.id, 'jobId': job.id}

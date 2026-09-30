@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/print_server.dart';
 import '../config/theme.dart';
 import 'status_badge.dart';
@@ -22,7 +23,9 @@ class StationCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isSelected ? AppTheme.primaryLight : Colors.white.withValues(alpha: 0.08),
+          color: isSelected
+              ? AppTheme.primaryLight
+              : Colors.white.withValues(alpha: 0.08),
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -40,12 +43,18 @@ class StationCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (isSelected ? AppTheme.primary : AppTheme.surfaceLight).withValues(alpha: 0.3),
+                      color:
+                          (isSelected
+                                  ? AppTheme.primary
+                                  : AppTheme.surfaceLight)
+                              .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.print_rounded,
-                      color: isSelected ? AppTheme.primaryLight : Colors.white70,
+                      color: isSelected
+                          ? AppTheme.primaryLight
+                          : Colors.white70,
                       size: 28,
                     ),
                   ),
@@ -72,12 +81,19 @@ class StationCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.location_on_outlined, size: 14, color: Colors.white54),
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 14,
+                              color: Colors.white54,
+                            ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 server.location,
-                                style: const TextStyle(fontSize: 13, color: Colors.white70),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white70,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -111,14 +127,21 @@ class StationCard extends StatelessWidget {
                   ),
                   if (isSelected)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primary.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.primaryLight),
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 14,
+                            color: AppTheme.primaryLight,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Selected',
@@ -140,14 +163,14 @@ class StationCard extends StatelessWidget {
     );
   }
 
-  Widget _statusItem({required IconData icon, required String label, required bool isOk}) {
+  Widget _statusItem({
+    required IconData icon,
+    required String label,
+    required bool isOk,
+  }) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: isOk ? AppTheme.success : AppTheme.warning,
-        ),
+        Icon(icon, size: 14, color: isOk ? AppTheme.success : AppTheme.warning),
         const SizedBox(width: 4),
         Text(
           label,

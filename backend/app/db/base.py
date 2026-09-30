@@ -14,6 +14,7 @@ from app.db.models.otp import OTP
 from app.db.models.refund import Refund, RefundStatus
 from app.db.models.idempotency import IdempotencyKey
 from app.db.models.audit_log import AuditLog
+from app.db.models.security import CustomerSession, RateLimitBucket, WebhookEvent, WorkerState
 
 __all__ = [
     "Base",

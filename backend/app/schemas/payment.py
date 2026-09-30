@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.db.models.payment import PaymentStatus
 
 class PaymentCreateRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
     orderId: str = Field(..., alias="orderId")
 
@@ -14,7 +14,7 @@ class PaymentCreateRequest(BaseModel):
         super().__init__(**data)
 
 class PaymentCreateResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
     paymentId: str = Field(..., alias="paymentId", serialization_alias="paymentId")
     orderId: str = Field(..., alias="orderId", serialization_alias="orderId")
@@ -50,12 +50,12 @@ class PaymentResponse(BaseModel):
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
 
 class PaymentVerifyRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
     orderId: str = Field(..., alias="orderId")
-    razorpayOrderId: Optional[str] = Field(default=None, alias="razorpayOrderId")
-    razorpayPaymentId: Optional[str] = Field(default=None, alias="razorpayPaymentId")
-    razorpaySignature: Optional[str] = Field(default=None, alias="razorpaySignature")
+    razorpayOrderId: str = Field(..., max_length=128, alias="razorpayOrderId")
+    razorpayPaymentId: str = Field(..., max_length=128, alias="razorpayPaymentId")
+    razorpaySignature: str = Field(..., pattern=r"^[0-9a-f]{64}$", alias="razorpaySignature")
 
     def __init__(self, **data):
         if "order_id" in data and "orderId" not in data:

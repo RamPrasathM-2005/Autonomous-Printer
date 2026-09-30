@@ -60,11 +60,11 @@ def test_multi_document_order_pricing_and_merging(client, test_print_server, db_
     assert res.status_code == 201
     data = res.json()
 
-    # Verify total price is ₹28.00 (₹2.00 + ₹26.00)
+    # Verify total price is â‚¹28.00 (â‚¹2.00 + â‚¹26.00)
     assert data["amount"] == 28.00
     # Merged PDF has 14 pages (1 page image + 13 pages PDF)
     assert data["totalPages"] == 14
-    assert "DOC-COMBINED-" in data["documentId"]
+    assert data["documentId"].startswith("doc_")
 
     # Verify order in DB
     order_in_db = db_session.query(Order).filter(Order.id == data["id"]).first()
@@ -72,5 +72,5 @@ def test_multi_document_order_pricing_and_merging(client, test_print_server, db_
     assert order_in_db.amount == 28.00
     assert order_in_db.total_pages == 14
     assert len(order_in_db.print_settings["items"]) == 2
-    assert order_in_db.print_settings["items"][0]["amount"] == 2.00
-    assert order_in_db.print_settings["items"][1]["amount"] == 26.00
+    assert order_in_db.print_settings["items"][0]["amount"] == "2.00"
+    assert order_in_db.print_settings["items"][1]["amount"] == "26.00"

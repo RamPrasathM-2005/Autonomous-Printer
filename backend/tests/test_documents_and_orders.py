@@ -1,7 +1,7 @@
 from tests.conftest import create_sample_pdf
 
-def test_document_upload_without_login(client):
-    """Verifies that any user can upload documents without login."""
+def test_document_upload_with_customer_session(client):
+    """Verifies that any user can upload documents with a customer session."""
     pdf_bytes = create_sample_pdf(4)
 
     res = client.post(
@@ -25,8 +25,8 @@ def test_document_upload_corrupt_rejected(client):
     assert res.status_code == 400
     assert res.json()["error"] == "INVALID_FILE"
 
-def test_order_creation_and_pricing_without_login(client, test_print_server):
-    """Verifies that an order can be created and priced without login."""
+def test_order_creation_and_pricing_with_customer_session(client, test_print_server):
+    """Verifies that an order can be created and priced with a customer session."""
     pdf_bytes = create_sample_pdf(5)
 
     # 1. Upload 5-page PDF with no auth
@@ -55,8 +55,8 @@ def test_order_creation_and_pricing_without_login(client, test_print_server):
     )
     assert order_res.status_code == 201
     order_data = order_res.json()
-    assert order_data["totalPages"] == 4
-    assert order_data["copies"] == 2
+    assert order_data["totalPages"] == 8
+    assert order_data["copies"] == 1
     assert order_data["amount"] == 16.0
     assert order_data["status"] == "CREATED"
 
@@ -84,30 +84,7 @@ def test_order_invalid_page_range_exceeds(client, test_print_server):
     assert order_res.status_code == 400
     assert order_res.json()["error"] == "INVALID_PAGE_RANGE"
 
-def test_order_creation_flat_payload_without_nested_settings(client, test_print_server):
-    pdf_bytes = create_sample_pdf(3)
-
-    up_res = client.post(
-        "/api/documents/upload",
-        files={"file": ("notes.pdf", pdf_bytes, "application/pdf")}
-    )
-    doc_id = up_res.json()["documentId"]
-
-    # Post flat payload without "settings" object (the exact payload from the user's issue)
-    order_res = client.post(
-        "/api/orders",
-        json={
-            "documentId": doc_id,
-            "printServerId": test_print_server.id,
-            "colorMode": "MONO",
-            "duplex": False,
-            "copies": 1,
-            "pageRange": "ALL",
-            "paymentMethod": "RAZORPAY"
-        }
-    )
-    assert order_res.status_code == 201
-    data = order_res.json()
-    assert data["totalPages"] == 3
-    assert data["copies"] == 1
-    assert data["status"] == "CREATED"
+def test_flat_payload_with_unrecognized_fields_rejected(client, test_print_server):
+    res = client.post('/api/orders', json={'documentId':'unknown','printServerId':test_print_server.id,
+        'amount':0, 'status':'PAID', 'copies':1})
+    assert res.status_code == 422

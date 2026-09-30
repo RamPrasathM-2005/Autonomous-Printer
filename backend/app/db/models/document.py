@@ -13,6 +13,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(String(64), primary_key=True, index=True) # e.g. doc_01JXYZ
+    session_id = Column(String(64), ForeignKey('customer_sessions.id'), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     original_filename = Column(String(255), nullable=False)
     stored_filename = Column(String(255), nullable=False)

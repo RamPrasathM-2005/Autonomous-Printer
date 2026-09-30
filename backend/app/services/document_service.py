@@ -1,159 +1,66 @@
-import os
 import uuid
-import tempfile
+from datetime import timedelta
 from pathlib import Path
-from typing import Optional
-from datetime import datetime, timezone
-from fastapi import UploadFile, status
-from sqlalchemy.orm import Session
-from pypdf import PdfReader
-from PIL import Image
-
+from sqlalchemy import func
+from starlette.concurrency import run_in_threadpool
 from app.config.settings import settings
 from app.db.models.document import Document, DocumentStatus
-from app.utils.errors import AppException
-from app.utils.crypto import compute_file_sha256
-from app.utils.file_security import validate_file_content, generate_safe_filename
+from app.db.models.security import CustomerSession
 from app.services.storage_service import storage_service
+from app.services.document_processor import process_document
+from app.utils.file_security import validate_file_content
+from app.utils.crypto import compute_file_sha256
+from app.utils.common import now, fail, audit
 
 class DocumentService:
-    @staticmethod
-    def inspect_and_count_pages(file_path: Path, mime_type: str) -> int:
-        if mime_type == "application/pdf":
-            try:
-                reader = PdfReader(str(file_path))
-                page_count = len(reader.pages)
-                if page_count < 1:
-                    raise AppException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        error_code="INVALID_FILE",
-                        message="PDF contains no pages."
-                    )
-                return page_count
-            except Exception as e:
-                if isinstance(e, AppException):
-                    raise e
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_FILE",
-                    message="Failed to parse corrupted PDF."
-                )
-        elif mime_type in ["image/jpeg", "image/png"]:
-            try:
-                with Image.open(str(file_path)) as img:
-                    img.verify()
-                return 1
-            except Exception:
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_FILE",
-                    message="Failed to parse corrupted image file."
-                )
-        else:
-            raise AppException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="UNSUPPORTED_TYPE",
-                message=f"Unsupported file format: {mime_type}"
-            )
-
-    @classmethod
-    async def process_and_save_upload(
-        cls,
-        db: Session,
-        file: UploadFile,
-        user_id: Optional[int] = None
-    ) -> Document:
-        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
-        temp_dir = storage_service.get_temp_dir()
-        temp_file_path = temp_dir / f"upload_{uuid.uuid4().hex}.tmp"
-
-        original_filename = file.filename or "unknown_document"
-        total_size = 0
-        header_bytes = b""
-
+    async def process_and_save_upload(self, db, file, session_id=None, user_id=None):
+        if not session_id:
+            fail('UNAUTHENTICATED', 'A customer session is required.', 401)
+        # Serialize a session's uploads and order creation to enforce quotas under concurrency.
+        db.query(CustomerSession).filter_by(id=session_id).with_for_update().one()
+        total = db.query(func.coalesce(func.sum(Document.file_size), 0)).filter(
+            Document.session_id == session_id, Document.status != DocumentStatus.DELETED).scalar()
+        budget = min(settings.MAX_UPLOAD_MB * 1024 * 1024,
+                     settings.MAX_SESSION_STORAGE_MB * 1024 * 1024 - total)
+        temp = storage_service.get_temp_dir() / (uuid.uuid4().hex + '.upload')
+        key = None
         try:
-            with open(temp_file_path, "wb") as f_out:
-                # Read first chunk to inspect magic bytes
-                first_chunk = await file.read(4096)
-                if not first_chunk:
-                    raise AppException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        error_code="INVALID_FILE",
-                        message="Uploaded file is empty."
-                    )
-                header_bytes = first_chunk
-                total_size += len(first_chunk)
-                f_out.write(first_chunk)
-
-                # Read remaining chunks while enforcing file size limit
+            size = 0
+            header = b''
+            with temp.open('xb') as output:
                 while chunk := await file.read(65536):
-                    total_size += len(chunk)
-                    if total_size > max_bytes:
-                        raise AppException(
-                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            error_code="FILE_TOO_LARGE",
-                            message=f"File exceeds maximum upload size of {settings.MAX_UPLOAD_MB}MB."
-                        )
-                    f_out.write(chunk)
-        except Exception as e:
-            if temp_file_path.exists():
-                temp_file_path.unlink()
-            raise e
-
-        # Validate file content, extension and magic bytes
-        validated_mime, extension = validate_file_content(
-            header_bytes=header_bytes,
-            filename=original_filename,
-            content_type=file.content_type
-        )
-
-        # Inspect pages and integrity
-        try:
-            pages = cls.inspect_and_count_pages(temp_file_path, validated_mime)
-        except Exception as e:
-            if temp_file_path.exists():
-                temp_file_path.unlink()
-            raise e
-
-        # Compute SHA-256 hash
-        sha256_hash = compute_file_sha256(str(temp_file_path))
-
-        # Generate unique storage details
-        doc_id = f"doc_{uuid.uuid4().hex[:12]}"
-        stored_filename = generate_safe_filename(extension)
-        sub_folder = str(user_id) if user_id is not None else "public"
-        storage_key = f"documents/{sub_folder}/{stored_filename}"
-
-        # Atomically move temp file to user storage
-        try:
-            storage_service.save_file_atomically(temp_file_path, storage_key)
-        except Exception as e:
-            if temp_file_path.exists():
-                temp_file_path.unlink()
-            raise AppException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error_code="STORAGE_ERROR",
-                message="Failed to persist file in storage."
-            )
-
-        # Save metadata to DB
-        document = Document(
-            id=doc_id,
-            user_id=user_id,
-            original_filename=original_filename,
-            stored_filename=stored_filename,
-            storage_key=storage_key,
-            mime_type=validated_mime,
-            file_size=total_size,
-            sha256=sha256_hash,
-            page_count=pages,
-            status=DocumentStatus.ACTIVE,
-            created_at=datetime.now(timezone.utc)
-        )
-        db.add(document)
-        db.commit()
-        db.refresh(document)
-
-        return document
+                    size += len(chunk)
+                    if size > budget:
+                        fail('FILE_TOO_LARGE', 'Upload exceeds the file or session storage limit.', 413)
+                    if not header:
+                        header = chunk[:4096]
+                    output.write(chunk)
+            name = (file.filename or 'document').replace('\\', '/').split('/')[-1]
+            if not name or len(name) > 200 or any(ord(c) < 32 for c in name):
+                fail('INVALID_FILENAME', 'Invalid document filename.')
+            mime, extension = validate_file_content(header, name, file.content_type)
+            pages = await run_in_threadpool(process_document, {'operation': 'inspect', 'path': str(temp),
+                                      'mime': mime, 'max_pages': settings.MAX_DOCUMENT_PAGES})
+            digest = compute_file_sha256(str(temp))
+            doc_id = 'doc_' + uuid.uuid4().hex
+            filename = uuid.uuid4().hex + extension
+            key = f'documents/{session_id}/{filename}'
+            storage_service.save_file_atomically(temp, key)
+            doc = Document(id=doc_id, session_id=session_id, user_id=user_id,
+                original_filename=name, stored_filename=filename, storage_key=key,
+                mime_type=mime, file_size=size, sha256=digest, page_count=pages,
+                status=DocumentStatus.ACTIVE, expires_at=now() + timedelta(hours=settings.DOCUMENT_TTL_HOURS))
+            db.add(doc)
+            audit(db, 'DOCUMENT_UPLOADED', doc_id, actor='CUSTOMER')
+            db.commit()
+            return doc
+        except Exception:
+            db.rollback()
+            if key:
+                storage_service.delete_file(key)
+            raise
+        finally:
+            temp.unlink(missing_ok=True)
+            await file.close()
 
 document_service = DocumentService()

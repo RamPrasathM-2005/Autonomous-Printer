@@ -16,7 +16,12 @@ class Payment(Base):
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False, unique=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
-    razorpay_order_id = Column(String(128), unique=True, nullable=False, index=True)
+    razorpay_order_id = Column(String(128), unique=True, nullable=True, index=True)
+    creation_state = Column(String(24), nullable=False, default='CREATING')
+    gateway_key_id = Column(String(128), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    reconciled_at = Column(DateTime, nullable=True)
+    last_error = Column(String(128), nullable=True)
     razorpay_payment_id = Column(String(128), unique=True, nullable=True, index=True)
     razorpay_signature = Column(String(255), nullable=True)
     

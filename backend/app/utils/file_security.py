@@ -79,7 +79,14 @@ def resolve_safe_storage_path(storage_root: str | Path, storage_key: str) -> Pat
     """
     root_path = Path(storage_root).resolve()
     # Normalize key (strip leading slashes/backslashes)
-    clean_key = storage_key.lstrip("/\\")
+    if not isinstance(storage_key, str) or not storage_key or "\x00" in storage_key:
+        raise AppException(400, 'INVALID_PATH', 'Invalid storage path.')
+    # Reject absolute, drive-relative, alternate-stream and traversal forms on all OSes.
+    from pathlib import PureWindowsPath
+    if (PureWindowsPath(storage_key).drive or storage_key.startswith(('/', "\\")) or
+            ':' in storage_key or '..' in storage_key.replace("\\", '/').split('/')):
+        raise AppException(400, 'PATH_TRAVERSAL_DETECTED', 'Invalid storage path.')
+    clean_key = storage_key
     target_path = (root_path / clean_key).resolve()
 
     try:

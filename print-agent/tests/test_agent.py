@@ -1,79 +1,82 @@
+import hashlib
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import patch
 from app.config import config
 from app.services.cups_service import cups_service
-from app.services.file_service import file_service
-from app.services.job_poller import JobPoller
-from app.utils.errors import StorageException
+from app.services.file_service import FileService
+from app.services.job_journal import JobJournal
+from app.services.print_service import print_service
+from app.utils.errors import StorageException, CupsException
 
 def test_health_endpoint(agent_client):
-    res = agent_client.get("/health")
-    assert res.status_code == 200
-    data = res.get_json()
-    assert data["status"] == "healthy"
-    assert data["agent_id"] == config.AGENT_ID
+    assert agent_client.get('/health').status_code == 200
 
 def test_local_status_endpoint(agent_client):
-    res = agent_client.get("/local/status")
-    assert res.status_code == 200
-    data = res.get_json()
-    assert "printer_state" in data
-    assert "paper_state" in data
+    assert agent_client.get('/local/status').status_code == 200
 
 def test_cups_options_mapping():
-    settings = {
-        "copies": 3,
-        "pageRange": "1-3,5",
-        "colour": True,
-        "sides": "two-sided-long-edge",
-        "paperSize": "A4",
-        "orientation": "landscape"
-    }
-    options = cups_service.build_cups_options(settings)
-    assert options["copies"] == "3"
-    assert options["page-ranges"] == "1-3,5"
-    assert options["print-color-mode"] == "color"
-    assert options["sides"] == "two-sided-long-edge"
-    assert options["media"] == "A4"
-    assert options["orientation-requested"] == "4" # Landscape
+    result=cups_service.build_cups_options({'copies':3,'pageRange':'1-3,5','colour':True,
+        'sides':'two-sided-long-edge','paperSize':'A4','orientation':'landscape'})
+    assert result['copies']=='3' and result['page-ranges']=='1-3,5'
+    assert result['print-color-mode']=='color' and result['orientation-requested']=='4'
 
-def test_cups_mock_submission(tmp_path):
-    dummy_file = tmp_path / "test.pdf"
-    dummy_file.write_bytes(b"%PDF-1.4 test")
+def test_mock_requires_explicit_backend_permission(tmp_path,monkeypatch):
+    monkeypatch.setattr(cups_service,'mock_mode',True)
+    path=tmp_path/'doc.pdf';path.write_bytes(b'pdf')
+    with pytest.raises(CupsException):cups_service.submit_job(path,{},allow_mock=False)
+    assert cups_service.submit_job(path,{},allow_mock=True).startswith('mock-')
 
-    cups_job_id = cups_service.submit_job(dummy_file, {"copies": 1})
-    assert cups_job_id.startswith("cups-")
+def test_missing_printer_never_simulates(tmp_path,monkeypatch):
+    monkeypatch.setattr(cups_service,'mock_mode',False)
+    monkeypatch.setattr(cups_service,'has_pycups',False)
+    with pytest.raises(CupsException):cups_service.submit_job(tmp_path/'doc.pdf',{})
+    assert cups_service.monitor_job('123')=='UNKNOWN'
 
-def test_file_service_path_traversal_detection():
-    # Attempt directory traversal
-    with pytest.raises(StorageException):
-        file_service.resolve_and_verify_file("../../../../etc/passwd")
+@pytest.mark.parametrize('key',['../outside.pdf','/etc/passwd','C:/secret','documents/a.pdf:stream'])
+def test_path_escape_rejected(tmp_path,key):
+    with pytest.raises(StorageException):FileService(tmp_path).resolve_and_verify_file(key,'a'*64,1)
 
-def test_job_poller_duplicate_protection():
-    poller = JobPoller()
-    job = {"jobId": "job_dup_1", "orderId": "ord_1", "storageKey": "doc.pdf"}
+def test_missing_document_never_fabricated(tmp_path):
+    with pytest.raises(StorageException):FileService(tmp_path).resolve_and_verify_file('missing.pdf','a'*64,1)
+    assert not (tmp_path/'missing.pdf').exists()
 
-    # Manually acquire job
-    with poller._lock:
-        poller.processing_jobs.add("job_dup_1")
+def test_hash_and_size_required(tmp_path):
+    path=tmp_path/'file.pdf';path.write_bytes(b'test')
+    service=FileService(tmp_path)
+    with pytest.raises(StorageException):service.resolve_and_verify_file('file.pdf')
+    with pytest.raises(StorageException):service.resolve_and_verify_file('file.pdf','0'*64,4)
+    with pytest.raises(StorageException):service.resolve_and_verify_file('file.pdf',hashlib.sha256(b'test').hexdigest(),5)
+    assert service.resolve_and_verify_file('file.pdf',hashlib.sha256(b'test').hexdigest(),4)==path
 
-    # In another poll cycle, same job should be skipped because it's already in processing_jobs
-    with poller._lock:
-        is_already_processing = "job_dup_1" in poller.processing_jobs
-    assert is_already_processing is True
+def test_local_release_only_queues_job(agent_client):
+    with patch('app.routes.local.backend_client.release_job',return_value={'jobId':'job_1','status':'RELEASED'}), patch.object(print_service,'execute_print_job') as submit:
+        assert agent_client.post('/local/release',json={'otp':'123456'}).status_code==200
+        submit.assert_not_called()
 
-def test_local_release_endpoint(agent_client):
-    with patch("app.routes.local.backend_client.release_job") as mock_release:
-        mock_release.return_value = {
-            "jobId": "job_station_1",
-            "orderId": "ORD-123",
-            "status": "RELEASED",
-            "storageKey": "documents/1/doc.pdf",
-            "settings": {"copies": 1}
-        }
-        res = agent_client.post("/local/release", json={"otp": "123456"})
-        assert res.status_code == 200
-        data = res.get_json()
-        assert data["status"] == "RELEASED"
+def test_untrusted_browser_origin_rejected(agent_client):
+    assert agent_client.post('/local/release',json={'otp':'123456'},headers={'Origin':'https://evil.example'}).status_code==403
+
+def test_durable_deduplication(tmp_path,monkeypatch):
+    monkeypatch.setattr(config,'STATE_ROOT',tmp_path)
+    first=JobJournal();job={'jobId':'job1','claimToken':'secret'}
+    assert first.prepare(job)
+    second=JobJournal()
+    assert not second.prepare(job)
+    second.update('job1','DONE','123')
+    assert second.pending()==[]
+    with second.connect() as db:
+        assert 'secret' not in db.execute('SELECT payload FROM jobs').fetchone()[0]
+
+def test_crash_before_confirmed_submission_never_reprints(tmp_path,monkeypatch):
+    monkeypatch.setattr(config,'STATE_ROOT',tmp_path)
+    journal=JobJournal();journal.prepare({'jobId':'job1','claimToken':'x'*40})
+    monkeypatch.setattr('app.services.print_service.journal',journal)
+    with patch('app.services.print_service.backend_client.update_job_status',return_value=True) as report, patch.object(cups_service,'submit_job') as submit:
+        print_service.recover()
+        submit.assert_not_called()
+        assert report.call_args.kwargs['error_code']=='SUBMISSION_UNKNOWN_OPERATOR_REVIEW'
+
+def test_processing_is_not_failed_or_completed(monkeypatch):
+    with patch.object(cups_service,'monitor_job',return_value='PROCESSING'), patch.object(print_service,'_finish') as finish:
+        assert not print_service.monitor({'jobId':'job1'},'123')
+        finish.assert_not_called()

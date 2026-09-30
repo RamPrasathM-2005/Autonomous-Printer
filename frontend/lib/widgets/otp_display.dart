@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../config/theme.dart';
 
 class OtpDisplayCard extends StatelessWidget {
   final String otp;
   final String? expiresAt;
 
-  const OtpDisplayCard({
-    super.key,
-    required this.otp,
-    this.expiresAt,
-  });
+  const OtpDisplayCard({super.key, required this.otp, this.expiresAt});
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +18,10 @@ class OtpDisplayCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.cardDark,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primary.withValues(alpha: 0.12),
@@ -33,7 +33,7 @@ class OtpDisplayCard extends StatelessWidget {
       child: Column(
         children: [
           const Text(
-            'STATION RELEASE OTP',
+            'Release code',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
@@ -52,7 +52,7 @@ class OtpDisplayCard extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: otp));
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('OTP copied to clipboard!'),
+                  content: Text('Code copied'),
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -66,7 +66,7 @@ class OtpDisplayCard extends StatelessWidget {
                   Icon(Icons.copy_rounded, size: 16, color: Colors.white70),
                   SizedBox(width: 6),
                   Text(
-                    'Tap to Copy Code',
+                    'Copy code',
                     style: TextStyle(fontSize: 13, color: Colors.white70),
                   ),
                 ],
@@ -79,7 +79,7 @@ class OtpDisplayCard extends StatelessWidget {
               'Expires: $expiresAt',
               style: const TextStyle(fontSize: 11, color: Colors.white38),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -93,7 +93,10 @@ class OtpDisplayCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(
+          color: AppTheme.primaryLight.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
       ),
       alignment: Alignment.center,
       child: Text(

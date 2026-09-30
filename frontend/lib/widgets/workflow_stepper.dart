@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../config/theme.dart';
 
 class WorkflowStepper extends StatelessWidget {
   final int currentStep; // 1 to 5
 
-  const WorkflowStepper({
-    super.key,
-    required this.currentStep,
-  });
+  const WorkflowStepper({super.key, required this.currentStep});
 
   static const List<Map<String, dynamic>> _steps = [
     {'index': 1, 'label': 'Upload', 'icon': Icons.cloud_upload_rounded},
@@ -59,7 +57,7 @@ class WorkflowStepper extends StatelessWidget {
             border = Border.all(color: AppTheme.primary, width: 2);
             shadow = [
               BoxShadow(
-                color: AppTheme.primary.withOpacity(0.2),
+                color: AppTheme.primary.withValues(alpha: 0.2),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -85,7 +83,11 @@ class WorkflowStepper extends StatelessWidget {
                 ),
                 child: Center(
                   child: isCompleted
-                      ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        )
                       : Icon(
                           stepData['icon'] as IconData,
                           size: isCurrent ? 17 : 14,
@@ -98,10 +100,14 @@ class WorkflowStepper extends StatelessWidget {
                 stepData['label'] as String,
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: isCurrent ? FontWeight.w700 : (isCompleted ? FontWeight.w600 : FontWeight.w500),
+                  fontWeight: isCurrent
+                      ? FontWeight.w700
+                      : (isCompleted ? FontWeight.w600 : FontWeight.w500),
                   color: isCurrent
                       ? AppTheme.primary
-                      : (isCompleted ? AppTheme.textPrimary : AppTheme.textMuted),
+                      : (isCompleted
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted),
                 ),
               ),
             ],

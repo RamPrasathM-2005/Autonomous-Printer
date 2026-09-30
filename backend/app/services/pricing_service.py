@@ -22,7 +22,10 @@ class PricingService:
             return odd_pages if odd_pages else [1]
         if clean_str == "even":
             even_pages = [p for p in range(1, total_doc_pages + 1) if p % 2 == 0]
-            return even_pages if even_pages else [1]
+
+            if not even_pages:
+                raise AppException(400, 'INVALID_PAGE_RANGE', 'Document has no even pages.')
+            return even_pages
 
         pages_set = set()
         parts = [p.strip() for p in page_range_str.split(",") if p.strip()]
@@ -105,24 +108,13 @@ class PricingService:
         return sorted(list(pages_set))
 
     @staticmethod
-    def calculate_price(
-        selected_pages_count: int,
-        copies: int,
-        is_colour: bool = False,
-        per_page_rate: Optional[float] = None,
-        base_fee: Optional[float] = None
-    ) -> float:
-        """
-        Calculates price = pages * copies * per_page_rate + base_fee
-        Standard rate: ₹5.00 for Color, ₹2.00 for Grayscale (monochrome).
-        Convenience / Platform fee: ₹0.00 (FREE).
-        """
-        if per_page_rate is not None:
-            rate = per_page_rate
-        else:
-            rate = 10.00 if is_colour else 2.00
-        fee = base_fee if base_fee is not None else 0.00
-        amount = round((selected_pages_count * copies * rate) + fee, 2)
-        return amount
+    def calculate_price(selected_pages_count, copies, is_colour=False, per_page_rate=None, base_fee=None):
+        from decimal import Decimal, ROUND_HALF_UP
+        if selected_pages_count < 1 or copies < 1 or copies > 100:
+            raise AppException(400, 'INVALID_QUANTITY', 'Invalid print quantity.')
+        rate = Decimal(str(per_page_rate)) if per_page_rate is not None else (
+            settings.COLOR_PAGE_RATE if is_colour else settings.PER_PAGE_RATE)
+        fee = Decimal(str(base_fee)) if base_fee is not None else settings.BASE_FEE
+        return (Decimal(selected_pages_count * copies) * rate + fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 pricing_service = PricingService()

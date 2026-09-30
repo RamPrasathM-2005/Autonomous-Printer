@@ -29,11 +29,11 @@ def validation_exception_handler(request: Request, exc: RequestValidationError) 
     first_error = exc.errors()[0] if exc.errors() else {"msg": "Validation error"}
     error_msg = first_error.get("msg", "Validation error")
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "error": "VALIDATION_ERROR",
             "message": error_msg,
-            "details": exc.errors()
+            "details": [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
         }
     )
 

@@ -27,6 +27,7 @@ class PrintServerResponse(BaseModel):
     printers: List[PrinterResponse] = []
 
 class HeartbeatRequest(BaseModel):
+    mockPrinting: bool = False
     printerState: str = "READY"
     paperState: str = "AVAILABLE"
 

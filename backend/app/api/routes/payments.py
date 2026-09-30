@@ -1,61 +1,32 @@
-from fastapi import APIRouter, Depends, Request, Header, status
-from sqlalchemy.orm import Session
-from typing import Optional
-
+from fastapi import APIRouter, Depends, Request, Header
 from app.db.session import get_db
 from app.schemas.payment import PaymentCreateRequest, PaymentCreateResponse, PaymentVerifyRequest
 from app.services.payment_service import payment_service
+from app.services.access_service import current_session, owned_order, rate_limit
 
-router = APIRouter(prefix="/api/payments", tags=["Payments"])
+router = APIRouter(prefix='/api/payments', tags=['Payments'])
 
-@router.post("/create", response_model=PaymentCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_payment(
-    req: PaymentCreateRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Public payment initiation - no login required.
-    Initializes a Razorpay order for the requested print order.
-    """
-    print(f"\n[BACKEND_PAYMENT] >>> Creating payment for order: {req.orderId}")
-    res = payment_service.create_payment(
-        db=db,
-        order_id=req.orderId,
-        user_id=None
-    )
-    print(f"[BACKEND_PAYMENT] <<< Payment Order Ready: keyId={res.keyId}, razorpayOrderId={res.razorpayOrderId}, amountPaise={res.amountPaise}")
-    return res
+@router.post('/create', response_model=PaymentCreateResponse, status_code=201)
+def create_payment(req: PaymentCreateRequest, session=Depends(current_session), db=Depends(get_db)):
+    owned_order(db, req.orderId, session)
+    rate_limit(db, 'payment-create:' + session.id, 10, 60)
+    return payment_service.create_payment(db, req.orderId)
 
-@router.post("/verify")
-def verify_payment(
-    req: PaymentVerifyRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Verifies / confirms payment and transitions order to WAITING_FOR_OTP,
-    automatically generating the 6-digit release OTP.
-    """
-    print(f"\n[BACKEND_PAYMENT] >>> Verifying payment: orderId={req.orderId}, rzpPaymentId={req.razorpayPaymentId}, rzpOrderId={req.razorpayOrderId}")
-    res = payment_service.verify_or_confirm_payment(
-        db=db,
-        order_id=req.orderId,
-        rzp_order_id=req.razorpayOrderId,
-        rzp_payment_id=req.razorpayPaymentId,
-        rzp_signature=req.razorpaySignature
-    )
-    print(f"[BACKEND_PAYMENT] <<< Payment verification complete for {req.orderId}: status={res.get('status')}")
-    return res
+@router.post('/verify')
+def verify_payment(req: PaymentVerifyRequest, session=Depends(current_session), db=Depends(get_db)):
+    owned_order(db, req.orderId, session)
+    rate_limit(db, 'payment-verify:' + session.id, 10, 60)
+    return payment_service.verify_or_confirm_payment(db, req.orderId, req.razorpayOrderId,
+        req.razorpayPaymentId, req.razorpaySignature)
 
-@router.post("/webhook")
-async def razorpay_webhook(
-    request: Request,
-    x_razorpay_signature: Optional[str] = Header(None, alias="X-Razorpay-Signature"),
-    db: Session = Depends(get_db)
-):
-    raw_body = await request.body()
-    result = payment_service.handle_webhook(
-        db=db,
-        raw_body=raw_body,
-        signature=x_razorpay_signature
-    )
-    return result
+@router.post('/reconcile')
+def reconcile_payment(req: PaymentCreateRequest, session=Depends(current_session), db=Depends(get_db)):
+    owned_order(db, req.orderId, session)
+    rate_limit(db, 'payment-reconcile:' + session.id, 5, 60)
+    return payment_service.reconcile(db, req.orderId)
+
+@router.post('/webhook', status_code=202)
+async def webhook(request: Request, db=Depends(get_db),
+    signature: str | None = Header(None, alias='X-Razorpay-Signature'),
+    event_id: str | None = Header(None, alias='X-Razorpay-Event-Id')):
+    return payment_service.handle_webhook(db, await request.body(), signature, event_id)

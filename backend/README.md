@@ -1,146 +1,30 @@
-# 🖨️ Autonomous Printer - Backend Service (FastAPI)
+# Backend
 
-Central REST API backend built with **FastAPI (Python 3.12+)**, **SQLAlchemy ORM**, **MySQL**, and **Pydantic v2**. It handles document upload validation, multi-document order management, exact pricing calculation, Razorpay payment processing, and secure OTP release verification.
+Run commands from `backend` using the repository virtual environment.
 
----
-
-## 📋 Prerequisites
-
-Before running the backend, ensure you have the following installed:
-
-- **Python 3.12+** ([python.org](https://www.python.org/downloads/))
-- **MySQL Server 8.0+** ([mysql.com](https://dev.mysql.com/downloads/installer/))
-- **Git** ([git-scm.com](https://git-scm.com/))
-
----
-
-## ⚙️ Environment Configuration
-
-1. In the `backend/` directory, copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   *(On Windows PowerShell: `Copy-Item .env.example .env`)*
-
-2. Configure your `.env` variables:
-   ```env
-   # Application Configuration
-   APP_NAME="PrintPlatform"
-   ENVIRONMENT="development"
-   HOST="127.0.0.1"
-   PORT=8000
-
-   # MySQL Database Connection
-   DATABASE_URL="mysql+pymysql://<user>:<password>@127.0.0.1:3306/print_platform"
-
-   # Security & Auth
-   JWT_SECRET_KEY="CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS"
-   JWT_ALGORITHM="HS256"
-   JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15
-   JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
-
-   # Storage & Upload Limits
-   STORAGE_ROOT="./storage"
-   MAX_UPLOAD_MB=50
-
-   # Pricing Configuration
-   PER_PAGE_RATE=2.00
-   COLOR_PAGE_RATE=5.00
-   BASE_FEE=0.00
-
-   # OTP & Retries
-   OTP_TTL_MINUTES=30
-   MAX_OTP_ATTEMPTS=5
-   MAX_PRINT_RETRIES=2
-
-   # Razorpay Payment Gateway (Test Mode)
-   RAZORPAY_KEY_ID="rzp_test_RFxhjAiTxwrpAJ"
-   RAZORPAY_KEY_SECRET="f7jSae5XJ4V6EfZIYTUpWB7q"
-   ```
-
----
-
-## 🗄️ Database Setup
-
-Ensure MySQL is running and create the `print_platform` database:
-
-```sql
-CREATE DATABASE IF NOT EXISTS print_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```powershell
+..\.venv\Scripts\python.exe -m app.db.migrate
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-> **Note**: Database tables are automatically created on startup by SQLAlchemy via `Base.metadata.create_all(bind=engine)` in `app/main.py`.
+Run the reconciliation worker in a separate supervised process:
 
----
-
-## 🚀 Step-by-Step: How to Run
-
-### Step 1: Navigate to the Backend Directory
-```bash
-cd backend
+```powershell
+..\.venv\Scripts\python.exe -m app.worker
 ```
 
-### Step 2: Create and Activate a Python Virtual Environment
+Read-only operational status:
 
-- **On Windows (PowerShell)**:
-  ```powershell
-  python -m venv venv
-  .\venv\Scripts\Activate.ps1
-  ```
-  *(If you get an execution policy error, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first)*
-
-- **On Linux / macOS**:
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate
-  ```
-
-### Step 3: Install Required Dependencies
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+```powershell
+..\.venv\Scripts\python.exe -m app.ops
 ```
 
-### Step 4: Run the Development Server
-```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
+Copy `.env.example` only for a new installation; preserve the existing configured `.env`. Generate independent random secrets for JWT and OTP hashing, and a Fernet key for OTP encryption. Use real Razorpay **test** credentials for development. A webhook secret is separate from the API key secret. The worker needs the same settings and database as the API.
 
-When started successfully, you will see:
-```text
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process using WatchFiles
-INFO:     Application startup complete.
-```
+The existing installation uses MySQL database `printer`. Stop services and back up MySQL before running migrations on another installation. `app.db.migrate` is additive and repeatable. Legacy/demo payments are not trusted and their codes are disabled. Run migrations with a schema administrator, then run API/worker with a separate restricted account. Runtime uses MySQL READ COMMITTED with explicit row locks and unique constraints for transitions/idempotency.
 
----
+`python -m app.db.seed` provisions a station from the agent configuration for a new database. It creates no default user/admin accounts and does not reset an existing device token. Keep raw tokens in the agent's protected environment only; the database contains a hash.
 
-## 🔍 Verification & Interactive API Documentation
+Customer API authentication uses short-lived guest bearer sessions, not the unused legacy user-login code. There is no public admin registration or payment-state override. `/api/maintenance/cleanup` requires an administrator token; normal cleanup runs in the worker. Prefer the local read-only operations command for monitoring.
 
-- **Health Check**: Open [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
-- **Interactive Swagger Docs**: Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **Redoc Documentation**: Open [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
-
----
-
-## 🧪 Running Automated Tests
-
-Run the full pytest suite (all 10 automated test suites):
-
-```bash
-pytest -v
-```
-
-To run a specific test file:
-```bash
-pytest tests/test_multi_doc_orders.py -v
-```
-
----
-
-## 🛠️ Common Troubleshooting
-
-| Issue | Resolution |
-| :--- | :--- |
-| **`python` not found on Windows** | Add Python to your Windows System PATH or use full path: `& "C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe"` |
-| **Port 8000 already in use** | Find and terminate the process using port 8000: `netstat -ano \| findstr :8000` followed by `taskkill /PID <PID> /F` (Windows) or `kill -9 $(lsof -t -i:8000)` (Linux). |
-| **MySQL Connection Refused** | Verify MySQL service is running (`Get-Service MySQL*` on Windows or `sudo systemctl status mysql` on Linux). Ensure username and password in `DATABASE_URL` are correct. |
+See [security and deployment](../docs/SECURITY.md) for webhook events, review procedures, live-mode preparation, and limitations.

@@ -17,20 +17,27 @@ from app.utils.logging import agent_logger
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    @app.after_request
-    def add_cors_headers(response):
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
-        return response
+    from flask import request, jsonify
+    app.config['MAX_CONTENT_LENGTH'] = 4096
 
-    @app.route("/", defaults={"path": ""}, methods=["OPTIONS"])
-    @app.route("/<path:path>", methods=["OPTIONS"])
-    def handle_options(path=""):
-        response = app.make_default_options_response()
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
+    @app.before_request
+    def check_browser_origin():
+        origin = request.headers.get('Origin')
+        if origin and origin not in config.ALLOWED_ORIGINS:
+            return jsonify({'error': 'ORIGIN_DENIED'}), 403
+        if request.host.split(':')[0] not in ('localhost', '127.0.0.1'):
+            return jsonify({'error': 'HOST_DENIED'}), 403
+
+    @app.after_request
+    def headers(response):
+        origin = request.headers.get('Origin')
+        if origin in config.ALLOWED_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Vary'] = 'Origin'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Cache-Control'] = 'no-store'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
     # Register blueprints
@@ -40,6 +47,18 @@ def create_app() -> Flask:
     return app
 
 def run_agent():
+    if len(config.AGENT_TOKEN) < 32:
+        raise RuntimeError('Configure a random AGENT_TOKEN of at least 32 characters')
+    config.STATE_ROOT.mkdir(parents=True, exist_ok=True)
+    lock_file = open(config.STATE_ROOT / '.agent.lock', 'a+b')
+    lock_file.seek(0)
+    if os.name == 'nt':
+        import msvcrt
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     agent_logger.info(f"Starting Flask Print Agent for station: {config.AGENT_ID}")
     # Start background job poller and heartbeat
     job_poller.start()

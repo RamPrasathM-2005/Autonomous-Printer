@@ -1,3 +1,5 @@
+> Historical design document. The implemented security/payment contract is documented in [docs/SECURITY.md](../docs/SECURITY.md) and supersedes this specification.
+
 # Smart Self-Service Printing Platform
 ## FastAPI Backend + Ubuntu Flask Print Agent
 ### Self-Hosted Single-Linux-Machine Architecture

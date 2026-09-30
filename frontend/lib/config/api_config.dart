@@ -7,8 +7,15 @@ class ApiConfig {
   static const String _keySelectedStationId = 'selected_station_id';
 
   // Smart defaults: 127.0.0.1 for Web and Desktop, 10.0.2.2 for Android emulator
-  static String get defaultBackendUrl =>
-      kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000';
+  static String get defaultBackendUrl {
+    const configured = String.fromEnvironment('API_BASE_URL');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb && !['localhost', '127.0.0.1'].contains(Uri.base.host)) {
+      return Uri.base.origin;
+    }
+    return kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000';
+  }
+
   static String get defaultAgentUrl =>
       kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
 
@@ -23,8 +30,9 @@ class ApiConfig {
     String? storedAgent = prefs.getString(_keyAgentUrl);
 
     // On Web, if stored URL is the Android emulator loopback 10.0.2.2, auto-correct to localhost
-    if (kIsWeb && (storedBackend == null || storedBackend.contains('10.0.2.2'))) {
-      storedBackend = 'http://127.0.0.1:8000';
+    if (kIsWeb &&
+        (storedBackend == null || storedBackend.contains('10.0.2.2'))) {
+      storedBackend = defaultBackendUrl;
       await prefs.setString(_keyBackendUrl, storedBackend);
     }
     if (kIsWeb && (storedAgent == null || storedAgent.contains('10.0.2.2'))) {
