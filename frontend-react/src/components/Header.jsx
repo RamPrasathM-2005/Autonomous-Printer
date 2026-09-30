@@ -40,43 +40,6 @@ export default function Header() {
           <div className="logo-subtitle">Self-Service Autonomous Kiosk</div>
         </div>
       </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-        {/* Download APK Button */}
-        <a
-          href="/downloads/autonomous-printer.apk"
-          download="autonomous-printer.apk"
-          className="btn-download-apk"
-          id="headerDownloadApkBtn"
-          title="Download Autonomous Printer Mobile App (Android APK)"
-        >
-          <Smartphone size={15} />
-          <span>Download App (.apk)</span>
-          <span className="apk-badge">APK</span>
-        </a>
-
-        <div className="station-badge">
-          <span className="pulsing-dot" />
-          <span>Station Online</span>
-        </div>
-        <button
-          onClick={fetchStatus}
-          style={{
-            background: 'var(--surface-subtle)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            padding: '6px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'all 0.15s ease'
-          }}
-          title="Refresh Kiosk Status"
-        >
-          <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-        </button>
-      </div>
     </header>
   );
 }

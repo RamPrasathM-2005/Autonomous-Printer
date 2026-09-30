@@ -59,21 +59,17 @@ class BackendClient:
                 except Exception:
                     err_code = "RELEASE_FAILED"
                     err_msg = "OTP verification failed."
-                from app.utils.errors import OTPReleaseException
                 raise OTPReleaseException(message=err_msg, error_code=err_code, status_code=resp.status_code)
         except requests.exceptions.Timeout:
             agent_logger.error("Timeout connecting to backend for OTP release.")
-            from app.utils.errors import BackendCommunicationException
             raise BackendCommunicationException("Backend communication timed out. Please try again.", error_code="NETWORK_TIMEOUT", status_code=504)
         except requests.exceptions.ConnectionError:
             agent_logger.error("FastAPI backend connection refused for OTP release.")
-            from app.utils.errors import BackendCommunicationException
             raise BackendCommunicationException("FastAPI backend is unavailable. Please ensure the backend is running.", error_code="BACKEND_UNAVAILABLE", status_code=503)
         except (OTPReleaseException, BackendCommunicationException):
             raise
         except Exception as e:
             agent_logger.error(f"Unexpected error communicating with backend: {e}")
-            from app.utils.errors import BackendCommunicationException
             raise BackendCommunicationException(str(e), error_code="COMMUNICATION_ERROR", status_code=500)
 
     def update_job_status(

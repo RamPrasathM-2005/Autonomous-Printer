@@ -88,6 +88,16 @@ app.include_router(agent_router)
 app.include_router(maintenance_router)
 app.include_router(kiosk_router)
 
+from app.schemas.agent import AgentReleaseRequest
+from app.db.session import get_db
+from sqlalchemy.orm import Session
+from fastapi import Depends
+
+@app.post("/agent/release-kiosk", include_in_schema=False)
+def alias_release_kiosk(req: AgentReleaseRequest, db: Session = Depends(get_db)):
+    from app.api.routes.agent import release_job_kiosk
+    return release_job_kiosk(req, db)
+
 @app.get("/health", tags=["Health"])
 def health_check():
     return {

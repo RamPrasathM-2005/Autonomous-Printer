@@ -14,6 +14,7 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
       isColor: false,
       sides: 'one-sided',
       paperSize: 'A4',
+      printQuality: 'Standard',
       rangeOption: 'all',
       customRange: '',
       orientation: 'portrait',
@@ -91,6 +92,7 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
         paperSize: firstConfig.paperSize,
         paper_size: firstConfig.paperSize,
         orientation: firstConfig.orientation,
+        print_quality: firstConfig.printQuality,
         pageRange: firstConfig.rangeOption === 'all' ? null : firstConfig.customRange,
         page_range: firstConfig.rangeOption === 'all' ? null : firstConfig.customRange,
       };
@@ -222,104 +224,7 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
         </div>
       </div>
 
-      {/* Document Visualizer Preview Card - Matches Flutter _buildDocumentPreviewCard */}
-      <div className="card-white" style={{ borderRadius: '20px', overflow: 'hidden', marginBottom: '1.25rem' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0.85rem 1.15rem',
-          borderBottom: '1px solid var(--border)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              padding: '6px',
-              borderRadius: '8px',
-              background: (activeDoc.original_filename || activeDoc.originalFilename || '').toLowerCase().endsWith('.pdf') ? '#FEF2F2' : '#EFF6FF',
-              color: (activeDoc.original_filename || activeDoc.originalFilename || '').toLowerCase().endsWith('.pdf') ? '#DC2626' : '#2563EB'
-            }}>
-              <FileText size={16} />
-            </div>
-            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {(activeDoc.original_filename || activeDoc.originalFilename || '').toLowerCase().endsWith('.pdf') ? 'PDF Document Preview' : 'Image Document Preview'}
-            </span>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '3px 8px',
-            borderRadius: '6px',
-            background: activeConfig.isColor ? '#EEF2FF' : '#F1F5F9',
-            border: `1px solid ${activeConfig.isColor ? 'rgba(99, 102, 241, 0.3)' : '#CBD5E1'}`,
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            color: activeConfig.isColor ? '#6366F1' : '#475569'
-          }}>
-            <Palette size={12} />
-            <span>{activeConfig.isColor ? 'Color' : 'Grayscale'}</span>
-          </div>
-        </div>
-
-        {/* Visual Simulated Paper Canvas */}
-        <div style={{
-          height: '220px',
-          background: '#F8FAFC',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem'
-        }}>
-          <div style={{
-            width: activeConfig.orientation === 'landscape' ? '220px' : '160px',
-            height: activeConfig.orientation === 'landscape' ? '150px' : '190px',
-            background: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-            padding: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            transition: 'all 0.25s ease'
-          }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <div style={{
-                  width: '32px',
-                  height: '5px',
-                  borderRadius: '3px',
-                  background: activeConfig.isColor ? '#DC2626' : '#64748B'
-                }} />
-                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94A3B8' }}>
-                  {activeConfig.paperSize}
-                </span>
-              </div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: activeConfig.isColor ? '#0F172A' : '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {activeDoc.original_filename || activeDoc.originalFilename || 'Document'}
-              </div>
-              <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
-                {activePages} pg &bull; {activeConfig.rangeOption === 'all' ? 'All Pages' : activeConfig.rangeOption}
-              </div>
-            </div>
-
-            {/* Dummy Skeleton Lines */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', margin: '8px 0' }}>
-              <div style={{ width: '85%', height: '4px', background: activeConfig.isColor ? '#EEF2FF' : '#F1F5F9', borderRadius: '2px' }} />
-              <div style={{ width: '95%', height: '4px', background: activeConfig.isColor ? '#EEF2FF' : '#F1F5F9', borderRadius: '2px' }} />
-              <div style={{ width: '70%', height: '4px', background: activeConfig.isColor ? '#EEF2FF' : '#F1F5F9', borderRadius: '2px' }} />
-            </div>
-
-            <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.6rem', color: '#94A3B8' }}>{activeConfig.sides === 'one-sided' ? '1-Sided' : '2-Sided'}</span>
-              <span style={{ fontSize: '0.6rem', fontWeight: 700, color: activeConfig.isColor ? '#6366F1' : '#64748B' }}>₹{(activePages * activeConfig.copies * (activeConfig.isColor ? 5 : 2)).toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Segment 1: Color Mode Segmented Toggle - Exactly matches Flutter */}
+      {/* Color Mode Segmented Toggle - Exactly matches Flutter */}
       <div className="card-white" style={{ padding: '1.25rem', marginBottom: '1.15rem' }}>
         <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Palette size={18} color="var(--primary)" />
@@ -370,36 +275,24 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
         </div>
       </div>
 
-      {/* Segment 2: Copies Stepper (Full width - matches Flutter Segment 3) */}
-      <div className="card-white" style={{ padding: '1.15rem 1.25rem', marginBottom: '1.15rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Number of Copies
-            </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Select copies to print
-            </div>
+      {/* Copies & Print Quality Card */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '1.15rem' }}>
+        
+        {/* Copies Stepper */}
+        <div className="card-white" style={{ padding: '1.15rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+            Copies
           </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            background: 'var(--surface-subtle)',
-            padding: '4px 8px',
-            borderRadius: '14px',
-            border: '1px solid var(--border)'
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
               type="button"
               onClick={() => updateActiveConfig({ copies: Math.max(1, activeConfig.copies - 1) })}
               disabled={activeConfig.copies <= 1}
               style={{
-                width: '36px',
-                height: '36px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '10px',
-                background: 'var(--surface-white)',
+                background: 'var(--surface-subtle)',
                 border: '1px solid var(--border)',
                 fontWeight: 800,
                 fontSize: '1.2rem',
@@ -407,38 +300,62 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--text-primary)',
-                opacity: activeConfig.copies <= 1 ? 0.4 : 1
+                color: 'var(--text-primary)'
               }}
             >
               -
             </button>
-            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', minWidth: '28px', textAlign: 'center' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
               {activeConfig.copies}
             </span>
             <button
               type="button"
               onClick={() => updateActiveConfig({ copies: activeConfig.copies + 1 })}
               style={{
-                width: '36px',
-                height: '36px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '10px',
-                background: 'var(--primary)',
-                border: 'none',
+                background: 'var(--primary-surface)',
+                border: '1px solid rgba(79, 70, 229, 0.25)',
                 fontWeight: 800,
                 fontSize: '1.2rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'white',
-                boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                color: 'var(--primary)'
               }}
             >
               +
             </button>
           </div>
         </div>
+
+        {/* Print Quality Dropdown */}
+        <div className="card-white" style={{ padding: '1.15rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+            Print Quality
+          </div>
+          <select
+            value={activeConfig.printQuality}
+            onChange={(e) => updateActiveConfig({ printQuality: e.target.value })}
+            style={{
+              width: '100%',
+              padding: '0.65rem 0.75rem',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-subtle)',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)'
+            }}
+          >
+            <option value="Standard">Standard (300 DPI)</option>
+            <option value="High (600 DPI)">High Quality (600 DPI)</option>
+            <option value="Draft">Draft Fast</option>
+          </select>
+        </div>
+
       </div>
 
       {/* Paper Size & Orientation Card */}

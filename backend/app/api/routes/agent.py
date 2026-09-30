@@ -38,34 +38,6 @@ def get_pending_jobs(
 ):
     return job_service.get_pending_jobs_for_server(db, server.id)
 
-import threading
-import time
-
-def _simulate_backend_printing(order_id: str, job_id: str):
-    time.sleep(2)
-    from app.db.session import SessionLocal
-    from app.db.models.order import Order, OrderStatus
-    from app.db.models.print_job import PrintJob, PrintJobStatus
-    db = SessionLocal()
-    try:
-        ord_rec = db.query(Order).filter(Order.id == order_id).first()
-        job_rec = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-        if ord_rec and ord_rec.status in (OrderStatus.RELEASED, OrderStatus.PRINTING):
-            ord_rec.status = OrderStatus.PRINTING
-            if job_rec:
-                job_rec.status = PrintJobStatus.PRINTING
-            db.commit()
-
-            time.sleep(3)
-            ord_rec.status = OrderStatus.COMPLETED
-            if job_rec:
-                job_rec.status = PrintJobStatus.COMPLETED
-            db.commit()
-            print(f"[KIOSK] Order {order_id} completed printing.")
-    except Exception as e:
-        print(f"[KIOSK SIMULATION ERROR]: {e}")
-    finally:
-        db.close()
 
 @router.post("/release-kiosk")
 def release_job_kiosk(
@@ -85,32 +57,24 @@ def release_job_kiosk(
     order = db.query(Order).filter(Order.id == job.order_id).first()
     doc = db.query(Document).filter(Document.id == order.document_id).first() if order else None
 
-    # Advance order to PRINTING immediately if not already printing or completed
-    if order and order.status in (OrderStatus.RELEASED, OrderStatus.WAITING_FOR_OTP):
-        order.status = OrderStatus.PRINTING
-        job.status = PrintJobStatus.PRINTING
-        db.commit()
-
-    # Try notifying print agent directly on localhost if online (port 5001, fallback 5000)
-    notified_agent = False
+    # Job is now RELEASED in DB. Notify print agent immediately to print via CUPS
+    payload = {
+        "jobId": job.id,
+        "orderId": order.id if order else "",
+        "storageKey": doc.storage_key if doc else "",
+        "settings": order.print_settings if order else {}
+    }
     for port in (5001, 5000):
         try:
             import requests
-            resp = requests.post(f"http://127.0.0.1:{port}/local/release", json={"otp": req.otp}, timeout=3)
+            resp = requests.post(f"http://127.0.0.1:{port}/local/print-job", json=payload, timeout=3)
             if resp.status_code == 200:
-                notified_agent = True
-                print(f"[KIOSK] Real print agent on {port} notified for job {job.id}")
+                print(f"[KIOSK] Real print agent on {port} dispatched job {job.id} to physical printer.")
                 break
-        except Exception:
-            pass
+        except Exception as err:
+            print(f"[KIOSK] Direct agent dispatch on port {port} warning: {err}")
 
-    # Fallback simulation ONLY IF physical print agent is offline
-    if not notified_agent and order:
-        threading.Thread(
-            target=_simulate_backend_printing,
-            args=(order.id, job.id),
-            daemon=True
-        ).start()
+    # Note: If direct HTTP dispatch was not reachable, job_poller polls every 3 seconds for RELEASED jobs.
 
     return {
         "status": "RELEASED",

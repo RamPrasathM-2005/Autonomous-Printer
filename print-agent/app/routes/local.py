@@ -120,3 +120,23 @@ def local_station_otp_release():
         "jobId": job_id,
         "orderId": order_id
     }), 200
+
+@local_bp.route("/print-job", methods=["POST", "OPTIONS"])
+def direct_print_job():
+    if request.method == "OPTIONS":
+        return "", 200
+    data = request.get_json(silent=True) or {}
+    job_id = data.get("jobId") or data.get("job_id")
+    if not job_id:
+        return jsonify({"error": "MISSING_JOB_ID"}), 400
+
+    if not print_service.is_job_active_or_done(job_id):
+        job_poller.processing_jobs.add(job_id)
+        import threading
+        threading.Thread(
+            target=job_poller._execute_job_safely,
+            args=(data,),
+            daemon=True
+        ).start()
+        return jsonify({"status": "PRINTING", "job_id": job_id}), 200
+    return jsonify({"status": "ALREADY_ACTIVE", "job_id": job_id}), 200
