@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Linux Services Launcher
+# Autonomous Self-Service Printing Platform - Master Services Launcher
+# Runs the entire project across all ports & pages in a single command:
+#   * Port 8000: FastAPI Central Backend & REST API
+#   * Port 5001: Flask Hardware Print Agent & Physical Station Kiosk Terminal
+#   * Port 3000: Flutter Web Customer Interface
+#   * Port 3100: React Web Customer Interface
 # ==============================================================================
+
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,11 +18,22 @@ if [ "$1" = "--gui" ]; then
     exec "$SCRIPT_DIR/start_gui_terminals.sh"
 fi
 
-echo "========================================================"
-echo " Starting Autonomous Print Hub Services (Linux / Ubuntu) "
-echo "========================================================"
+echo ""
+echo -e "\033[1;36m====================================================================\033[0m"
+echo -e "\033[1;36m       AUTONOMOUS SELF-SERVICE PRINTING PLATFORM (ALL SERVICES)     \033[0m"
+echo -e "\033[1;36m====================================================================\033[0m"
+echo ""
 
-# 1. Determine Python executable
+# 1. Kill any existing instances on all project ports
+echo -e "\033[1;33m[*] Clearing any stale processes on ports 8000, 5001, 5000, 3000, 3100...\033[0m"
+fuser -k 8000/tcp 2>/dev/null || true
+fuser -k 5001/tcp 2>/dev/null || true
+fuser -k 5000/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
+fuser -k 3100/tcp 2>/dev/null || true
+sleep 1
+
+# 2. Determine Python executable
 if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
     PYTHON_EXE="$SCRIPT_DIR/venv/bin/python"
     UVICORN_EXE="$SCRIPT_DIR/venv/bin/uvicorn"
@@ -24,72 +41,84 @@ elif command -v python3 &> /dev/null; then
     PYTHON_EXE="python3"
     UVICORN_EXE="uvicorn"
 else
-    echo "Error: Python 3 not found!"
+    echo -e "\033[1;31mError: Python 3 not found!\033[0m"
     exit 1
 fi
 
-# 2. Determine Flutter executable
+# 3. Determine Flutter executable
 if [ -f "$HOME/flutter/bin/flutter" ]; then
     export PATH="$HOME/flutter/bin:$PATH"
 fi
 
 # Ensure storage directory exists
 mkdir -p "$SCRIPT_DIR/storage"
+mkdir -p "$SCRIPT_DIR/storage/documents/public"
+mkdir -p "$SCRIPT_DIR/storage/printed_outputs"
 
 # Process tracking for clean termination
 PIDS=()
 
 cleanup() {
     echo ""
-    echo "Shutting down all services..."
+    echo -e "\033[1;33m[!] Stopping all Autonomous Print services...\033[0m"
     for pid in "${PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null || true
         fi
     done
+    fuser -k 8000/tcp 2>/dev/null || true
+    fuser -k 5001/tcp 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
+    fuser -k 3100/tcp 2>/dev/null || true
     wait 2>/dev/null || true
-    echo "All services stopped."
+    echo -e "\033[1;32m[✓] All services cleanly stopped.\033[0m"
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# 3. Launch FastAPI Backend
-echo "[1/3] Launching FastAPI Backend on http://127.0.0.1:8000 ..."
+# 4. Launch FastAPI Backend (Port 8000)
+echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://127.0.0.1:8000 ...\033[0m"
 (cd "$SCRIPT_DIR/backend" && "$UVICORN_EXE" app.main:app --host 127.0.0.1 --port 8000 --reload) &
 PIDS+=($!)
 sleep 2
 
-# 4. Launch Print Agent
-echo "[2/3] Launching Print Agent on http://127.0.0.1:5001 ..."
+# 5. Launch Flask Print Agent & Kiosk Terminal (Port 5001)
+echo -e "\033[1;34m[2/4] Starting Flask Print Agent & Kiosk Terminal on http://127.0.0.1:5001 ...\033[0m"
 (cd "$SCRIPT_DIR/print-agent" && "$PYTHON_EXE" app/main.py) &
 PIDS+=($!)
 sleep 2
 
-# 5. Launch Flutter Frontend
-if [ "$1" = "--dev" ] && command -v flutter &> /dev/null; then
-    echo "[3/3] Launching Flutter Web in DEV / Hot-Reload mode on http://127.0.0.1:3000 ..."
-    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 127.0.0.1) &
-    PIDS+=($!)
-elif [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
-    echo "[3/3] Launching Optimized Flutter Web Frontend on http://127.0.0.1:3000 ..."
+# 6. Launch Flutter Web Frontend (Port 3000)
+if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
+    echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://127.0.0.1:3000 ...\033[0m"
     (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 127.0.0.1) &
     PIDS+=($!)
 elif command -v flutter &> /dev/null; then
-    echo "[3/3] Launching Flutter Web Frontend on http://127.0.0.1:3000 ..."
+    echo -e "\033[1;36m[3/4] Starting Flutter Web Server on http://127.0.0.1:3000 ...\033[0m"
     (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 127.0.0.1) &
     PIDS+=($!)
 else
-    echo "[3/3] Flutter frontend not built yet. Kiosk UI is directly available at: http://127.0.0.1:5001/kiosk"
+    echo -e "\033[1;33m[3/4] Flutter build not found. Skipping Port 3000.\033[0m"
+fi
+sleep 1
+
+# 7. Launch React Web Frontend (Port 3100)
+if [ -d "$SCRIPT_DIR/frontend-react" ]; then
+    echo -e "\033[1;35m[4/4] Starting React Web App on http://127.0.0.1:3100 ...\033[0m"
+    (cd "$SCRIPT_DIR/frontend-react" && npm run dev) &
+    PIDS+=($!)
+    sleep 2
 fi
 
 echo ""
-echo "========================================================"
-echo " All services running! Press Ctrl+C to stop all."
-echo "   * Backend Swagger:   http://127.0.0.1:8000/docs"
-echo "   * Kiosk Terminal:    http://127.0.0.1:5001/kiosk"
-echo "   * Print Agent API:   http://127.0.0.1:5001"
-echo "   * Flutter Web App:   http://127.0.0.1:3000"
-echo "   * React Web App:     http://127.0.0.1:3100"
-echo "========================================================"
+echo -e "\033[1;32m====================================================================\033[0m"
+echo -e "\033[1;32m   ✓ ALL PROJECT SERVICES ARE ACTIVE AND RUNNING!                  \033[0m"
+echo -e "\033[1;32m====================================================================\033[0m"
+echo -e "   \033[1m1. Customer React Web App:\033[0m     \033[1;35mhttp://127.0.0.1:3100\033[0m"
+echo -e "   \033[1m2. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m"
+echo -e "   \033[1m3. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
+echo -e "   \033[1m4. FastAPI Swagger Docs:\033[0m       \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
+echo -e "\033[1;32m====================================================================\033[0m"
+echo -e "   \033[2mPress Ctrl+C at any time to cleanly stop all running services.\033[0m"
 echo ""
 
 # Keep running and wait on all child processes
