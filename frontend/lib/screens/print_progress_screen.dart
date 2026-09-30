@@ -32,7 +32,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Timer? _pollTimer;
 
   String? _errorMessage;
-  String _statusMessage = 'Connecting to local printer kiosk...';
+  String _statusMessage = 'Connecting to local printer station...';
   int _progressPercent = 10;
   bool _isCompleted = false;
 
@@ -57,7 +57,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Future<void> _triggerRelease() async {
     setState(() {
       _errorMessage = null;
-      _statusMessage = 'Sending 6-digit OTP to printer kiosk...';
+      _statusMessage = 'Sending 6-digit OTP to printer station...';
       _progressPercent = 25;
     });
 
@@ -87,7 +87,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'Job released at printer kiosk. Printing your document...';
+        _statusMessage = 'Job released at printer station. Printing your document...';
         _progressPercent = 65;
       });
       _startStatusPolling();
@@ -152,7 +152,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -216,7 +216,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                               ),
                               const SizedBox(height: 20),
                               const Text(
-                                'Kiosk Release Notice',
+                                'Station Release Notice',
                                 style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
@@ -248,7 +248,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                   decoration: BoxDecoration(
                                     color: AppTheme.primarySurface,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+                                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), width: 2),
                                   ),
                                   child: const Icon(
                                     Icons.print_rounded,
@@ -274,7 +274,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                   value: _progressPercent / 100.0,
                                   minHeight: 10,
                                   backgroundColor: AppTheme.surfaceSubtle,
-                                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -283,7 +283,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
-                                  color: AppTheme.accent,
+                                  color: AppTheme.primary,
                                 ),
                               ),
                             ],
@@ -308,7 +308,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                             const Divider(height: 20),
                             _buildRow('Release OTP', widget.otp),
                             const Divider(height: 20),
-                            _buildRow('CUPS Station ID', widget.printServerId),
+                            _buildRow('Station ID', widget.printServerId),
                           ],
                         ),
                       ),
@@ -318,11 +318,12 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                       TextButton.icon(
                         onPressed: () => KioskLauncher.openKioskScreen(widget.otp),
                         icon: const Icon(Icons.desktop_windows_rounded, size: 18),
-                        label: const Text('Open Touchscreen Kiosk Monitor'),
+                        label: const Text('Open Touchscreen Station Monitor'),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.primary,
                         ),
                       ),
+
 
                       const SizedBox(height: 20),
 

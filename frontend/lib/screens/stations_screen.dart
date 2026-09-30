@@ -80,8 +80,8 @@ class _StationsScreenState extends State<StationsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Enter the station or kiosk identifier (or scan QR code from the printer station).',
-              style: TextStyle(fontSize: 13, color: Colors.white70),
+              'Enter the print station identifier (or scan QR code from the printer station).',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -141,11 +141,7 @@ class _StationsScreenState extends State<StationsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -206,11 +202,11 @@ class _StationsScreenState extends State<StationsScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Available Printing Kiosks',
+              'Available Printing Stations',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -237,7 +233,7 @@ class _StationsScreenState extends State<StationsScreen> {
                     Text(
                       _errorMessage!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
@@ -253,25 +249,26 @@ class _StationsScreenState extends State<StationsScreen> {
                 margin: const EdgeInsets.symmetric(vertical: 20),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceDark,
+                  color: AppTheme.primarySurface,
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.print_disabled_rounded, size: 48, color: Colors.white38),
+                    Icon(Icons.print_disabled_rounded, size: 48, color: AppTheme.primary.withValues(alpha: 0.4)),
                     const SizedBox(height: 12),
                     const Text(
                       'No Print Stations Found',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     const SizedBox(height: 6),
                     const Text(
                       'Ensure the FastAPI backend and print-agent are started.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Colors.white60),
+                      style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                     ),
                     const SizedBox(height: 16),
-                    OutlinedButton(
+                    ElevatedButton(
                       onPressed: _loadServers,
                       child: const Text('Check Again'),
                     ),

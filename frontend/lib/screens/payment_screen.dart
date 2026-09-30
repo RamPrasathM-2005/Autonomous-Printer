@@ -169,7 +169,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const WorkflowStepper(currentStep: 3),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -199,7 +199,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         decoration: BoxDecoration(
                           color: AppTheme.successSurface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+                          border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
                         ),
                         child: const Row(
                           children: [
@@ -396,7 +396,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           decoration: BoxDecoration(
                             color: AppTheme.dangerSurface,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+                            border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
                           ),
                           child: Text(
                             _paymentError!,
@@ -418,7 +418,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               color: AppTheme.surfaceWhite,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 16,
                   offset: const Offset(0, -4),
                 ),
@@ -441,7 +441,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           elevation: 0,
-                          shadowColor: AppTheme.primary.withOpacity(0.4),
+                          shadowColor: AppTheme.primary.withValues(alpha: 0.4),
                         ),
                         child: _isVerifying
                             ? const Row(

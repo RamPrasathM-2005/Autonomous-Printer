@@ -184,14 +184,14 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           const WorkflowStepper(currentStep: 4),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Column(
                     children: [
                       const Text(
-                        'Your Kiosk Release Code',
+                        'Your Station Release Code',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -201,7 +201,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Enter this code on the kiosk touchscreen or click Auto Release below.',
+                        'Enter this code on the station touchscreen or click Auto Release below.',
                         style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                         textAlign: TextAlign.center,
                       ),
@@ -229,7 +229,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceWhite,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+                          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3), width: 2),
                           boxShadow: AppTheme.cardShadow,
                         ),
                         child: Column(
@@ -245,35 +245,46 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                             ),
                             const SizedBox(height: 16),
                             _isLoading
-                                ? const SizedBox(
+                                 ? const SizedBox(
                                     height: 50,
                                     child: Center(child: CircularProgressIndicator()),
                                   )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: List.generate(6, (i) {
-                                      final digit = i < otpStr.length ? otpStr[i] : '-';
-                                      return Container(
-                                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                                        width: 44,
-                                        height: 54,
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primarySurface,
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: AppTheme.primary, width: 1.5),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            digit,
-                                            style: const TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.w900,
-                                              color: AppTheme.primary,
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      // Each digit: box + margin. Fit 6 within available width.
+                                      final available = constraints.maxWidth;
+                                      final isCompact = available < 300;
+                                      final digitW = isCompact ? 36.0 : 44.0;
+                                      final digitH = isCompact ? 46.0 : 54.0;
+                                      final digitFontSize = isCompact ? 20.0 : 24.0;
+                                      final margin = isCompact ? 3.0 : 4.0;
+                                      return Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: List.generate(6, (i) {
+                                          final digit = i < otpStr.length ? otpStr[i] : '-';
+                                          return Container(
+                                            margin: EdgeInsets.symmetric(horizontal: margin),
+                                            width: digitW,
+                                            height: digitH,
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primarySurface,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: AppTheme.primary, width: 1.5),
                                             ),
-                                          ),
-                                        ),
+                                            child: Center(
+                                              child: Text(
+                                                digit,
+                                                style: TextStyle(
+                                                  fontSize: digitFontSize,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: AppTheme.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }),
                                       );
-                                    }),
+                                    },
                                   ),
                             const SizedBox(height: 20),
 
@@ -295,7 +306,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                                   decoration: BoxDecoration(
                                     color: AppTheme.warningSurface,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+                                    border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
                                   ),
                                   child: Row(
                                     children: [
@@ -343,7 +354,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                             const SizedBox(height: 14),
                             _buildInstructionStep(
                               step: '1',
-                              title: 'Walk to the Kiosk Terminal',
+                              title: 'Walk to the Print Station',
                               subtitle: 'Locate your selected station touchscreen/keypad.',
                             ),
                             const SizedBox(height: 12),
@@ -375,7 +386,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               color: AppTheme.surfaceWhite,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 16,
                   offset: const Offset(0, -4),
                 ),
@@ -427,7 +438,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           decoration: BoxDecoration(
             color: AppTheme.primarySurface,
             shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+            border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
           ),
           child: Center(
             child: Text(

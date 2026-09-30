@@ -13,48 +13,33 @@ from app.config.settings import settings
 from app.db.models.document import Document, DocumentStatus
 from app.utils.errors import AppException
 from app.utils.crypto import compute_file_sha256
-from app.utils.file_security import validate_file_content, generate_safe_filename
+from app.utils.file_security import (
+    validate_file_content,
+    generate_safe_filename,
+    scan_for_malicious_content,
+    verify_pdf_security_and_printability,
+    verify_image_security_and_printability,
+)
 from app.services.storage_service import storage_service
 
 class DocumentService:
     @staticmethod
     def inspect_and_count_pages(file_path: Path, mime_type: str) -> int:
+        # 1. First run general binary & script malware scanning
+        scan_for_malicious_content(file_path)
+
+        # 2. Run format-specific deep security & printability verification
         if mime_type == "application/pdf":
-            try:
-                reader = PdfReader(str(file_path))
-                page_count = len(reader.pages)
-                if page_count < 1:
-                    raise AppException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        error_code="INVALID_FILE",
-                        message="PDF contains no pages."
-                    )
-                return page_count
-            except Exception as e:
-                if isinstance(e, AppException):
-                    raise e
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_FILE",
-                    message="Failed to parse corrupted PDF."
-                )
+            return verify_pdf_security_and_printability(file_path)
         elif mime_type in ["image/jpeg", "image/png"]:
-            try:
-                with Image.open(str(file_path)) as img:
-                    img.verify()
-                return 1
-            except Exception:
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_FILE",
-                    message="Failed to parse corrupted image file."
-                )
+            return verify_image_security_and_printability(file_path)
         else:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="UNSUPPORTED_TYPE",
                 message=f"Unsupported file format: {mime_type}"
             )
+
 
     @classmethod
     async def process_and_save_upload(

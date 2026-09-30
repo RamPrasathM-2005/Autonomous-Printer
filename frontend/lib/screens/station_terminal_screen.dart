@@ -99,13 +99,13 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kiosk Station Terminal'),
+        title: const Text('Print Station Terminal'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           children: [
-            // Kiosk Monitor Header
+            // Station Monitor Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -126,7 +126,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'PRINTER KIOSK: ${_stationStatus?['printer_name'] ?? 'Ubuntu Local CUPS'}',
+                      'PRINT STATION: ${_stationStatus?['printer_name'] ?? 'Ubuntu Local CUPS'}',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
                     ),
                   ),
