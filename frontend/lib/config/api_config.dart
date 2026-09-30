@@ -6,11 +6,9 @@ class ApiConfig {
   static const String _keyAgentUrl = 'agent_base_url';
   static const String _keySelectedStationId = 'selected_station_id';
 
-  // Smart defaults: 127.0.0.1 for Web and Desktop, 10.0.2.2 for Android emulator
-  static String get defaultBackendUrl =>
-      kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000';
-  static String get defaultAgentUrl =>
-      kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
+  // Smart defaults: 127.0.0.1 works on Web, Desktop, and Physical Mobile (via adb reverse)
+  static String get defaultBackendUrl => 'http://127.0.0.1:8000';
+  static String get defaultAgentUrl => 'http://127.0.0.1:5000';
 
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
@@ -22,12 +20,12 @@ class ApiConfig {
     String? storedBackend = prefs.getString(_keyBackendUrl);
     String? storedAgent = prefs.getString(_keyAgentUrl);
 
-    // On Web, if stored URL is the Android emulator loopback 10.0.2.2, auto-correct to localhost
-    if (kIsWeb && (storedBackend == null || storedBackend.contains('10.0.2.2'))) {
+    // Auto-correct any leftover emulator loopback 10.0.2.2 to 127.0.0.1
+    if (storedBackend != null && storedBackend.contains('10.0.2.2')) {
       storedBackend = 'http://127.0.0.1:8000';
       await prefs.setString(_keyBackendUrl, storedBackend);
     }
-    if (kIsWeb && (storedAgent == null || storedAgent.contains('10.0.2.2'))) {
+    if (storedAgent != null && storedAgent.contains('10.0.2.2')) {
       storedAgent = 'http://127.0.0.1:5000';
       await prefs.setString(_keyAgentUrl, storedAgent);
     }
