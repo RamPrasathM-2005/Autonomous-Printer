@@ -167,7 +167,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 3),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
