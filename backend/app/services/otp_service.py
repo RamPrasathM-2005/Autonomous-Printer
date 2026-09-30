@@ -11,6 +11,7 @@ from app.db.models.document import Document, DocumentStatus
 from app.utils.crypto import generate_secure_otp, encrypt_value, decrypt_value, compute_file_sha256
 from app.services.storage_service import storage_service
 from app.utils.common import now, naive, fail, audit
+from app.services.print_authorization import require_print_authorization
 
 def otp_digest(code, station):
     if not settings.OTP_HASH_KEY:
@@ -64,8 +65,7 @@ class OTPService:
         if (not record.active or record.used_at or naive(record.expires_at) <= now() or
                 order.status != OrderStatus.WAITING_FOR_OTP or job.status != PrintJobStatus.QUEUED):
             fail('INVALID_OTP', 'Invalid, expired or already used release code.')
-        if not payment or payment.status != PaymentStatus.CAPTURED or not payment.verified_at or payment.last_error:
-            fail('PAYMENT_REQUIRED', 'A verified captured payment is required.', 409)
+        require_print_authorization(order, payment)
         doc = db.query(Document).filter_by(id=order.document_id).one()
         path = storage_service.resolve_storage_key(doc.storage_key)
         if (doc.status != DocumentStatus.ACTIVE or not path.is_file() or

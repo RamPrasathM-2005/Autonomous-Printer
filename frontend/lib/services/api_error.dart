@@ -27,7 +27,10 @@ class ApiError implements Exception {
     'VALIDATION_ERROR' => 'Check your entries and try again.',
     'INVALID_OTP' ||
     'RELEASE_FAILED' => 'Code invalid, expired or already used.',
-    'OTP_EXPIRED' => 'Code expired. Refund pending.',
+    'OTP_EXPIRED' => 'Code expired. Check your order status.',
+    'TEST_PRINT_DISABLED' => 'Test printing is unavailable.',
+    'PAYMENT_ALREADY_STARTED' =>
+      'Payment already started. Use a new order for a test print.',
     'OTP_NOT_AVAILABLE' ||
     'OTP_ALREADY_ISSUED' => 'Release code unavailable. Check your order.',
     'OTP_UNAVAILABLE' => 'Unable to load the release code. Try again.',

@@ -18,7 +18,8 @@ class Config:
     HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "15"))
 
     CUPS_SERVER: str = os.getenv("CUPS_SERVER", "localhost")
-    PRINTER_NAME: str = os.getenv("PRINTER_NAME", "Default_Office_Printer")
+    PRINTER_NAME: str = os.getenv("PRINTER_NAME", "HP_LaserJet_400_M401dn_E9A0F4")
+    PORT: int = int(os.getenv("PORT", "5000"))
     MOCK_CUPS: bool = os.getenv("MOCK_CUPS", "false").lower() in ("true", "1", "yes")
 
 config = Config()

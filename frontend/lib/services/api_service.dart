@@ -214,6 +214,22 @@ class ApiService {
 
   Future<PaymentInitiateResponse> createPaymentOrder(String id) =>
       createPayment(id);
+  Future<Map<String, dynamic>> paymentCapabilities() async =>
+      Map<String, dynamic>.from(
+        _decode(
+          await http
+              .get(
+                Uri.parse('$_baseUrl/api/payments/capabilities'),
+                headers: await _headers(),
+              )
+              .timeout(const Duration(seconds: 10)),
+        ),
+      );
+
+  Future<void> authorizeTestPrint(String id) async {
+    await _post('/api/orders/$id/test-print', {});
+  }
+
   Future<PaymentInitiateResponse> createPayment(String id) async =>
       PaymentInitiateResponse.fromJson(
         await _post('/api/payments/create', {'orderId': id}),

@@ -6,6 +6,7 @@ class PrintSettings {
   final String paperSize; // A4, Letter, Legal
   final String orientation; // portrait, landscape
   final bool mockPrinting;
+  final bool unpaidTestPrint;
 
   PrintSettings({
     this.pageRange = 'all',
@@ -15,6 +16,7 @@ class PrintSettings {
     this.paperSize = 'A4',
     this.orientation = 'portrait',
     this.mockPrinting = false,
+    this.unpaidTestPrint = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +37,7 @@ class PrintSettings {
       paperSize: json['paperSize'] ?? json['paper_size'] ?? 'A4',
       orientation: json['orientation'] ?? 'portrait',
       mockPrinting: json['mockPrinting'] == true,
+      unpaidTestPrint: json['unpaidTestPrint'] == true,
     );
   }
 }

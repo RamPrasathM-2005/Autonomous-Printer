@@ -27,21 +27,28 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _api = ApiService();
   PaymentInitiateResponse? _payment;
   bool _busy = false;
+  bool _testPrintAvailable = false;
+  bool _testPaymentMode = false;
   String? _message;
   @override
   void initState() {
     super.initState();
-    _initiate();
+    _loadCapabilities();
   }
 
-  Future<void> _initiate() async {
+  Future<void> _loadCapabilities() async {
     setState(() {
       _busy = true;
       _message = null;
     });
     try {
-      final payment = await _api.createPaymentOrder(widget.order.id);
-      if (mounted) setState(() => _payment = payment);
+      final capabilities = await _api.paymentCapabilities();
+      if (mounted) {
+        setState(() {
+          _testPrintAvailable = capabilities['unpaidTestPrinting'] == true;
+          _testPaymentMode = capabilities['paymentMode'] == 'test';
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(
@@ -74,13 +81,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _pay() async {
-    final payment = _payment;
-    if (payment == null) return;
+    if (_busy) return;
     setState(() {
       _busy = true;
       _message = null;
     });
     try {
+      final payment =
+          _payment ?? await _api.createPaymentOrder(widget.order.id);
+      _payment = payment;
+      if (!mounted) return;
       final result = await RazorpayWebService.openCheckout(
         keyId: payment.keyId,
         orderId: payment.razorpayOrderId,
@@ -137,6 +147,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  Future<void> _testPrint() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await _api.authorizeTestPrint(widget.order.id);
+      await _showConfirmedOrder();
+    } catch (e) {
+      if (mounted) setState(() => _message = userError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Payment')),
@@ -156,7 +182,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               '${widget.order.currency} ${widget.order.amount.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 28),
             ),
-            if (_payment?.keyId.startsWith('rzp_test_') == true)
+            if (_testPaymentMode)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text('Test mode - No charge'),
@@ -170,17 +196,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
             if (_busy) const Center(child: CircularProgressIndicator()),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _busy || _payment == null ? null : _pay,
+              onPressed: _busy ? null : _pay,
               child: const Text('Pay with Razorpay'),
             ),
             TextButton(
               onPressed: _busy ? null : _check,
               child: const Text('Check payment status'),
             ),
-            if (_payment == null)
-              TextButton(
-                onPressed: _busy ? null : _initiate,
-                child: const Text('Retry checkout'),
+            if (_testPrintAvailable)
+              OutlinedButton(
+                onPressed: _busy ? null : _testPrint,
+                child: const Text('Test print - No payment'),
               ),
           ],
         ),

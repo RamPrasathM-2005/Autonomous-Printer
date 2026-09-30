@@ -93,8 +93,8 @@ def run_once():
             if order.status == OrderStatus.WAITING_FOR_OTP and otp.active and naive(otp.expires_at) < now():
                 otp.active = False
                 order.status = OrderStatus.EXPIRED
-                payment = db.query(Payment).filter_by(order_id=order_id).one()
-                if payment.verified_at and payment.status == PaymentStatus.CAPTURED:
+                payment = db.query(Payment).filter_by(order_id=order_id).first()
+                if payment and payment.verified_at and payment.status == PaymentStatus.CAPTURED:
                     refund_service.enqueue(db, order, payment, 'Release code expired before printing')
             db.commit()
         refund_ids = [r.id for r in db.query(Refund).filter(Refund.status.in_(

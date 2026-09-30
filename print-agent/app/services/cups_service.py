@@ -69,14 +69,51 @@ class CupsService:
 
         # Duplex / Sides
         sides = settings.get("sides", "one-sided")
-        if sides in ["two-sided-long-edge", "two-sided-short-edge"]:
-            options["sides"] = sides
+        if sides in ["two-sided-long-edge", "two-sided-short-edge", "duplex"]:
+            options["sides"] = "two-sided-long-edge" if sides in ["two-sided-long-edge", "duplex"] else "two-sided-short-edge"
+            options["Duplex"] = "DuplexNoTumble" if sides in ["two-sided-long-edge", "duplex"] else "DuplexTumble"
         else:
             options["sides"] = "one-sided"
+            options["Duplex"] = "None"
 
-        # Media / Paper Size
-        paper_size = settings.get("paperSize") or settings.get("paper_size", "A4")
+        # Media / Paper Size (A4, A5, A6, Letter, Legal, Executive)
+        raw_paper = str(settings.get("paperSize") or settings.get("paper_size", "A4")).strip()
+        paper_map = {
+            "a4": "A4",
+            "a5": "A5",
+            "a6": "A6",
+            "letter": "Letter",
+            "legal": "Legal",
+            "executive": "Executive"
+        }
+        paper_size = paper_map.get(raw_paper.lower(), raw_paper)
         options["media"] = paper_size
+        options["PageSize"] = paper_size
+
+        # Tray / InputSlot (Tray 1, Tray 2, Tray 3)
+        tray = settings.get("tray") or settings.get("inputSlot") or settings.get("input_slot") or settings.get("paper_source")
+        if tray:
+            tray_str = str(tray).strip().lower()
+            if "1" in tray_str:
+                options["InputSlot"] = "Tray1"
+            elif "2" in tray_str:
+                options["InputSlot"] = "Tray2"
+            elif "3" in tray_str:
+                options["InputSlot"] = "Tray3"
+
+        # Print Resolution / Quality (FastRes1200, 600dpi, ProRes1200)
+        res = settings.get("resolution") or settings.get("printQuality") or settings.get("print_quality")
+        if res:
+            res_str = str(res).strip().lower()
+            if "prores" in res_str or "1200x1200" in res_str:
+                options["Resolution"] = "1200x1200dpi"
+                options["HPResolution"] = "ProRes1200"
+            elif "fastres" in res_str:
+                options["Resolution"] = "600x600dpi"
+                options["HPResolution"] = "FastRes1200"
+            elif "600" in res_str:
+                options["Resolution"] = "600x600dpi"
+                options["HPResolution"] = "600dpi"
 
         # Orientation
         orientation = settings.get("orientation", "portrait").lower()

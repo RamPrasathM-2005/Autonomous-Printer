@@ -8,6 +8,7 @@ from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.db.models.document import Document, DocumentStatus
 from app.services.refund_service import refund_service
 from app.utils.common import now, fail, audit
+from app.services.print_authorization import require_print_authorization, is_unpaid_test
 
 class JobService:
     def get_pending_jobs_for_server(self, db, server_id):
@@ -22,8 +23,7 @@ class JobService:
         payment = db.query(Payment).filter_by(order_id=order.id).with_for_update().populate_existing().first()
         if job.status != PrintJobStatus.RELEASED or order.status != OrderStatus.RELEASED or job.claim_token_hash:
             fail('JOB_ALREADY_CLAIMED', 'Job is no longer available for submission.', 409)
-        if not payment or payment.status != PaymentStatus.CAPTURED or not payment.verified_at or payment.last_error:
-            fail('PAYMENT_REQUIRED', 'A verified, unrefunded payment is required.', 409)
+        require_print_authorization(order, payment)
         doc = db.query(Document).filter_by(id=order.document_id).one()
         token = secrets.token_urlsafe(32)
         job.claim_token_hash = hash_token(token)
@@ -35,7 +35,7 @@ class JobService:
         return {'jobId': job.id, 'orderId': order.id, 'claimToken': token,
             'storageKey': doc.storage_key, 'sha256': doc.sha256, 'fileSize': doc.file_size,
             'settings': order.print_settings, 'allowMock': settings.ALLOW_MOCK_PRINTING and
-                bool(payment.gateway_key_id and payment.gateway_key_id.startswith('rzp_test_'))}
+                (is_unpaid_test(order) or bool(payment and payment.gateway_key_id and payment.gateway_key_id.startswith('rzp_test_')))}
 
     def update_job_status(self, db, server_id, job_id, update):
         snapshot = db.query(PrintJob).filter_by(id=job_id, server_id=server_id).first()
@@ -73,8 +73,9 @@ class JobService:
             # Only definitely pre-submission failures are safe to refund automatically.
             # Unknown submission/partial output requires operator review, never blind retry.
             if update.errorCode in ('FILE_INTEGRITY', 'PRINTER_UNAVAILABLE', 'MOCK_FORBIDDEN') and not job.cups_job_id:
-                payment = db.query(Payment).filter_by(order_id=order.id).one()
-                refund_service.enqueue(db, order, payment, 'Print could not be submitted')
+                payment = db.query(Payment).filter_by(order_id=order.id).first()
+                if payment and not is_unpaid_test(order):
+                    refund_service.enqueue(db, order, payment, 'Print could not be submitted')
         db.commit()
         return job
 

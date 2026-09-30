@@ -175,6 +175,8 @@ class PaymentService:
                 # Fetch independently rather than trusting a callback's entity.
                 full = gateway.fetch_payment(remote['id'])
                 return self.accept_capture(db, order_id, full, remote_order)
+        if payment.last_error in ('GATEWAY_UNAVAILABLE', 'ConnectionError', 'Timeout'):
+            payment.last_error = None
         payment.reconciled_at = now()
         db.commit()
         return {'success': False, 'orderId': order.id, 'status': order.status.value}

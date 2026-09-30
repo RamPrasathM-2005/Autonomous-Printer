@@ -18,7 +18,7 @@ window.openRazorpayModal = async function(key, order, amount, success, failure) 
   try {
     await loadCheckout();
     const checkout = new window.Razorpay({key, order_id:order, amount, currency:'INR',
-      name:'QwikPrint', description:'Document printing',
+      name:'Autonomous Printer', description:'Print order', theme:{color:'#2563EB'},
       handler: response => success(response.razorpay_payment_id || '', response.razorpay_order_id || '', response.razorpay_signature || ''),
       modal:{ondismiss:() => failure('DISMISSED')}});
     checkout.on('payment.failed', () => failure('Payment failed. Check status before retrying.'));

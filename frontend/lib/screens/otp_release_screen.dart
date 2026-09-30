@@ -195,7 +195,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -222,6 +222,11 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         ),
                       ],
 
+                      if (_order?.printSettings.unpaidTestPrint == true)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 16),
+                          child: Text('Test print - No payment'),
+                        ),
                       const SizedBox(height: 24),
 
                       // Large OTP Digits Display Card
@@ -258,45 +263,60 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                                       child: CircularProgressIndicator(),
                                     ),
                                   )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: List.generate(6, (i) {
-                                      final digit = i < otpStr.length
-                                          ? otpStr[i]
-                                          : '-';
-                                      return Container(
-                                        margin: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                        ),
-                                        width: 44,
-                                        height: 54,
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primarySurface,
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          border: Border.all(
-                                            color: AppTheme.primary,
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            digit,
-                                            style: const TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.w900,
-                                              color: AppTheme.primary,
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final width =
+                                          ((constraints.maxWidth - 36) / 6)
+                                              .clamp(20.0, 44.0);
+                                      return Semantics(
+                                        label: 'Release code: $otpStr',
+                                        excludeSemantics: true,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: List.generate(
+                                            6,
+                                            (i) => Container(
+                                              margin:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 3,
+                                                  ),
+                                              width: width,
+                                              height: width + 12,
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.primarySurface,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: AppTheme.primary,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  i < otpStr.length
+                                                      ? otpStr[i]
+                                                      : '-',
+                                                  style: TextStyle(
+                                                    fontSize: width * 0.55,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: AppTheme.primary,
+                                                  ),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       );
-                                    }),
+                                    },
                                   ),
                             const SizedBox(height: 20),
 
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 12,
+                              runSpacing: 12,
                               children: [
                                 OutlinedButton.icon(
                                   onPressed: _otpData == null
@@ -317,7 +337,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
@@ -333,6 +352,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                                     ),
                                   ),
                                   child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const Icon(
                                         Icons.timer_outlined,

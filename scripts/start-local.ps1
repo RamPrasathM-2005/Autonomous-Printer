@@ -58,10 +58,17 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl) {
 
 Start-LocalService 'backend' (Join-Path $projectRoot 'backend') '-u -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers' 8000 'http://127.0.0.1:8000/health'
 Start-LocalService 'reconciliation' (Join-Path $projectRoot 'backend') '-u -m app.worker' 0 $null
-Start-LocalService 'agent' (Join-Path $projectRoot 'print-agent') '-u -m app.main' 5000 'http://127.0.0.1:5000/health'
+Push-Location (Join-Path $projectRoot 'print-agent')
+try {
+    $agentPort = & $python -c 'from app.config import config; print(config.PORT)'
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to read the print-agent port.' }
+    $agentPort = [int]$agentPort
+} finally { Pop-Location }
+Start-LocalService 'agent' (Join-Path $projectRoot 'print-agent') '-u -m app.main' $agentPort "http://127.0.0.1:$agentPort/health"
 Start-LocalService 'frontend' $projectRoot '-u scripts/serve_frontend.py' 3000 'http://127.0.0.1:3000/'
 Write-Host "`nApp: http://127.0.0.1:3000/"
 Write-Host 'API docs: http://127.0.0.1:8000/docs'
 Write-Host 'Printing progress is shown inside the authenticated frontend.'
+Write-Host "Station keypad: http://127.0.0.1:$agentPort/kiosk"
 Write-Host 'Logs: .runtime | Stop: stop_all.bat | Rebuild frontend: start_all.bat -Build'
 if (-not $NoBrowser) { Start-Process 'http://127.0.0.1:3000/' }

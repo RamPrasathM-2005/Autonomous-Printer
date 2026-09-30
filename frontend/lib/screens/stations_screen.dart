@@ -143,11 +143,7 @@ class _StationsScreenState extends State<StationsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -215,11 +211,11 @@ class _StationsScreenState extends State<StationsScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Available Printing Kiosks',
+              'Available stations',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -252,7 +248,7 @@ class _StationsScreenState extends State<StationsScreen> {
                     Text(
                       _errorMessage!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppTheme.danger),
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
@@ -268,7 +264,7 @@ class _StationsScreenState extends State<StationsScreen> {
                 margin: const EdgeInsets.symmetric(vertical: 20),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceDark,
+                  color: AppTheme.primarySurface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -276,7 +272,7 @@ class _StationsScreenState extends State<StationsScreen> {
                     const Icon(
                       Icons.print_disabled_rounded,
                       size: 48,
-                      color: Colors.white38,
+                      color: AppTheme.textSecondary,
                     ),
                     const SizedBox(height: 12),
                     const Text(

@@ -183,7 +183,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -288,9 +288,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Interactive 3D Smart Printer & Document Visualizer (Reference Image 2)
-                      const SizedBox(height: 20),
-
                       // Segment 1: Color Mode Selector (Color or Grayscale)
                       _buildSectionContainer(
                         title: 'Color',
@@ -301,7 +298,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 label: 'Color',
                                 icon: Icons.color_lens_rounded,
                                 isSelected: _currentConfig.isColor,
-                                accentColor: const Color(0xFF6366F1),
+                                accentColor: AppTheme.primary,
                                 onTap: () => _updateActiveSetting(
                                   () => _currentConfig.isColor = true,
                                 ),
@@ -310,7 +307,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildSegmentPill(
-                                label: 'Black & white',
+                                label: 'B&W',
                                 icon: Icons.tonality_rounded,
                                 isSelected: !_currentConfig.isColor,
                                 accentColor: const Color(0xFF475569),
@@ -599,70 +596,67 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                const Flexible(
-                                  child: Text(
-                                    'Estimated total',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final summary = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              const Flexible(
+                                child: Text(
+                                  'Estimated total',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (_configs.length > 1) ...[
+                                const SizedBox(width: 4),
+                                InkWell(
+                                  onTap: () => setState(
+                                    () => _showCostBreakdown =
+                                        !_showCostBreakdown,
+                                  ),
+                                  child: Icon(
+                                    _showCostBreakdown
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    size: 18,
+                                    color: AppTheme.primary,
                                   ),
                                 ),
-                                if (_configs.length > 1) ...[
-                                  const SizedBox(width: 4),
-                                  InkWell(
-                                    onTap: () => setState(
-                                      () => _showCostBreakdown =
-                                          !_showCostBreakdown,
-                                    ),
-                                    child: Icon(
-                                      _showCostBreakdown
-                                          ? Icons.expand_less
-                                          : Icons.expand_more,
-                                      size: 18,
-                                      color: AppTheme.primary,
-                                    ),
-                                  ),
-                                ],
                               ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.primary,
+                              letterSpacing: -0.5,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primary,
-                                letterSpacing: -0.5,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '$_totalCalculatedPages ${_totalCalculatedPages == 1 ? 'page' : 'pages'} / ${_configs.length} ${_configs.length == 1 ? 'file' : 'files'}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
                             ),
-                            Text(
-                              '$_totalCalculatedPages ${_totalCalculatedPages == 1 ? 'page' : 'pages'} / ${_configs.length} ${_configs.length == 1 ? 'file' : 'files'}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                      final action = ElevatedButton(
                         onPressed: _isValidating ? null : _submitOrder,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
@@ -710,8 +704,25 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                   ),
                                 ],
                               ),
-                      ),
-                    ],
+                      );
+                      if (constraints.maxWidth < 560) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            summary,
+                            const SizedBox(height: 12),
+                            SizedBox(width: double.infinity, child: action),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: summary),
+                          const SizedBox(width: 12),
+                          action,
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),

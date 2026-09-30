@@ -13,11 +13,18 @@ class ApiConfig {
     if (kIsWeb && !['localhost', '127.0.0.1'].contains(Uri.base.host)) {
       return Uri.base.origin;
     }
-    return kIsWeb ? 'http://127.0.0.1:8000' : 'http://10.0.2.2:8000';
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+        ? 'http://10.0.2.2:8000'
+        : 'http://127.0.0.1:8000';
   }
 
-  static String get defaultAgentUrl =>
-      kIsWeb ? 'http://127.0.0.1:5000' : 'http://10.0.2.2:5000';
+  static String get defaultAgentUrl {
+    const configured = String.fromEnvironment('AGENT_BASE_URL');
+    if (configured.isNotEmpty) return configured;
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+        ? 'http://10.0.2.2:5000'
+        : 'http://127.0.0.1:5000';
+  }
 
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
@@ -36,7 +43,7 @@ class ApiConfig {
       await prefs.setString(_keyBackendUrl, storedBackend);
     }
     if (kIsWeb && (storedAgent == null || storedAgent.contains('10.0.2.2'))) {
-      storedAgent = 'http://127.0.0.1:5000';
+      storedAgent = defaultAgentUrl;
       await prefs.setString(_keyAgentUrl, storedAgent);
     }
 

@@ -6,6 +6,13 @@ from app.services.access_service import current_session, owned_order, rate_limit
 
 router = APIRouter(prefix='/api/payments', tags=['Payments'])
 
+@router.get('/capabilities')
+def payment_capabilities(session=Depends(current_session)):
+    from app.services.print_authorization import unpaid_test_enabled
+    from app.config.settings import settings
+    return {'unpaidTestPrinting': unpaid_test_enabled(),
+            'paymentMode': 'test' if settings.RAZORPAY_KEY_ID.startswith('rzp_test_') else 'live'}
+
 @router.post('/create', response_model=PaymentCreateResponse, status_code=201)
 def create_payment(req: PaymentCreateRequest, session=Depends(current_session), db=Depends(get_db)):
     owned_order(db, req.orderId, session)

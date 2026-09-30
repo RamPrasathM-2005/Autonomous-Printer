@@ -49,7 +49,7 @@ def test_hash_and_size_required(tmp_path):
     assert service.resolve_and_verify_file('file.pdf',hashlib.sha256(b'test').hexdigest(),4)==path
 
 def test_local_release_only_queues_job(agent_client):
-    with patch('app.routes.local.backend_client.release_job',return_value={'jobId':'job_1','status':'RELEASED'}), patch.object(print_service,'execute_print_job') as submit:
+    with patch('app.routes.local.printer_monitor.get_printer_status',return_value=('READY','AVAILABLE')), patch('app.routes.local.backend_client.release_job',return_value={'jobId':'job_1','status':'RELEASED'}), patch.object(print_service,'execute_print_job') as submit:
         assert agent_client.post('/local/release',json={'otp':'123456'}).status_code==200
         submit.assert_not_called()
 

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Print station</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='kiosk.css') }}">
+  <script src="{{ url_for('static', filename='kiosk.js') }}" defer></script>
+</head>
+<body>
+  <main>
+    <header><h1>Print station</h1><span id="station-status" role="status">Connecting...</span></header>
+    <p class="station">{{ agent_id }}</p>
+    {% if mock_printing %}<p class="test-notice">Test mode &middot; No paper printed</p>{% endif %}
+    <form id="release-form">
+      <label for="release-code">Release code</label>
+      <input id="release-code" name="otp" type="password" inputmode="numeric"
+        pattern="[0-9]{6}" maxlength="6" autocomplete="off" required aria-describedby="result">
+      <div class="keypad" aria-label="Release code keypad">
+        {% for digit in ['1', '2', '3', '4', '5', '6', '7', '8', '9'] %}
+        <button type="button" data-digit="{{ digit }}">{{ digit }}</button>
+        {% endfor %}
+        <button type="button" id="clear">Clear</button>
+        <button type="button" data-digit="0">0</button>
+        <button type="button" id="backspace" aria-label="Delete last digit">Delete</button>
+      </div>
+      <button type="submit" id="release" disabled>Release print</button>
+    </form>
+    <p id="result" role="status" aria-live="polite"></p>
+  </main>
+</body>
+</html>

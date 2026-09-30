@@ -18,7 +18,6 @@ class SelectedDocItem {
   final String name;
   final int size;
   final List<int> bytes;
-  double progress; // 0.0 to 1.0
   bool isCompleted;
   String? error;
 
@@ -26,8 +25,7 @@ class SelectedDocItem {
     required this.name,
     required this.size,
     required this.bytes,
-    this.progress = 1.0,
-    this.isCompleted = true,
+    this.isCompleted = false,
     this.error,
   });
 
@@ -164,8 +162,6 @@ class _UploadScreenState extends State<UploadScreen>
                 name: file.name,
                 size: fileBytes.length,
                 bytes: fileBytes,
-                progress: 1.0,
-                isCompleted: true,
               ),
             );
           }
@@ -196,6 +192,9 @@ class _UploadScreenState extends State<UploadScreen>
     setState(() {
       _isUploading = true;
       _uploadError = null;
+      for (final item in _selectedFiles) {
+        item.isCompleted = false;
+      }
     });
 
     try {
@@ -204,15 +203,8 @@ class _UploadScreenState extends State<UploadScreen>
       for (int i = 0; i < _selectedFiles.length; i++) {
         final item = _selectedFiles[i];
         setState(() {
-          item.progress = 0.3;
           _uploadStatusText =
               'Uploading ${i + 1} of ${_selectedFiles.length}: ${item.name}';
-        });
-
-        // Simulate upload progress steps visually
-        await Future.delayed(const Duration(milliseconds: 150));
-        setState(() {
-          item.progress = 0.7;
         });
 
         final doc = await _apiService.uploadDocumentBytes(
@@ -221,7 +213,6 @@ class _UploadScreenState extends State<UploadScreen>
         );
 
         setState(() {
-          item.progress = 1.0;
           item.isCompleted = true;
         });
 
@@ -288,11 +279,11 @@ class _UploadScreenState extends State<UploadScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'QwikPrint',
+                    'Autonomous Printer',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                       color: AppTheme.textPrimary,
@@ -337,7 +328,7 @@ class _UploadScreenState extends State<UploadScreen>
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -448,6 +439,11 @@ class _UploadScreenState extends State<UploadScreen>
 
                       // Dropzone Card (Inspired by Image 1 & 2)
                       _buildDropzoneCard(),
+                      if (_isUploading)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Text(_uploadStatusText),
+                        ),
 
                       const SizedBox(height: 24),
 
@@ -511,16 +507,16 @@ class _UploadScreenState extends State<UploadScreen>
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: Row(
-                    children: [
-                      Column(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final summary = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             _selectedFiles.isEmpty
                                 ? 'No documents selected'
-                                : '${_selectedFiles.length} file(s) ready',
+                                : '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'file' : 'files'} ready',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -538,9 +534,8 @@ class _UploadScreenState extends State<UploadScreen>
                             ),
                           ),
                         ],
-                      ),
-                      const Spacer(),
-                      ElevatedButton(
+                      );
+                      final action = ElevatedButton(
                         onPressed: (_selectedFiles.isEmpty || _isUploading)
                             ? null
                             : _handleNext,
@@ -573,9 +568,7 @@ class _UploadScreenState extends State<UploadScreen>
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
-                                    _uploadStatusText.isNotEmpty
-                                        ? _uploadStatusText
-                                        : 'Uploading...',
+                                    'Uploading...',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -596,8 +589,25 @@ class _UploadScreenState extends State<UploadScreen>
                                   Icon(Icons.arrow_forward_rounded, size: 18),
                                 ],
                               ),
-                      ),
-                    ],
+                      );
+                      if (constraints.maxWidth < 440) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            summary,
+                            const SizedBox(height: 12),
+                            SizedBox(width: double.infinity, child: action),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: summary),
+                          const SizedBox(width: 12),
+                          action,
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -709,7 +719,7 @@ class _UploadScreenState extends State<UploadScreen>
         boxShadow: AppTheme.cardShadow,
       ),
       child: InkWell(
-        onTap: _pickFiles,
+        onTap: _isUploading ? null : _pickFiles,
         borderRadius: BorderRadius.circular(24),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
@@ -760,7 +770,7 @@ class _UploadScreenState extends State<UploadScreen>
 
               // Pink Accent Browse Button (Direct reference from Image 1 & Image 2)
               ElevatedButton(
-                onPressed: _pickFiles,
+                onPressed: _isUploading ? null : _pickFiles,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme
                       .accent, // Rose/Pink accent from Reference Image 1
@@ -856,7 +866,6 @@ class _UploadScreenState extends State<UploadScreen>
     final badgeIcon = file.isPdf
         ? Icons.picture_as_pdf_rounded
         : Icons.image_rounded;
-    final percentInt = (file.progress * 100).toInt();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -910,7 +919,7 @@ class _UploadScreenState extends State<UploadScreen>
               const SizedBox(width: 10),
               // Percentage indicator text (Reference Image 1)
               Text(
-                '$percentInt%',
+                file.isCompleted ? 'Uploaded' : 'Selected',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -921,7 +930,7 @@ class _UploadScreenState extends State<UploadScreen>
               ),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: () => _removeFile(index),
+                onPressed: _isUploading ? null : () => _removeFile(index),
                 icon: const Icon(
                   Icons.cancel_rounded,
                   color: AppTheme.textMuted,
@@ -933,19 +942,20 @@ class _UploadScreenState extends State<UploadScreen>
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Progress bar line (Reference Image 1 & Image 2)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: file.progress,
-              minHeight: 6,
-              backgroundColor: AppTheme.surfaceSubtle,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                file.isCompleted ? AppTheme.accent : AppTheme.primary,
+          if (_isUploading) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: file.isCompleted ? 1 : null,
+                minHeight: 6,
+                backgroundColor: AppTheme.surfaceSubtle,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  file.isCompleted ? AppTheme.accent : AppTheme.primary,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

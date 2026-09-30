@@ -68,6 +68,27 @@ def test_provider_recovery_clears_transient_hold(client, test_print_server, fake
     assert payment.last_error is None
 
 
+def test_unpaid_provider_recovery_clears_alert_without_authorizing_print(client, test_print_server, fake_gateway, db_session):
+    from app.db.models.print_job import PrintJob
+    from app.db.models.payment import PaymentStatus
+    order = create_order(client, test_print_server)
+    start_payment(client, order)
+    payment = db_session.query(Payment).one()
+    payment.last_error = 'GATEWAY_UNAVAILABLE'
+    db_session.commit()
+
+    result = payment_service.reconcile(db_session, order['id'])
+
+    assert result['success'] is False
+    assert payment.last_error is None
+    assert payment.reconciled_at is not None
+    assert payment.status == PaymentStatus.PENDING
+    assert payment.verified_at is None
+    assert db_session.query(OTP).count() == 0
+    assert db_session.query(PrintJob).count() == 0
+    assert fake_gateway.creates == 1
+
+
 def test_external_full_refund_satisfies_pending_outbox(client, test_print_server, fake_gateway, db_session):
     order, remote = paid_order(client, test_print_server, fake_gateway)
     db_session.get(Order, order['id']).status = OrderStatus.EXPIRED

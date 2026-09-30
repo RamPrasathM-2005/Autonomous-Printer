@@ -71,3 +71,39 @@ def test_concurrent_release_and_claim_only_once(client,test_print_server,fake_ga
     db_session.expire_all();job=db_session.query(PrintJob).one()
     result=parallel(db_session,lambda db:job_service.claim(db,test_print_server.id,job.id))
     assert sum(isinstance(o,dict) for o in result)==1
+
+
+def test_concurrent_unpaid_authorization_issues_one_code(client,test_print_server,db_session,monkeypatch):
+    from app.config.settings import settings
+    from app.services.test_print_service import authorize_test_print
+    monkeypatch.setattr(settings,'ALLOW_UNPAID_TEST_PRINTING',True)
+    order=create_order(client,test_print_server)
+    outcomes=parallel(db_session,lambda db:authorize_test_print(db,order['id']))
+    assert all(isinstance(o,dict) for o in outcomes)
+    db_session.rollback()
+    assert db_session.query(OTP).count()==1
+    assert db_session.query(PrintJob).count()==1
+    assert db_session.query(Payment).count()==0
+
+
+def test_payment_and_unpaid_test_are_mutually_exclusive(client,test_print_server,db_session,monkeypatch):
+    from threading import Barrier
+    from app.config.settings import settings
+    from app.services.test_print_service import authorize_test_print
+    monkeypatch.setattr(settings,'ALLOW_UNPAID_TEST_PRINTING',True)
+    order=create_order(client,test_print_server)
+    factory=sessionmaker(bind=db_session.get_bind())
+    barrier=Barrier(2)
+    def run(test):
+        with factory() as db:
+            barrier.wait()
+            try:
+                return authorize_test_print(db,order['id']) if test else payment_service.create_payment(db,order['id'])
+            except AppException as error:
+                db.rollback()
+                return error.error_code
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes=list(pool.map(run,[True,False]))
+    assert sum(isinstance(o,str) for o in outcomes)==1
+    db_session.rollback()
+    assert db_session.query(Payment).count()+db_session.query(PrintJob).count()==1

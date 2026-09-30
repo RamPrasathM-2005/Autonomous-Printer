@@ -8,6 +8,7 @@ from app.services.order_service import order_service
 from app.services.otp_service import otp_service
 from app.services.access_service import current_session, owned_order, rate_limit
 from app.utils.common import fail
+from app.services.print_authorization import require_print_authorization
 
 router = APIRouter(prefix='/api/orders', tags=['Orders'])
 
@@ -34,9 +35,9 @@ def get_order(order_id: str, session=Depends(current_session), db=Depends(get_db
 def get_order_otp(order_id: str, session=Depends(current_session), db=Depends(get_db)):
     order = owned_order(db, order_id, session)
     payment = db.query(Payment).filter_by(order_id=order_id).first()
-    if (order.status != OrderStatus.WAITING_FOR_OTP or not payment or
-            payment.status != PaymentStatus.CAPTURED or not payment.verified_at):
-        fail('OTP_NOT_AVAILABLE', 'A verified captured payment and unreleased order are required.', 409)
+    if order.status != OrderStatus.WAITING_FOR_OTP:
+        fail('OTP_NOT_AVAILABLE', 'An unreleased order is required.', 409)
+    require_print_authorization(order, payment)
     code, expires = otp_service.get_otp_for_order(db, order.id)
     return OTPResponse(order_id=order.id, otp=code, expires_at=expires)
 
@@ -46,3 +47,10 @@ def release_order(order_id: str, req: AgentReleaseRequest, session=Depends(curre
     rate_limit(db, 'release-session:' + session.id, 5, 60)
     job = otp_service.verify_and_release_job(db, order.print_server_id, req.otp, order_id=order.id)
     return {'status': 'RELEASED', 'orderId': order.id, 'jobId': job.id}
+
+@router.post('/{order_id}/test-print')
+def test_print(order_id: str, session=Depends(current_session), db=Depends(get_db)):
+    from app.services.test_print_service import authorize_test_print
+    owned_order(db, order_id, session)
+    rate_limit(db, 'test-print:' + session.id, 5, 60)
+    return authorize_test_print(db, order_id)
