@@ -90,43 +90,6 @@ export default function UploadStep({ onNext }) {
 
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-      
-      {/* Station Connection Card - Exactly matches Flutter _buildStationCard */}
-      <div className="card-white" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.9rem 1.15rem', marginBottom: '1.25rem' }}>
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '50%',
-          background: 'var(--success-surface)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--success)',
-          flexShrink: 0
-        }}>
-          <Printer size={19} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Central Kiosk Station
-            </span>
-            <span style={{
-              background: 'var(--success-surface)',
-              color: '#047857',
-              fontSize: '0.68rem',
-              fontWeight: 800,
-              padding: '2px 7px',
-              borderRadius: '6px'
-            }}>
-              ONLINE
-            </span>
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Location: Main Campus Library Terminal #1 &bull; HP LaserJet 400 M401dn
-          </div>
-        </div>
-      </div>
 
       {/* Section Title & Subtitle */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '1.15rem' }}>

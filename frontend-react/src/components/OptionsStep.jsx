@@ -331,31 +331,6 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
           </div>
         </div>
 
-        {/* Print Quality Dropdown */}
-        <div className="card-white" style={{ padding: '1.15rem' }}>
-          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
-            Print Quality
-          </div>
-          <select
-            value={activeConfig.printQuality}
-            onChange={(e) => updateActiveConfig({ printQuality: e.target.value })}
-            style={{
-              width: '100%',
-              padding: '0.65rem 0.75rem',
-              borderRadius: '10px',
-              border: '1px solid var(--border)',
-              background: 'var(--surface-subtle)',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              color: 'var(--text-primary)'
-            }}
-          >
-            <option value="Standard">Standard (300 DPI)</option>
-            <option value="High (600 DPI)">High Quality (600 DPI)</option>
-            <option value="Draft">Draft Fast</option>
-          </select>
-        </div>
-
       </div>
 
       {/* Paper Size & Orientation Card */}
