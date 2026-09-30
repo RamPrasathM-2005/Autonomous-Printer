@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
+import 'print_options_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -60,20 +61,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _openRazorpayCheckout() async {
     final rawOrderId = _paymentData?.razorpayOrderId ?? '';
-    final rzpOrderId = rawOrderId.isNotEmpty
-        ? rawOrderId
-        : 'order_rzp_${widget.order.id}';
-
+    final rzpOrderId = rawOrderId.isNotEmpty ? rawOrderId : 'order_rzp_${widget.order.id}';
     final rawKeyId = _paymentData?.keyId ?? '';
-    final keyId = rawKeyId.isNotEmpty
-        ? rawKeyId
-        : 'rzp_test_RFxhjAiTxwrpAJ';
-
-    debugPrint('[PAYMENT_SCREEN] _openRazorpayCheckout called:');
-    debugPrint('  - Order ID: ${widget.order.id}');
-    debugPrint('  - Razorpay Order ID: $rzpOrderId');
-    debugPrint('  - Razorpay Key ID: $keyId');
-    debugPrint('  - Amount: ₹${widget.order.amount}');
+    final keyId = rawKeyId.isNotEmpty ? rawKeyId : 'rzp_test_RFxhjAiTxwrpAJ';
 
     setState(() {
       _isVerifying = true;
@@ -86,26 +76,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
       amount: widget.order.amount,
     );
 
-    debugPrint('[PAYMENT_SCREEN] Razorpay checkout finished: success=${result.success}, paymentId=${result.razorpayPaymentId}, error=${result.errorMessage}');
-
     if (!result.success) {
       setState(() {
         _isVerifying = false;
         if (result.errorMessage != null && result.errorMessage != 'DISMISSED') {
-          _paymentError = 'Payment error: ${result.errorMessage}';
+          _paymentError = 'Payment notice: ${result.errorMessage}';
         }
       });
       return;
     }
 
-    setState(() {
-      _isVerifying = true;
-      _paymentError = null;
-    });
-
     try {
-      debugPrint('[PAYMENT_SCREEN] Verifying payment with backend: orderId=${widget.order.id}, paymentId=${result.razorpayPaymentId}');
-      // Confirm payment on backend and auto-generate OTP
       await _apiService.verifyPayment(
         orderId: widget.order.id,
         razorpayOrderId: result.razorpayOrderId,
@@ -113,23 +94,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
         razorpaySignature: result.razorpaySignature,
       );
 
-      setState(() {
-        _isVerifying = false;
-      });
+      setState(() => _isVerifying = false);
 
       if (!mounted) return;
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (ctx) => OtpReleaseScreen(orderId: widget.order.id),
         ),
       );
-    } catch (e) {
-      debugPrint('[PAYMENT_SCREEN] Verification exception: $e. Transitioning to OTP screen.');
-      setState(() {
-        _isVerifying = false;
-      });
+    } catch (_) {
+      setState(() => _isVerifying = false);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -147,30 +122,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     try {
-      // 1. Confirm payment and auto-generate OTP on FastAPI backend
       await _apiService.verifyPayment(
         orderId: widget.order.id,
-        razorpayOrderId:
-            _paymentData?.razorpayOrderId ?? 'order_rzp_${widget.order.id}',
+        razorpayOrderId: _paymentData?.razorpayOrderId ?? 'order_rzp_${widget.order.id}',
         razorpayPaymentId: 'pay_rzp_${DateTime.now().millisecondsSinceEpoch}',
         razorpaySignature: 'test_sig',
       );
 
-      // 2. Also send webhook simulation as backup
       await _apiService.simulatePaymentVerification(
         orderId: widget.order.id,
-        razorpayOrderId:
-            _paymentData?.razorpayOrderId ?? 'order_sim_${widget.order.id}',
+        razorpayOrderId: _paymentData?.razorpayOrderId ?? 'order_sim_${widget.order.id}',
         amount: widget.order.amount,
       );
 
-      setState(() {
-        _isVerifying = false;
-      });
+      setState(() => _isVerifying = false);
 
       if (!mounted) return;
-
-      // Navigate to Step 4: OTP Release Page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -178,11 +145,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
       );
     } catch (_) {
-      // Always allow proceeding to next page without blocking during development
-      setState(() {
-        _isVerifying = false;
-      });
-
+      setState(() => _isVerifying = false);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -198,7 +161,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Payment & Invoice'),
+        title: const Text('Checkout & Payment'),
+        elevation: 0,
+        backgroundColor: AppTheme.surfaceWhite,
       ),
       body: Column(
         children: [
@@ -206,410 +171,301 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Step 3: Review Invoice & Pay',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Review your order charges before proceeding to payment.',
-                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                  ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Review Invoice & Pay',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Confirm details and proceed with instant digital payment.',
+                        style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                      ),
 
-                  const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                  // Itemized Invoice Card
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceWhite,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // High Trust Security Card
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.successSurface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+                        ),
+                        child: const Row(
                           children: [
-                            const Text(
-                              'Order Summary',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primarySurface,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                widget.order.id.substring(0, 8).toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.primary,
-                                ),
+                            Icon(Icons.shield_outlined, color: AppTheme.success, size: 22),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '100% Encrypted Payment',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF065F46),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Instant 6-digit release OTP generated immediately after payment.',
+                                    style: TextStyle(fontSize: 11, color: Color(0xFF047857)),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                        const Divider(height: 24),
-                        if (widget.configs != null && widget.configs!.isNotEmpty) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Documents (${widget.configs!.length})',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                '${widget.configs!.fold<int>(0, (sum, c) => sum + (c.calculatedPages * c.copies))} total page(s)',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: widget.configs!.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 10),
-                            itemBuilder: (ctx, idx) {
-                              final cfg = widget.configs![idx];
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.surfaceSubtle,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                      color: AppTheme.border.withValues(alpha: 0.8)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFEF2F2),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: const Icon(Icons.picture_as_pdf,
-                                              color: Color(0xFFDC2626), size: 16),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            cfg.document.filename,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                              color: AppTheme.textPrimary,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '₹${cfg.estimatedCost.toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 14,
-                                            color: AppTheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 4,
-                                      children: [
-                                        _buildOptionTag('${cfg.copies} copy(s)'),
-                                        _buildOptionTag(cfg.colorDescription),
-                                        _buildOptionTag(cfg.sidesDescription),
-                                        _buildOptionTag('Range: ${cfg.pageRangeDescription}'),
-                                        _buildOptionTag('${cfg.calculatedPages} page(s)'),
-                                        _buildOptionTag(cfg.paperSize),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ] else ...[
-                          _buildInvoiceRow('Copies', '${widget.order.copies} set(s)'),
-                          const SizedBox(height: 10),
-                          _buildInvoiceRow(
-                            'Color Mode',
-                            widget.order.isColor ? 'Full Color' : 'Black & White',
-                          ),
-                          const SizedBox(height: 10),
-                          _buildInvoiceRow(
-                            'Duplex Sides',
-                            widget.order.duplex ? 'Double-Sided' : 'Single-Sided',
-                          ),
-                          const SizedBox(height: 10),
-                          _buildInvoiceRow(
-                            'Paper Size',
-                            widget.order.paperSize,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildInvoiceRow(
-                            'Page Range',
-                            widget.order.pageRange,
-                          ),
-                        ],
-                        const Divider(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Order Summary Invoice Card
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceWhite,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.border),
+                          boxShadow: AppTheme.cardShadow,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'Total Amount',
+                                  'Invoice Summary',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
-                                if (widget.configs != null && widget.configs!.isNotEmpty)
-                                  Text(
-                                    '${widget.configs!.length} document(s) • Tax inclusive',
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primarySurface,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '#${widget.order.id.takeLast(8).toUpperCase()}',
                                     style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppTheme.textSecondary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primary,
                                     ),
                                   ),
+                                ),
                               ],
                             ),
-                            Text(
-                              '₹${widget.order.amount.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primary,
+
+                            const Divider(height: 28),
+
+                            if (widget.configs != null && widget.configs!.isNotEmpty) ...[
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: widget.configs!.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                itemBuilder: (ctx, idx) {
+                                  final cfg = widget.configs![idx];
+                                  return Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.surfaceSubtle,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          cfg.document.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                                          size: 18,
+                                          color: AppTheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              cfg.document.filename,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppTheme.textPrimary,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              '${cfg.copies} copy • ${cfg.calculatedPages} pg • ${cfg.isColor ? "Color" : "B&W"}',
+                                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${cfg.estimatedCost.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
+                              const Divider(height: 28),
+                            ],
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Print Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                Text('₹${widget.order.amount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            const Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Platform & Convenience Fee', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                                Text('₹0.00 (FREE)', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                            const Divider(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Total Payable',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '₹${widget.order.amount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.primary,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Payment method card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceWhite,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0C2340),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.flash_on_rounded,
-                              color: Color(0xFF3395FF), size: 20),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Instant UPI / Card via Razorpay',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'GPay, PhonePe, Paytm, Cards & NetBanking',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.check_circle_rounded,
-                            color: AppTheme.success, size: 20),
-                      ],
-                    ),
-                  ),
-
-                  if (_paymentError != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.dangerSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: AppTheme.danger.withValues(alpha: 0.3)),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline,
-                              color: AppTheme.danger, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _paymentError!,
-                              style: const TextStyle(
-                                  color: AppTheme.danger, fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
 
-                  const SizedBox(height: 24),
-
-                  // Razorpay Test Gateway Badge
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF86EFAC)),
-                    ),
-                    child: Row(
-                      children: [
+                      if (_paymentError != null) ...[
+                        const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(8),
+                            color: AppTheme.dangerSurface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
                           ),
-                          child: const Icon(
-                            Icons.verified_user_rounded,
-                            color: Color(0xFF16A34A),
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Razorpay Test Gateway Connected',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: Color(0xFF15803D),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Key: ${_paymentData?.keyId ?? "rzp_test_RFxhjAiTxwrpAJ"} • Test Mode Active',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF166534),
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            _paymentError!,
+                            style: const TextStyle(color: AppTheme.danger, fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
+                ),
+              ),
+            ),
+          ),
 
-                  const SizedBox(height: 20),
-
-                  // Pay Action Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: (_isCreatingPayment || _isVerifying)
-                          ? null
-                          : _openRazorpayCheckout,
-                      child: _isVerifying
-                          ? const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+          // Bottom Action Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceWhite,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ElevatedButton(
+                        onPressed: (_isCreatingPayment || _isVerifying) ? null : _openRazorpayCheckout,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                          shadowColor: AppTheme.primary.withOpacity(0.4),
+                        ),
+                        child: _isVerifying
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                                   ),
-                                ),
-                                SizedBox(width: 12),
-                                Text('Processing & Generating OTP...'),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.lock_outline, size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Pay ₹${widget.order.amount.toStringAsFixed(2)} with Razorpay & Generate OTP',
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Quick Continue / Skip Button for Testing
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _isVerifying ? null : _proceedToOtpRelease,
-                      icon: const Icon(Icons.fast_forward_rounded, size: 16),
-                      label: const Text(
-                        'Direct Next: Generate OTP & Release Page (Test Mode)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondary,
+                                  SizedBox(width: 12),
+                                  Text('Verifying Payment & Generating OTP...'),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.payment_rounded, size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Pay ₹${widget.order.amount.toStringAsFixed(2)} via Razorpay',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                  ),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: (_isCreatingPayment || _isVerifying) ? null : _proceedToOtpRelease,
+                        child: const Text(
+                          'Test Demo Pay (Skip Razorpay Modal)',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -617,43 +473,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
+}
 
-  Widget _buildInvoiceRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOptionTag(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textSecondary,
-        ),
-      ),
-    );
+extension StringExtension on String {
+  String takeLast(int n) {
+    if (length <= n) return this;
+    return substring(length - n);
   }
 }

@@ -10,91 +10,103 @@ class WorkflowStepper extends StatelessWidget {
   });
 
   static const List<Map<String, dynamic>> _steps = [
-    {'index': 1, 'label': 'Upload', 'icon': Icons.cloud_upload_outlined},
-    {'index': 2, 'label': 'Options', 'icon': Icons.tune_outlined},
-    {'index': 3, 'label': 'Payment', 'icon': Icons.credit_card_outlined},
-    {'index': 4, 'label': 'OTP Code', 'icon': Icons.pin_outlined},
-    {'index': 5, 'label': 'Printing', 'icon': Icons.print_outlined},
+    {'index': 1, 'label': 'Upload', 'icon': Icons.cloud_upload_rounded},
+    {'index': 2, 'label': 'Options', 'icon': Icons.tune_rounded},
+    {'index': 3, 'label': 'Payment', 'icon': Icons.credit_card_rounded},
+    {'index': 4, 'label': 'Release', 'icon': Icons.pin_rounded},
+    {'index': 5, 'label': 'Print', 'icon': Icons.print_rounded},
   ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppTheme.surfaceWhite,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        children: [
-          Row(
-            children: List.generate(_steps.length * 2 - 1, (i) {
-              if (i.isOdd) {
-                final stepBefore = (i ~/ 2) + 1;
-                final isPassed = currentStep > stepBefore;
-                return Expanded(
-                  child: Container(
-                    height: 2,
-                    color: isPassed ? AppTheme.primary : AppTheme.border,
-                  ),
-                );
-              }
-              final stepIndex = (i ~/ 2) + 1;
-              final stepData = _steps[stepIndex - 1];
-              final isCompleted = currentStep > stepIndex;
-              final isCurrent = currentStep == stepIndex;
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: List.generate(_steps.length * 2 - 1, (i) {
+          if (i.isOdd) {
+            final stepBefore = (i ~/ 2) + 1;
+            final isPassed = currentStep > stepBefore;
+            return Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: isPassed ? AppTheme.primary : AppTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }
 
-              Color bgColor;
-              Color iconColor;
-              Border? border;
+          final stepIndex = (i ~/ 2) + 1;
+          final stepData = _steps[stepIndex - 1];
+          final isCompleted = currentStep > stepIndex;
+          final isCurrent = currentStep == stepIndex;
 
-              if (isCompleted) {
-                bgColor = AppTheme.primary;
-                iconColor = Colors.white;
-              } else if (isCurrent) {
-                bgColor = AppTheme.primarySurface;
-                iconColor = AppTheme.primary;
-                border = Border.all(color: AppTheme.primary, width: 2);
-              } else {
-                bgColor = AppTheme.surfaceSubtle;
-                iconColor = AppTheme.textMuted;
-                border = Border.all(color: AppTheme.border, width: 1);
-              }
+          Color bgColor;
+          Color iconColor;
+          Border? border;
+          List<BoxShadow>? shadow;
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      shape: BoxShape.circle,
-                      border: border,
-                    ),
-                    child: Center(
-                      child: isCompleted
-                          ? const Icon(Icons.check, size: 16, color: Colors.white)
-                          : Icon(stepData['icon'] as IconData,
-                              size: 15, color: iconColor),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    stepData['label'] as String,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight:
-                          isCurrent ? FontWeight.w700 : FontWeight.w500,
-                      color: isCurrent
-                          ? AppTheme.primary
-                          : (isCompleted
-                              ? AppTheme.textPrimary
-                              : AppTheme.textMuted),
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
-        ],
+          if (isCompleted) {
+            bgColor = AppTheme.primary;
+            iconColor = Colors.white;
+          } else if (isCurrent) {
+            bgColor = AppTheme.primarySurface;
+            iconColor = AppTheme.primary;
+            border = Border.all(color: AppTheme.primary, width: 2);
+            shadow = [
+              BoxShadow(
+                color: AppTheme.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ];
+          } else {
+            bgColor = AppTheme.surfaceSubtle;
+            iconColor = AppTheme.textMuted;
+            border = Border.all(color: AppTheme.border, width: 1);
+          }
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: isCurrent ? 36 : 30,
+                height: isCurrent ? 36 : 30,
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  shape: BoxShape.circle,
+                  border: border,
+                  boxShadow: shadow,
+                ),
+                child: Center(
+                  child: isCompleted
+                      ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                      : Icon(
+                          stepData['icon'] as IconData,
+                          size: isCurrent ? 17 : 14,
+                          color: iconColor,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                stepData['label'] as String,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isCurrent ? FontWeight.w700 : (isCompleted ? FontWeight.w600 : FontWeight.w500),
+                  color: isCurrent
+                      ? AppTheme.primary
+                      : (isCompleted ? AppTheme.textPrimary : AppTheme.textMuted),
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
