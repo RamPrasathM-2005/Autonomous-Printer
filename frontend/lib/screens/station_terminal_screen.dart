@@ -106,7 +106,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           children: [
-            // Kiosk Monitor Header
+            // Print Station Monitor Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -8,11 +10,66 @@ import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'print_options_screen.dart';
+
 import 'payment_screen.dart';
 import 'otp_release_screen.dart';
 import 'print_progress_screen.dart';
+
+// ---------------------------------------------------------------------------
+// Security: dangerous extensions that must never be uploaded
+// ---------------------------------------------------------------------------
+const _kDangerousExtensions = [
+  'exe', 'bat', 'sh', 'js', 'vbs', 'ps1', 'psm1', 'psd1',
+  'jar', 'html', 'htm', 'php', 'py', 'rb', 'pl', 'cmd',
+  'com', 'msi', 'dll', 'scr', 'hta', 'wsf', 'wsh',
+];
+
+/// Returns a non-null error string if the file fails security checks.
+/// Checks:
+///  1. Extension allowlist (pdf, jpg, jpeg, png)
+///  2. Dangerous-extension blocklist
+///  3. Magic-byte validation (PDF, JPEG, PNG)
+String? _validateFileBytes(String filename, List<int> bytes) {
+  final ext = filename.contains('.')
+      ? filename.split('.').last.toLowerCase()
+      : '';
+
+  // 1 – Allowlist check
+  const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+  if (!allowed.contains(ext)) {
+    if (_kDangerousExtensions.contains(ext)) {
+      return '"$filename" is not allowed — potentially dangerous file type.';
+    }
+    return '"$filename" must be a PDF, JPG, or PNG file.';
+  }
+
+  // 2 – Magic-byte validation
+  if (bytes.length < 4) {
+    return '"$filename" appears to be empty or corrupted.';
+  }
+
+  if (ext == 'pdf') {
+    // PDF magic: %PDF  (0x25 0x50 0x44 0x46)
+    if (bytes[0] != 0x25 || bytes[1] != 0x50 ||
+        bytes[2] != 0x44 || bytes[3] != 0x46) {
+      return '"$filename" does not appear to be a valid PDF — content mismatch.';
+    }
+  } else if (ext == 'jpg' || ext == 'jpeg') {
+    // JPEG magic: FF D8 FF
+    if (bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF) {
+      return '"$filename" does not appear to be a valid JPEG image.';
+    }
+  } else if (ext == 'png') {
+    // PNG magic: 89 50 4E 47 0D 0A 1A 0A
+    if (bytes[0] != 0x89 || bytes[1] != 0x50 ||
+        bytes[2] != 0x4E || bytes[3] != 0x47) {
+      return '"$filename" does not appear to be a valid PNG image.';
+    }
+  }
+
+  return null; // Passed all checks
+}
 
 class SelectedDocItem {
   final String name;
@@ -53,6 +110,8 @@ class _UploadScreenState extends State<UploadScreen>
   bool _isUploading = false;
   String _uploadStatusText = '';
   String? _uploadError;
+  // Track per-upload progress: 0.0 → 1.0 across all files
+  double _uploadProgress = 0.0;
 
   PrintServer? _selectedStation;
   bool _isLoadingStations = true;
@@ -145,15 +204,37 @@ class _UploadScreenState extends State<UploadScreen>
     });
 
     try {
-      final files = await FilePicker.pickFiles(
+      // file_picker v13: static FilePicker.pickFiles() returns List<PlatformFile>
+      // No allowMultiple param — the method inherently allows multi-select.
+      // We use webOptions to pre-load bytes for the security check.
+      final List<PlatformFile> files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
 
       if (files.isNotEmpty) {
         for (final file in files) {
-          final fileBytes = await file.readAsBytes();
-          // Avoid duplicate file additions
+          // file_picker v13: PlatformFile has readAsBytes() method, not .bytes property
+          final Uint8List rawBytes = await file.readAsBytes();
+
+          if (rawBytes.isEmpty) {
+            setState(
+              () => _uploadError =
+                  'Cannot read "${file.name}" — please try again.',
+            );
+            continue;
+          }
+
+          final List<int> fileBytes = rawBytes;
+
+          // ── Security gate: validate before queuing ──────────────────────
+          final secError = _validateFileBytes(file.name, fileBytes);
+          if (secError != null) {
+            setState(() => _uploadError = secError);
+            continue; // Skip this file, process others
+          }
+
+          // Avoid exact duplicates (same name + same byte count)
           if (!_selectedFiles.any(
             (f) => f.name == file.name && f.size == fileBytes.length,
           )) {
@@ -168,12 +249,14 @@ class _UploadScreenState extends State<UploadScreen>
         }
         setState(() {});
       }
+
     } catch (e) {
       setState(() {
         _uploadError = 'Unable to open this file. Choose another.';
       });
     }
   }
+
 
   void _removeFile(int index) {
     setState(() {
@@ -192,6 +275,7 @@ class _UploadScreenState extends State<UploadScreen>
     setState(() {
       _isUploading = true;
       _uploadError = null;
+      _uploadProgress = 0.0;
       for (final item in _selectedFiles) {
         item.isCompleted = false;
       }
@@ -199,12 +283,15 @@ class _UploadScreenState extends State<UploadScreen>
 
     try {
       final List<UploadedDocument> uploadedDocs = [];
+      final total = _selectedFiles.length;
 
-      for (int i = 0; i < _selectedFiles.length; i++) {
+      for (int i = 0; i < total; i++) {
         final item = _selectedFiles[i];
         setState(() {
           _uploadStatusText =
-              'Uploading ${i + 1} of ${_selectedFiles.length}: ${item.name}';
+              'Uploading ${i + 1} of $total: ${item.name}';
+          // Progress reflects completed files; current one counts as 50% done
+          _uploadProgress = (i + 0.5) / total;
         });
 
         final doc = await _apiService.uploadDocumentBytes(
@@ -214,6 +301,7 @@ class _UploadScreenState extends State<UploadScreen>
 
         setState(() {
           item.isCompleted = true;
+          _uploadProgress = (i + 1) / total;
         });
 
         uploadedDocs.add(doc);
@@ -221,6 +309,7 @@ class _UploadScreenState extends State<UploadScreen>
 
       setState(() {
         _isUploading = false;
+        _uploadProgress = 1.0;
       });
 
       if (!mounted) return;
@@ -324,8 +413,7 @@ class _UploadScreenState extends State<UploadScreen>
       ),
       body: Column(
         children: [
-          const WorkflowStepper(currentStep: 1),
-          const Divider(height: 1),
+          // WorkflowStepper removed — no top flow bar on any page
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -335,54 +423,66 @@ class _UploadScreenState extends State<UploadScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Kiosk Connection Banner
+                      // Printer Station Banner
                       _buildStationCard(),
 
                       const SizedBox(height: 20),
 
-                      // Section Title & File Count
+                      // Section Title & File Count (always visible)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Documents',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppTheme.textPrimary,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ],
+                          const Text(
+                            'Documents',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimary,
+                              letterSpacing: -0.5,
+                            ),
                           ),
-                          if (_selectedFiles.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primarySurface,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: AppTheme.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                '${_selectedFiles.length} file(s) selected',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.primary,
-                                ),
+                          // File count badge — always visible
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _selectedFiles.isEmpty
+                                  ? AppTheme.surfaceSubtle
+                                  : AppTheme.primarySurface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _selectedFiles.isEmpty
+                                    ? AppTheme.border
+                                    : AppTheme.primary.withValues(alpha: 0.2),
                               ),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.insert_drive_file_rounded,
+                                  size: 13,
+                                  color: _selectedFiles.isEmpty
+                                      ? AppTheme.textMuted
+                                      : AppTheme.primary,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${_selectedFiles.length} file${_selectedFiles.length == 1 ? '' : 's'}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: _selectedFiles.isEmpty
+                                        ? AppTheme.textMuted
+                                        : AppTheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
 
@@ -437,13 +537,55 @@ class _UploadScreenState extends State<UploadScreen>
                         const SizedBox(height: 16),
                       ],
 
-                      // Dropzone Card (Inspired by Image 1 & 2)
+                      // Dropzone Card
                       _buildDropzoneCard(),
-                      if (_isUploading)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Text(_uploadStatusText),
+
+                      // Upload progress — visible when uploading
+                      if (_isUploading) ...[
+                        const SizedBox(height: 14),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _uploadStatusText,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  '${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: _uploadProgress,
+                                minHeight: 8,
+                                backgroundColor: AppTheme.primarySurface,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ],
 
                       const SizedBox(height: 24),
 
@@ -653,7 +795,7 @@ class _UploadScreenState extends State<UploadScreen>
                   children: [
                     Flexible(
                       child: Text(
-                        _selectedStation?.name ?? 'Central Kiosk Station',
+                        _selectedStation?.name ?? 'Print Station',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -768,12 +910,11 @@ class _UploadScreenState extends State<UploadScreen>
 
               const SizedBox(height: 20),
 
-              // Pink Accent Browse Button (Direct reference from Image 1 & Image 2)
+              // Browse Files Button — pure blue/white, no accent color
               ElevatedButton(
                 onPressed: _isUploading ? null : _pickFiles,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme
-                      .accent, // Rose/Pink accent from Reference Image 1
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 36,
@@ -783,7 +924,7 @@ class _UploadScreenState extends State<UploadScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   elevation: 0,
-                  shadowColor: AppTheme.accent.withValues(alpha: 0.4),
+                  shadowColor: AppTheme.primary.withValues(alpha: 0.35),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -802,30 +943,7 @@ class _UploadScreenState extends State<UploadScreen>
                 ),
               ),
 
-              const SizedBox(height: 16),
 
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  _buildFormatPill(
-                    'PDF Document',
-                    Icons.picture_as_pdf_rounded,
-                    const Color(0xFFE11D48),
-                  ),
-                  _buildFormatPill(
-                    'Images (JPG, PNG)',
-                    Icons.image_rounded,
-                    const Color(0xFF2563EB),
-                  ),
-                  _buildFormatPill(
-                    'Up to 50 MB',
-                    Icons.check_circle_outline_rounded,
-                    const Color(0xFF059669),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -833,36 +951,10 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  Widget _buildFormatPill(String label, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildFileItemCard(SelectedDocItem file, int index) {
-    final badgeColor = file.isPdf
-        ? const Color(0xFFE11D48)
-        : const Color(0xFF2563EB);
+    // All file types use blue shades for consistent blue/white theme
+    final badgeColor = file.isPdf ? AppTheme.primary : AppTheme.primaryLight;
     final badgeIcon = file.isPdf
         ? Icons.picture_as_pdf_rounded
         : Icons.image_rounded;
@@ -907,7 +999,7 @@ class _UploadScreenState extends State<UploadScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_formatFileSize(file.size)} â€¢ ${file.fileExtension}',
+                      '${_formatFileSize(file.size)} \u2022 ${file.fileExtension}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,

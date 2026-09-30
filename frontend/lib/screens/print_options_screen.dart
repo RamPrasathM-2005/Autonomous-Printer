@@ -6,7 +6,6 @@ import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'payment_screen.dart';
 
 class PrintOptionsScreen extends StatefulWidget {
@@ -179,8 +178,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       ),
       body: Column(
         children: [
-          const WorkflowStepper(currentStep: 2),
-          const Divider(height: 1),
+          // WorkflowStepper removed — no top flow bar
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),

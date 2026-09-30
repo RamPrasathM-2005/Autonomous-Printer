@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import '../config/theme.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'print_progress_screen.dart';
 
 class OtpReleaseScreen extends StatefulWidget {
@@ -191,8 +190,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       ),
       body: Column(
         children: [
-          const WorkflowStepper(currentStep: 4),
-          const Divider(height: 1),
+          // WorkflowStepper removed — no top flow bar
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
