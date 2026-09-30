@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Clock, RotateCcw, MapPin, Printer } from 'lucide-react';
+import { Copy, Check, Clock, RotateCcw, MapPin, Printer, CheckCircle2 } from 'lucide-react';
 
 export default function OtpStep({ finalData, onReset }) {
   const { order, otp } = finalData;
   const [copied, setCopied] = useState(false);
+
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const rawExp = order?.expires_at || order?.expiresAt;
     if (rawExp) {
@@ -40,16 +41,52 @@ export default function OtpStep({ finalData, onReset }) {
   const otpDigits = (otp || '------').split('');
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+    <div style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center' }}>
+      
+      {/* Top Success Celebration Banner */}
+      <div style={{
+        background: 'var(--success-surface)',
+        border: '1.5px solid rgba(16, 185, 129, 0.35)',
+        borderRadius: '20px',
+        padding: '1.15rem 1.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.75rem',
+        marginBottom: '1.5rem',
+        animation: 'slideDown 0.25s ease-out'
+      }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '50%',
+          background: 'var(--success)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Check size={20} strokeWidth={3} />
+        </div>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#065f46' }}>
+            Payment Confirmed!
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#047857' }}>
+            Your print release code has been generated successfully.
+          </div>
+        </div>
+      </div>
+
       <h2 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px', marginBottom: '0.35rem' }}>
         Your Kiosk Release Code
       </h2>
-      <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto' }}>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
         Enter this 6-digit code on the kiosk touchscreen terminal at the printer machine to release your document.
       </p>
 
-      {/* Large 6-Digit Display Card - Matches Flutter OtpReleaseScreen */}
-      <div className="otp-display-card">
+      {/* Large 6-Digit Display Card - Matches Flutter OtpReleaseScreen exactly */}
+      <div className="otp-display-card" style={{ marginBottom: '1.5rem' }}>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 800 }}>
           6-DIGIT RELEASE CODE
         </div>
@@ -90,25 +127,36 @@ export default function OtpStep({ finalData, onReset }) {
       </div>
 
       {/* Physical Kiosk Walk-Up Guidance Card */}
-      <div className="card-white" style={{ textAlign: 'left', marginBottom: '1.5rem', background: '#f8fafc', border: '1.5px solid #e2e8f0' }}>
+      <div className="card-white" style={{ textAlign: 'left', marginBottom: '1.5rem', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '20px', padding: '1.35rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.75rem' }}>
-          <MapPin size={20} color="var(--primary)" />
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            background: 'var(--primary-surface)',
+            color: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <MapPin size={18} />
+          </div>
+          <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
             How to Collect Your Print at the Station:
           </h4>
         </div>
-        <ol style={{ paddingLeft: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.6 }}>
-          <li>Go physically to the Ubuntu printer station.</li>
+        <ol style={{ paddingLeft: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.7, margin: 0 }}>
+          <li>Go physically to the Ubuntu printer station (<strong>HP LaserJet 400 M401dn</strong>).</li>
           <li>The machine screen is running the dedicated <strong>Autonomous Printer Kiosk</strong>.</li>
           <li>Enter your <strong>{otp}</strong> code on the kiosk numeric keypad.</li>
-          <li>Tap <strong>PRINT</strong> to collect your document from the printer output tray.</li>
+          <li>Tap <strong>PRINT DOCUMENT</strong> to collect your pages from the printer tray.</li>
         </ol>
       </div>
 
       <button
         onClick={onReset}
         className="btn-primary"
-        style={{ padding: '0.85rem' }}
+        style={{ padding: '0.85rem 2rem', borderRadius: '16px' }}
       >
         <RotateCcw size={16} />
         <span>Start New Print Order</span>

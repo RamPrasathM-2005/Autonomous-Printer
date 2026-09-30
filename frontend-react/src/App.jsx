@@ -8,7 +8,7 @@ import { Smartphone, Download, X } from 'lucide-react';
 
 export default function App() {
   const [step, setStep] = useState(1); // 1: Upload, 2: Options, 3: Payment, 4: OTP
-  const [document, setDocument] = useState(null);
+  const [documents, setDocuments] = useState([]);
   const [orderData, setOrderData] = useState(null);
   const [finalData, setFinalData] = useState(null);
   const [showAppBanner, setShowAppBanner] = useState(true);
@@ -31,8 +31,8 @@ export default function App() {
     }
   }, []);
 
-  const handleDocumentUploaded = (doc) => {
-    setDocument(doc);
+  const handleDocumentsUploaded = (docs) => {
+    setDocuments(Array.isArray(docs) ? docs : [docs]);
     setStep(2);
   };
 
@@ -47,7 +47,7 @@ export default function App() {
   };
 
   const handleReset = () => {
-    setDocument(null);
+    setDocuments([]);
     setOrderData(null);
     setFinalData(null);
     setStep(1);
@@ -109,10 +109,10 @@ export default function App() {
         </div>
 
         {/* Step Views */}
-        {step === 1 && <UploadStep onNext={handleDocumentUploaded} />}
+        {step === 1 && <UploadStep onNext={handleDocumentsUploaded} />}
         {step === 2 && (
           <OptionsStep
-            document={document}
+            documents={documents}
             onBack={() => setStep(1)}
             onNext={handleOptionsConfigured}
           />
