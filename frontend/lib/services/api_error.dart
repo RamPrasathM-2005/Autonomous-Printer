@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 class ApiError implements Exception {
   final String message;
   const ApiError(this.message);
@@ -19,7 +22,7 @@ class ApiError implements Exception {
     'DOCUMENT_INTEGRITY' => 'Document unavailable. Contact the station.',
     'DOCUMENT_IN_USE' => 'This document belongs to an existing order.',
     'INVALID_PAGE_RANGE' => 'Check the page range against this document.',
-    'INVALID_QUANTITY' => 'Choose 1–100 copies.',
+    'INVALID_QUANTITY' => 'Choose 1 to 100 copies.',
     'ORDER_TOO_LARGE' => 'Too many pages. Reduce the selection or copies.',
     'INCONSISTENT_LAYOUT' =>
       'Use the same paper size, orientation and sides for all files.',
@@ -61,4 +64,18 @@ class ApiError implements Exception {
 String userError(
   Object error, {
   String fallback = 'Unable to connect. Try again.',
-}) => error is ApiError ? error.message : fallback;
+}) {
+  if (error is ApiError) return error.message;
+  final errStr = error.toString().toLowerCase();
+  if (error is TimeoutException || errStr.contains('timeout')) {
+    return 'Connection timed out. Server may be unreachable or busy.';
+  }
+  if (error is SocketException ||
+      errStr.contains('socketexception') ||
+      errStr.contains('connection refused') ||
+      errStr.contains('failed host lookup') ||
+      errStr.contains('network is unreachable')) {
+    return 'Server unreachable. Check your Wi-Fi/cellular connection and server address.';
+  }
+  return fallback;
+}

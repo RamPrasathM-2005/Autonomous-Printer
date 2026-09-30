@@ -6,6 +6,7 @@ import '../services/api_error.dart';
 
 import 'package:file_picker/file_picker.dart';
 
+import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
@@ -171,6 +172,7 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Future<void> _loadStations() async {
+    setState(() => _isLoadingStations = true);
     try {
       final stations = await _apiService.fetchPrintServers();
       if (!mounted) return;
@@ -183,12 +185,120 @@ class _UploadScreenState extends State<UploadScreen>
         }
         _isLoadingStations = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoadingStations = false;
+        _uploadError = userError(e, fallback: 'Unable to reach print server.');
       });
     }
+  }
+
+  Future<void> _showServerConfigDialog() async {
+    final controller = TextEditingController(text: ApiConfig.backendUrl);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.dns_outlined, color: AppTheme.primary, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Server Configuration',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the backend API server URL (IP or domain):',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'http://10.11.6.148:8000',
+                labelText: 'Backend URL',
+                labelStyle: const TextStyle(fontSize: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              style: const TextStyle(fontSize: 13),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Quick Presets:',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildPresetChip('PC Wi-Fi (10.11.6.148)', 'http://10.11.6.148:8000', controller),
+                _buildPresetChip('Localhost (127.0.0.1)', 'http://127.0.0.1:8000', controller),
+                _buildPresetChip('Emulator (10.0.2.2)', 'http://10.0.2.2:8000', controller),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            child: const Text('Save & Connect'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && controller.text.trim().isNotEmpty) {
+      final newUrl = controller.text.trim();
+      await ApiConfig.updateBackendUrl(newUrl);
+      if (mounted) {
+        setState(() {
+          _uploadError = null;
+        });
+        await _loadStations();
+      }
+    }
+  }
+
+  Widget _buildPresetChip(String label, String url, TextEditingController controller) {
+    return InkWell(
+      onTap: () => controller.text = url,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
   }
 
   String _formatFileSize(int bytes) {
@@ -393,13 +503,22 @@ class _UploadScreenState extends State<UploadScreen>
               onPressed: _resumeOrder,
               child: const Text('Your orders'),
             ),
+          IconButton(
+            onPressed: _showServerConfigDialog,
+            icon: const Icon(
+              Icons.dns_outlined,
+              color: AppTheme.textSecondary,
+              size: 20,
+            ),
+            tooltip: 'Server Settings',
+          ),
           _isLoadingStations
               ? const Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 8),
                     child: SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
@@ -766,88 +885,99 @@ class _UploadScreenState extends State<UploadScreen>
 
   Widget _buildStationCard() {
     final isOnline = _selectedStation?.status.toLowerCase() == 'online';
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isOnline
-                  ? AppTheme.successSurface
-                  : AppTheme.warningSurface,
-              shape: BoxShape.circle,
+    return InkWell(
+      onTap: _showServerConfigDialog,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.border),
+          boxShadow: AppTheme.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isOnline
+                    ? AppTheme.successSurface
+                    : AppTheme.warningSurface,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.print_rounded,
+                color: isOnline ? AppTheme.success : AppTheme.warning,
+                size: 20,
+              ),
             ),
-            child: Icon(
-              Icons.print_rounded,
-              color: isOnline ? AppTheme.success : AppTheme.warning,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _selectedStation?.name ?? 'Print Station',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _selectedStation?.name ?? 'Print Station',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isOnline
-                            ? AppTheme.successSurface
-                            : AppTheme.warningSurface,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        (isOnline ? 'ONLINE' : 'CONNECTING').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
                           color: isOnline
-                              ? const Color(0xFF047857)
-                              : const Color(0xFFB45309),
+                              ? AppTheme.successSurface
+                              : AppTheme.warningSurface,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          (isOnline ? 'ONLINE' : 'CONNECTING').toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: isOnline
+                                ? const Color(0xFF047857)
+                                : const Color(0xFFB45309),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _selectedStation?.location ?? 'Location unavailable',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    _selectedStation?.location ?? (isOnline ? 'Available' : 'Tap to configure server IP'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isOnline ? AppTheme.textSecondary : AppTheme.primary,
+                      fontWeight: isOnline ? FontWeight.normal : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.tune_rounded,
+              size: 16,
+              color: AppTheme.textMuted,
+            ),
+          ],
+        ),
       ),
     );
   }
