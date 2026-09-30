@@ -1,3 +1,25 @@
+class PrintLineItem {
+  final String filename;
+  final int pages;
+  final int copies;
+  final bool colour;
+  final String amount;
+  const PrintLineItem({
+    required this.filename,
+    required this.pages,
+    required this.copies,
+    required this.colour,
+    required this.amount,
+  });
+  factory PrintLineItem.fromJson(Map<String, dynamic> json) => PrintLineItem(
+    filename: json['filename'] as String? ?? 'Document',
+    pages: (json['pages'] as num?)?.toInt() ?? 0,
+    copies: (json['copies'] as num?)?.toInt() ?? 1,
+    colour: json['colour'] == true,
+    amount: num.tryParse('${json['amount']}')?.toStringAsFixed(2) ?? '',
+  );
+}
+
 class PrintSettings {
   final String pageRange;
   final int copies;
@@ -6,7 +28,7 @@ class PrintSettings {
   final String paperSize; // A4, Letter, Legal
   final String orientation; // portrait, landscape
   final bool mockPrinting;
-  final bool unpaidTestPrint;
+  final List<PrintLineItem> items;
 
   PrintSettings({
     this.pageRange = 'all',
@@ -16,7 +38,7 @@ class PrintSettings {
     this.paperSize = 'A4',
     this.orientation = 'portrait',
     this.mockPrinting = false,
-    this.unpaidTestPrint = false,
+    this.items = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -37,7 +59,12 @@ class PrintSettings {
       paperSize: json['paperSize'] ?? json['paper_size'] ?? 'A4',
       orientation: json['orientation'] ?? 'portrait',
       mockPrinting: json['mockPrinting'] == true,
-      unpaidTestPrint: json['unpaidTestPrint'] == true,
+      items: (json['items'] as List? ?? const [])
+          .map(
+            (item) =>
+                PrintLineItem.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
     );
   }
 }

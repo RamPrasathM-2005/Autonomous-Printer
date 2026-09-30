@@ -47,10 +47,3 @@ def release_order(order_id: str, req: AgentReleaseRequest, session=Depends(curre
     rate_limit(db, 'release-session:' + session.id, 5, 60)
     job = otp_service.verify_and_release_job(db, order.print_server_id, req.otp, order_id=order.id)
     return {'status': 'RELEASED', 'orderId': order.id, 'jobId': job.id}
-
-@router.post('/{order_id}/test-print')
-def test_print(order_id: str, session=Depends(current_session), db=Depends(get_db)):
-    from app.services.test_print_service import authorize_test_print
-    owned_order(db, order_id, session)
-    rate_limit(db, 'test-print:' + session.id, 5, 60)
-    return authorize_test_print(db, order_id)

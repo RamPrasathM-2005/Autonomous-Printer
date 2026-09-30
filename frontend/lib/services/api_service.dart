@@ -226,10 +226,6 @@ class ApiService {
         ),
       );
 
-  Future<void> authorizeTestPrint(String id) async {
-    await _post('/api/orders/$id/test-print', {});
-  }
-
   Future<PaymentInitiateResponse> createPayment(String id) async =>
       PaymentInitiateResponse.fromJson(
         await _post('/api/payments/create', {'orderId': id}),

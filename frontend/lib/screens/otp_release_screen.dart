@@ -220,11 +220,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         ),
                       ],
 
-                      if (_order?.printSettings.unpaidTestPrint == true)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 16),
-                          child: Text('Test print - No payment'),
-                        ),
                       const SizedBox(height: 24),
 
                       // Large OTP Digits Display Card

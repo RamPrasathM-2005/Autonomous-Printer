@@ -71,7 +71,6 @@ def configuration(monkeypatch, tmp_path):
     monkeypatch.setattr(settings,'OTP_HASH_KEY','test-otp-'+'y'*40)
     monkeypatch.setattr(settings,'OTP_ENCRYPTION_KEY',Fernet.generate_key().decode())
     monkeypatch.setattr(settings,'ALLOW_MOCK_PRINTING',True)
-    monkeypatch.setattr(settings,'ALLOW_UNPAID_TEST_PRINTING',False)
     monkeypatch.setattr(settings,'ENVIRONMENT','test')
     monkeypatch.setattr(storage_service,'storage_root',tmp_path/'storage')
     storage_service._ensure_directories()

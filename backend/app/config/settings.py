@@ -45,7 +45,6 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ['http://127.0.0.1:3000', 'http://localhost:3000']
     ALLOWED_HOSTS: list[str] = ['127.0.0.1', 'localhost', 'testserver']
     ALLOW_MOCK_PRINTING: bool = False
-    ALLOW_UNPAID_TEST_PRINTING: bool = False
     PAYMENT_HTTP_TIMEOUT: int = 10
     RECONCILE_INTERVAL_SECONDS: int = 30
 
