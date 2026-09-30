@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'razorpay_platform_stub.dart'
+import 'razorpay_platform_mobile.dart'
     if (dart.library.js_interop) 'razorpay_platform_web.dart';
 
 class RazorpayWebPaymentResult {
