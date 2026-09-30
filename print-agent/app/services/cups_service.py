@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import uuid
 from pathlib import Path
@@ -27,12 +28,23 @@ class CupsService:
 
         # Copies
         copies = settings.get("copies", 1)
+        try:
+            copies = max(1, int(copies))
+        except (ValueError, TypeError):
+            copies = 1
         options["copies"] = str(copies)
 
-        # Page ranges
-        page_range = settings.get("pageRange") or settings.get("page_range")
-        if page_range:
-            options["page-ranges"] = str(page_range)
+        # Page ranges (CUPS page-ranges fails with 'Bad page-ranges values 0-0.' if 'all' is passed)
+        raw_range = settings.get("pageRange") or settings.get("page_range")
+        if raw_range:
+            range_str = str(raw_range).strip()
+            range_lower = range_str.lower()
+            if range_lower in ("odd", "odds"):
+                options["page-set"] = "odd"
+            elif range_lower in ("even", "evens"):
+                options["page-set"] = "even"
+            elif range_lower not in ("all", "all pages", "none", "", "*") and re.match(r'^[0-9\s,\-]+$', range_str):
+                options["page-ranges"] = range_str.replace(" ", "")
 
         # Color mode: Color vs Grayscale (Monochrome)
         raw_colour = settings.get("colour")
@@ -158,17 +170,24 @@ class CupsService:
                 agent_logger.warning(f"pycups printFile failed ({e}). Attempting CLI lp fallback...")
 
         # 2. CLI 'lp' command fallback
-        try:
-            cmd = ["lp", "-d", self.printer_name]
-            for opt_k, opt_v in options.items():
-                cmd.extend(["-o", f"{opt_k}={opt_v}"])
-            cmd.append(str(file_path))
+        cmd = ["lp", "-d", self.printer_name]
+        for opt_k, opt_v in options.items():
+            cmd.extend(["-o", f"{opt_k}={opt_v}"])
+        cmd.append(str(file_path))
 
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                err_msg = result.stderr.strip() or f"lp exited with code {result.returncode}"
+                agent_logger.error(f"CUPS lp command failed ({err_msg}): {' '.join(cmd)}")
+                raise CupsException(f"Failed to print to physical printer '{self.printer_name}': {err_msg}")
+
             output = result.stdout.strip()
             cups_id = output.split()[3] if len(output.split()) >= 4 else f"{uuid.uuid4().hex[:6]}"
             agent_logger.info(f"CLI lp successfully submitted job ID: {cups_id}")
             return cups_id
+        except CupsException:
+            raise
         except Exception as e:
             agent_logger.error(f"CUPS submission failed on physical printer '{self.printer_name}': {e}")
             raise CupsException(f"Failed to print to physical printer '{self.printer_name}': {e}")
