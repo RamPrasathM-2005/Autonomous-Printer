@@ -1,18 +1,48 @@
+import threading
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Set
 from app.services.file_service import file_service
 from app.services.cups_service import cups_service
 from app.services.backend_client import backend_client
 from app.utils.logging import agent_logger
 
 class PrintService:
-    @staticmethod
-    def execute_print_job(job: Dict[str, Any]) -> bool:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.active_jobs: Set[str] = set()
+        self.completed_jobs: Set[str] = set()
+
+    def is_job_active_or_done(self, job_id: str) -> bool:
+        with self._lock:
+            return job_id in self.active_jobs or job_id in self.completed_jobs
+
+    def execute_print_job(self, job: Dict[str, Any]) -> bool:
         job_id = job.get("jobId") or job.get("job_id")
         order_id = job.get("orderId") or job.get("order_id")
         storage_key = job.get("storageKey") or job.get("storage_key")
         settings = job.get("settings", {})
 
+        if not job_id:
+            agent_logger.error("execute_print_job called without job_id!")
+            return False
+
+        with self._lock:
+            if job_id in self.active_jobs:
+                agent_logger.warning(f"Job {job_id} is ALREADY PRINTING! Preventing duplicate print.")
+                return True
+            if job_id in self.completed_jobs:
+                agent_logger.warning(f"Job {job_id} has ALREADY COMPLETED! Preventing duplicate print.")
+                return True
+            self.active_jobs.add(job_id)
+
+        try:
+            return self._do_execute(job_id, order_id, storage_key, settings)
+        finally:
+            with self._lock:
+                self.active_jobs.discard(job_id)
+                self.completed_jobs.add(job_id)
+
+    def _do_execute(self, job_id: str, order_id: str, storage_key: str, settings: Dict[str, Any]) -> bool:
         agent_logger.info(f"Starting execution of job {job_id} (Order {order_id})")
 
         # 1. Resolve and verify local file

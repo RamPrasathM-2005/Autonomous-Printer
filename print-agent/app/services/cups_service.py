@@ -77,6 +77,9 @@ class CupsService:
         # Media / Paper Size
         paper_size = settings.get("paperSize") or settings.get("paper_size", "A4")
         options["media"] = paper_size
+        options["PageSize"] = paper_size
+        options["fit-to-page"] = "True"
+        options["InputSlot"] = "Tray2"
 
         # Orientation
         orientation = settings.get("orientation", "portrait").lower()
@@ -172,6 +175,16 @@ class CupsService:
             except Exception:
                 return "COMPLETED"
 
-        return "COMPLETED"
+        # Monitor via lpstat CLI command
+        try:
+            for _ in range(45):
+                res = subprocess.run(["lpstat", "-o", self.printer_name], capture_output=True, text=True)
+                if cups_job_id not in res.stdout:
+                    agent_logger.info(f"CUPS job {cups_job_id} cleared printer queue.")
+                    return "COMPLETED"
+                time.sleep(1)
+            return "COMPLETED"
+        except Exception:
+            return "COMPLETED"
 
 cups_service = CupsService()

@@ -92,14 +92,18 @@ def release_job_kiosk(
         db.commit()
 
     # Try notifying print agent directly on localhost if online
+    notified_agent = False
     try:
         import requests
-        requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=1)
-    except Exception:
-        pass
+        resp = requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=5)
+        if resp.status_code == 200:
+            notified_agent = True
+            print(f"[KIOSK] Real print agent notified for job {job.id}")
+    except Exception as e:
+        print(f"[KIOSK] Print agent local release notice: {e}")
 
-    # Ensure background completion transition
-    if order:
+    # Fallback simulation ONLY IF physical print agent is offline
+    if not notified_agent and order:
         threading.Thread(
             target=_simulate_backend_printing,
             args=(order.id, job.id),

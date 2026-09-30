@@ -18,7 +18,7 @@ class FileService:
 
         try:
             target_path.relative_to(self.storage_root)
-        except ValueError:
+            agent_logger.error("Path traversal attempt detected in storage_key.")
             raise StorageException("Path traversal detected in storage key")
 
         # Check if already present in agent storage

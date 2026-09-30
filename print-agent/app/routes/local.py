@@ -39,9 +39,9 @@ def local_station_otp_release():
     if not release_data:
         return jsonify({"error": "RELEASE_FAILED", "message": "OTP verification failed or no queued job."}), 400
 
-    # Start printing immediately
+    # Start printing immediately if not already active or completed
     job_id = release_data.get("jobId") or release_data.get("job_id")
-    if job_id:
+    if job_id and not print_service.is_job_active_or_done(job_id):
         job_poller.processing_jobs.add(job_id)
         import threading
         threading.Thread(

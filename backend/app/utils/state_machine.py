@@ -39,6 +39,8 @@ REFUND_STATE_TRANSITIONS: Dict[RefundStatus, Set[RefundStatus]] = {
 }
 
 def validate_order_transition(current: OrderStatus, target: OrderStatus):
+    if current == target:
+        return
     allowed = ORDER_STATE_TRANSITIONS.get(current, set())
     if target not in allowed:
         raise AppException(
@@ -48,6 +50,8 @@ def validate_order_transition(current: OrderStatus, target: OrderStatus):
         )
 
 def validate_job_transition(current: PrintJobStatus, target: PrintJobStatus):
+    if current == target:
+        return
     allowed = JOB_STATE_TRANSITIONS.get(current, set())
     if target not in allowed:
         raise AppException(

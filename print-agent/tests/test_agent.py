@@ -43,8 +43,13 @@ def test_cups_mock_submission(tmp_path):
     dummy_file = tmp_path / "test.pdf"
     dummy_file.write_bytes(b"%PDF-1.4 test")
 
-    cups_job_id = cups_service.submit_job(dummy_file, {"copies": 1})
-    assert cups_job_id.startswith("cups-")
+    orig_mock = cups_service.mock_mode
+    try:
+        cups_service.mock_mode = True
+        cups_job_id = cups_service.submit_job(dummy_file, {"copies": 1})
+        assert cups_job_id.startswith("cups-")
+    finally:
+        cups_service.mock_mode = orig_mock
 
 def test_file_service_path_traversal_detection():
     # Attempt directory traversal
