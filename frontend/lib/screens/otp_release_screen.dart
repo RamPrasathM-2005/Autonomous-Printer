@@ -25,7 +25,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   String? _errorMessage;
   Timer? _pollingTimer;
 
-  int _secondsLeft = 900; // 15 mins
+  int _secondsLeft = 86400; // 24 hours (1 day)
   Timer? _countdownTimer;
 
   @override
@@ -64,12 +64,12 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           expiry = DateTime.tryParse(otp.expiresAt.replaceAll(' ', 'T'));
         } catch (_) {}
       }
-      final diff = expiry != null ? expiry.difference(DateTime.now()).inSeconds : 900;
+      final diff = expiry != null ? expiry.difference(DateTime.now()).inSeconds : 86400;
 
       setState(() {
         _order = order;
         _otpData = otp;
-        _secondsLeft = diff > 0 ? diff : 900;
+        _secondsLeft = diff > 0 ? diff : 86400;
         _isLoading = false;
       });
 
@@ -129,6 +129,12 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   }
 
   String _formatTimer(int totalSecs) {
+    if (totalSecs >= 3600) {
+      final h = totalSecs ~/ 3600;
+      final m = (totalSecs % 3600) ~/ 60;
+      final s = totalSecs % 60;
+      return '${h}h ${m.toString().padLeft(2, '0')}m ${s.toString().padLeft(2, '0')}s';
+    }
     final m = totalSecs ~/ 60;
     final s = totalSecs % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';

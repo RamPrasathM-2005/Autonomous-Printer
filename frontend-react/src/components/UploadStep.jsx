@@ -91,42 +91,6 @@ export default function UploadStep({ onNext }) {
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       
-      {/* Station Connection Card - Exactly matches Flutter _buildStationCard */}
-      <div className="card-white" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.9rem 1.15rem', marginBottom: '1.25rem' }}>
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '50%',
-          background: 'var(--success-surface)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--success)',
-          flexShrink: 0
-        }}>
-          <Printer size={19} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Central Kiosk Station
-            </span>
-            <span style={{
-              background: 'var(--success-surface)',
-              color: '#047857',
-              fontSize: '0.68rem',
-              fontWeight: 800,
-              padding: '2px 7px',
-              borderRadius: '6px'
-            }}>
-              ONLINE
-            </span>
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Location: Main Campus Library Terminal #1 &bull; HP LaserJet 400 M401dn
-          </div>
-        </div>
-      </div>
 
       {/* Section Title & Subtitle */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '1.15rem' }}>
@@ -264,6 +228,41 @@ export default function UploadStep({ onNext }) {
           <FolderOpen size={18} />
           <span>Browse Files</span>
         </button>
+
+        {/* Format Pills matching Flutter origin/main */}
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+          <div style={{
+            background: 'rgba(225, 29, 72, 0.08)',
+            border: '1px solid rgba(225, 29, 72, 0.2)',
+            borderRadius: '8px',
+            padding: '5px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: '#E11D48',
+            fontSize: '0.72rem',
+            fontWeight: 600
+          }}>
+            <FileText size={14} />
+            <span>PDF Document</span>
+          </div>
+
+          <div style={{
+            background: 'rgba(37, 99, 235, 0.08)',
+            border: '1px solid rgba(37, 99, 235, 0.2)',
+            borderRadius: '8px',
+            padding: '5px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: '#2563EB',
+            fontSize: '0.72rem',
+            fontWeight: 600
+          }}>
+            <FileText size={14} />
+            <span>Images (JPG, PNG)</span>
+          </div>
+        </div>
       </div>
 
       {/* Selected Files Progress Listing */}
