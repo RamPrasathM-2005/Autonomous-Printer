@@ -16,11 +16,9 @@ Double-click `start_all.bat`, then open http://127.0.0.1:3000/. The launcher sta
 
 The installed Flutter SDK is at `D:\flutter_windows_3.47.5-stable\flutter`. Python dependencies are in `.venv`. Configuration belongs in `backend/.env` and `print-agent/.env`; Flutter does not consume `frontend/.env`. Never place payment secrets or agent tokens in Flutter.
 
-Upload a PDF/image, choose options, and review the **server-priced** order. Use **Test print - No payment** to generate a release code without opening Razorpay, then release the print normally. This temporary option is enabled in this installation's backend environment. Windows still uses simulated printing and produces no paper; a configured CUPS agent can print physically in development mode.
+Upload a PDF/image, choose options, review the server-priced order, and select **Pay with Razorpay**. Razorpay test keys exercise the same checkout, server verification, release-code and print flow as live keys. The application has no unpaid print shortcut. Use **Check payment status** to recover a lost checkout response; **Your orders** resumes orders in the current browser tab.
 
-**Pay with Razorpay** remains available and requires genuine provider capture and server verification. Once payment has started, that order cannot switch to unpaid testing; create a new order for the test flow. If checkout loses its response, use Check payment status. Your orders recovers orders after a refresh in the current browser tab. Closing the tab or ending the session removes customer access.
-
-Set `ALLOW_UNPAID_TEST_PRINTING=false` in `backend/.env` and restart the API and reconciliation worker to disable the temporary flow. The example configuration defaults to disabled. Production or live Razorpay keys reject this flag at startup and at authorization time. Test orders are marked `unpaidTestPrint` in the server-owned order settings and audited; no payment or refund record is fabricated. Existing single-use codes, ownership checks, document checks, and one-time job claims still apply.
+The Windows installation still uses simulated printing and produces no paper. Physical printing requires a configured CUPS agent.
 
 ## Payment and printing flow
 

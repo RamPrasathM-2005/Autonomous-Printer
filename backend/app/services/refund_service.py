@@ -25,12 +25,11 @@ class RefundService:
 
     def process_refund(self, db, order_id, reason='Print failed before submission'):
         order = db.query(Order).filter_by(id=order_id).with_for_update().populate_existing().one()
-        from app.services.print_authorization import is_unpaid_test
-        if is_unpaid_test(order):
-            fail('REFUND_NOT_ELIGIBLE', 'No payment was taken for this test order.', 409)
         if order.status not in (OrderStatus.FAILED, OrderStatus.EXPIRED):
             fail('REFUND_NOT_ELIGIBLE', 'Refund requires a confirmed failed or expired order.', 409)
-        payment = db.query(Payment).filter_by(order_id=order_id).with_for_update().populate_existing().one()
+        payment = db.query(Payment).filter_by(order_id=order_id).with_for_update().populate_existing().first()
+        if not payment:
+            fail('REFUND_NOT_ELIGIBLE', 'No payment exists for this order.', 409)
         refund = self.enqueue(db, order, payment, reason)
         db.commit()
         return refund

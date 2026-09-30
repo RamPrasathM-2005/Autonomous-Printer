@@ -23,9 +23,6 @@ async def lifespan(app):
         raise RuntimeError('JWT and OTP hash keys must be independent.')
     if settings.ALLOW_MOCK_PRINTING and not settings.RAZORPAY_KEY_ID.startswith('rzp_test_'):
         raise RuntimeError('Mock printing requires Razorpay test keys; it cannot be enabled for live payments.')
-    from app.services.print_authorization import unpaid_test_enabled
-    if settings.ALLOW_UNPAID_TEST_PRINTING and not unpaid_test_enabled():
-        raise RuntimeError('Unpaid test printing requires development/test mode and Razorpay test keys.')
     if settings.ENVIRONMENT == 'production':
         if not settings.ALLOWED_ORIGINS or any(not o.startswith('https://') for o in settings.ALLOWED_ORIGINS):
             raise RuntimeError('Production requires explicit HTTPS browser origins.')

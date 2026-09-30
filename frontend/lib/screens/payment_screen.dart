@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
+import '../config/theme.dart';
 
 import '../models/document.dart';
 import '../models/order.dart';
@@ -27,7 +28,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _api = ApiService();
   PaymentInitiateResponse? _payment;
   bool _busy = false;
-  bool _testPrintAvailable = false;
   bool _testPaymentMode = false;
   String? _message;
   @override
@@ -45,7 +45,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final capabilities = await _api.paymentCapabilities();
       if (mounted) {
         setState(() {
-          _testPrintAvailable = capabilities['unpaidTestPrinting'] == true;
           _testPaymentMode = capabilities['paymentMode'] == 'test';
         });
       }
@@ -147,70 +146,342 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  Future<void> _testPrint() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _message = null;
-    });
-    try {
-      await _api.authorizeTestPrint(widget.order.id);
-      await _showConfirmedOrder();
-    } catch (e) {
-      if (mounted) setState(() => _message = userError(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Payment')),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text('Order: ${widget.order.id}'),
-            Text(
-              '${widget.order.totalPages} ${widget.order.totalPages == 1 ? 'page' : 'pages'}',
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '${widget.order.currency} ${widget.order.amount.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 28),
-            ),
-            if (_testPaymentMode)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Test mode - No charge'),
-              ),
-            if (_message != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(_message!),
-              ),
-            const SizedBox(height: 24),
-            if (_busy) const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _busy ? null : _pay,
-              child: const Text('Pay with Razorpay'),
-            ),
-            TextButton(
-              onPressed: _busy ? null : _check,
-              child: const Text('Check payment status'),
-            ),
-            if (_testPrintAvailable)
-              OutlinedButton(
-                onPressed: _busy ? null : _testPrint,
-                child: const Text('Test print - No payment'),
-              ),
-          ],
+  Widget _detail(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          ),
         ),
-      ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 13),
+          ),
+        ),
+      ],
     ),
   );
+
+  Widget _panel(List<Widget> children) => Container(
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: AppTheme.surfaceWhite,
+      border: Border.all(color: AppTheme.border),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    ),
+  );
+
+  Widget _heading(String text) => Text(
+    text,
+    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+  );
+
+  Widget _progress() => Padding(
+    padding: const EdgeInsets.only(bottom: 24),
+    child: Wrap(
+      spacing: 20,
+      runSpacing: 12,
+      children: [
+        for (final (index, label) in [
+          'Upload',
+          'Options',
+          'Payment',
+          'Release',
+          'Print',
+        ].indexed)
+          Semantics(
+            label: '$label, step ${index + 1} of 5',
+            selected: index == 2,
+            excludeSemantics: true,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: index == 2
+                        ? AppTheme.primary
+                        : AppTheme.surfaceSubtle,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: index < 2
+                      ? const Icon(
+                          Icons.check,
+                          size: 14,
+                          color: AppTheme.primary,
+                        )
+                      : Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: index == 2
+                                ? Colors.white
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: index == 2 ? FontWeight.w600 : FontWeight.w400,
+                    color: index == 2
+                        ? AppTheme.primary
+                        : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final settings = order.printSettings;
+    final amount = '${order.currency} ${order.amount.toStringAsFixed(2)}';
+    final items = settings.items;
+    final details = _panel([
+      _heading('Documents'),
+      const SizedBox(height: 20),
+      if (items.isNotEmpty)
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.description_outlined,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.filename,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        '${item.pages} ${item.pages == 1 ? 'page' : 'pages'} \u00b7 ${item.copies} ${item.copies == 1 ? 'copy' : 'copies'} \u00b7 ${item.colour ? 'Color' : 'B&W'}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (item.amount.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    item.amount,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          )
+      else if (widget.documents?.isNotEmpty == true)
+        for (final document in widget.documents!)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              document.filename,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+      const Divider(height: 24),
+      _heading('Print settings'),
+      const SizedBox(height: 12),
+      _detail('Paper', settings.paperSize),
+      _detail(
+        'Orientation',
+        settings.orientation == 'landscape' ? 'Landscape' : 'Portrait',
+      ),
+      _detail(
+        'Sides',
+        settings.sides == 'one-sided' ? 'Single-sided' : 'Double-sided',
+      ),
+      _detail('Station', order.printServerId),
+    ]);
+    final summary = _panel([
+      Row(
+        children: [
+          Expanded(child: _heading('Order summary')),
+          if (_testPaymentMode)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceSubtle,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'Test mode',
+                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 20),
+      if (items.isNotEmpty) _detail('Documents', '${items.length}'),
+      _detail('Printed pages', '${order.totalPages}'),
+      const Divider(height: 28),
+      Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Total',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Flexible(
+            child: Text(
+              amount,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+      if (_testPaymentMode)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'No charge in test mode',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+        ),
+      if (_message != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 20),
+          child: Semantics(
+            liveRegion: true,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceSubtle,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                _message!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: 24),
+      if (_busy)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+      ElevatedButton(
+        onPressed: _busy ? null : _pay,
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size.fromHeight(46),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: const Text(
+          'Pay with Razorpay',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      const SizedBox(height: 4),
+      TextButton(
+        onPressed: _busy ? null : _check,
+        child: const Text(
+          'Check payment status',
+          style: TextStyle(fontSize: 13),
+        ),
+      ),
+      const Divider(height: 24),
+      const Text(
+        'Order reference',
+        style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+      ),
+      const SizedBox(height: 4),
+      SelectableText(
+        order.id,
+        style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+      ),
+    ]);
+    return Scaffold(
+      backgroundColor: AppTheme.bgLight,
+      appBar: AppBar(title: const Text('Payment')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _progress(),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 760) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          details,
+                          const SizedBox(height: 16),
+                          summary,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 3, child: details),
+                        const SizedBox(width: 24),
+                        Expanded(flex: 2, child: summary),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
