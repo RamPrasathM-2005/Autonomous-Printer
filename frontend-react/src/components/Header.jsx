@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, RefreshCw } from 'lucide-react';
+import { Printer, RefreshCw, Smartphone, Download } from 'lucide-react';
 import { api } from '../api';
 
 export default function Header() {
@@ -41,7 +41,20 @@ export default function Header() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {/* Download APK Button */}
+        <a
+          href="/downloads/autonomous-printer.apk"
+          download="autonomous-printer.apk"
+          className="btn-download-apk"
+          id="headerDownloadApkBtn"
+          title="Download Autonomous Printer Mobile App (Android APK)"
+        >
+          <Smartphone size={15} />
+          <span>Download App (.apk)</span>
+          <span className="apk-badge">APK</span>
+        </a>
+
         <div className="station-badge">
           <span className="pulsing-dot" />
           <span>Station Online</span>

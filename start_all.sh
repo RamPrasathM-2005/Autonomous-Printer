@@ -76,8 +76,8 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 # 4. Launch FastAPI Backend (Port 8000)
-echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://127.0.0.1:8000 ...\033[0m"
-(cd "$SCRIPT_DIR/backend" && "$UVICORN_EXE" app.main:app --host 127.0.0.1 --port 8000 --reload) &
+echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://0.0.0.0:8000 ...\033[0m"
+(cd "$SCRIPT_DIR/backend" && "$UVICORN_EXE" app.main:app --host 0.0.0.0 --port 8000 --reload) &
 PIDS+=($!)
 sleep 2
 

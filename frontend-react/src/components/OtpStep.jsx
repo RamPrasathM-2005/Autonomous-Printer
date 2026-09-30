@@ -4,7 +4,15 @@ import { Copy, Check, Clock, RotateCcw, MapPin, Printer } from 'lucide-react';
 export default function OtpStep({ finalData, onReset }) {
   const { order, otp } = finalData;
   const [copied, setCopied] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(900); // 15 mins
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    const rawExp = order?.expires_at || order?.expiresAt;
+    if (rawExp) {
+      const expMs = new Date(rawExp.replace(' ', 'T')).getTime();
+      const diff = Math.floor((expMs - Date.now()) / 1000);
+      if (diff > 0) return diff;
+    }
+    return 86400; // 24 hours / 1 day
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -14,8 +22,12 @@ export default function OtpStep({ finalData, onReset }) {
   }, []);
 
   const formatCountdown = (secs) => {
-    const m = Math.floor(secs / 60);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
+    if (h > 0) {
+      return `${h}h ${m < 10 ? '0' : ''}${m}m ${s < 10 ? '0' : ''}${s}s`;
+    }
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 

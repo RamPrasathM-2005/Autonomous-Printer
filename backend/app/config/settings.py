@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     STORAGE_ROOT: str = "./storage"
     MAX_UPLOAD_MB: int = 50
 
-    OTP_TTL_MINUTES: int = 30
+    OTP_TTL_MINUTES: int = 1440
     MAX_OTP_ATTEMPTS: int = 5
     MAX_PRINT_RETRIES: int = 2
 

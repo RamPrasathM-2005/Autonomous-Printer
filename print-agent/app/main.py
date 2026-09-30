@@ -47,8 +47,8 @@ def run_agent():
     job_poller.start()
 
     app = create_app()
-    # Local only - not exposed publicly
-    app.run(host="127.0.0.1", port=config.PORT, debug=False)
+    # Accessible locally on Ubuntu PC and via LAN for phone QR scans / APK downloads
+    app.run(host="0.0.0.0", port=config.PORT, debug=False)
 
 if __name__ == "__main__":
     run_agent()

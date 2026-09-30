@@ -1,8 +1,50 @@
 import os
-from flask import Blueprint, render_template_string, redirect, url_for
+import io
+import socket
+import base64
+from pathlib import Path
+from flask import Blueprint, render_template_string, redirect, url_for, send_file, request, jsonify, Response
+import qrcode
 from app.config import config
 
 kiosk_bp = Blueprint("kiosk", __name__)
+
+def get_station_ip() -> str:
+    """Detect the local LAN IP of the Ubuntu station machine so mobile phones can connect."""
+    override = os.getenv("KIOSK_HOST_IP")
+    if override:
+        return override
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+def get_web_url() -> str:
+    """Returns the URL of the customer web app (port 3100 for React client)."""
+    override = os.getenv("KIOSK_WEB_URL")
+    if override:
+        return override
+    ip = get_station_ip()
+    return f"http://{ip}:3100"
+
+def generate_qr_base64(url: str) -> str:
+    """Generates a high-contrast PNG QR code as a base64 Data URI."""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 KIOSK_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -62,14 +104,16 @@ KIOSK_HTML = """<!DOCTYPE html>
     /* Top Kiosk Header */
     header {
       width: 100%;
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      padding: 14px 28px;
+      padding: 12px 28px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       z-index: 10;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .station-brand {
@@ -100,52 +144,65 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-weight: 800;
       letter-spacing: -0.02em;
       color: #ffffff;
+      line-height: 1.2;
     }
 
     .brand-text p {
-      font-size: 0.75rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
       font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }
 
-    .station-pills {
+    .station-actions {
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .status-badge {
-      display: inline-flex;
+    /* Header Download APK Button */
+    .header-apk-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff;
+      padding: 7px 14px;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+
+    .header-apk-btn:hover {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-1px);
+    }
+
+    .header-apk-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    .apk-tag {
+      background: rgba(255, 255, 255, 0.25);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 800;
+    }
+
+    .station-pills {
+      display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #34d399;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 10px #10b981;
-      animation: pulseDot 2s infinite ease-in-out;
-    }
-
-    @keyframes pulseDot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
     }
 
     .printer-model-badge {
-      background: rgba(30, 41, 59, 0.8);
+      background: var(--surface-card);
       border: 1px solid var(--border);
       padding: 6px 12px;
       border-radius: 9999px;
@@ -154,43 +211,242 @@ KIOSK_HTML = """<!DOCTYPE html>
       color: var(--text-muted);
     }
 
-    /* Main Terminal Workspace */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+      animation: pulseDot 2s infinite;
+    }
+
+    @keyframes pulseDot {
+      0% { opacity: 0.6; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.6; transform: scale(0.9); }
+    }
+
+    /* Main Kiosk Layout Grid (Side by Side) */
     main {
       flex: 1;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       width: 100%;
-      max-width: 580px;
-      padding: 16px 20px;
+      max-width: 1100px;
+      padding: 20px 24px;
     }
 
-    .kiosk-card {
+    .kiosk-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 28px;
       width: 100%;
+      align-items: stretch;
+    }
+
+    @media (max-width: 880px) {
+      .kiosk-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Card: QR Code & Mobile Info */
+    .kiosk-card-left {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 24px 28px;
+      padding: 26px 24px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .qr-badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      color: #60a5fa;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .kiosk-card-left h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+
+    .kiosk-card-left p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      max-width: 320px;
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    /* QR Code Display Frame */
+    .qr-frame {
+      background: #ffffff;
+      padding: 14px;
+      border-radius: 18px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.25);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    .qr-frame:hover {
+      transform: scale(1.02);
+    }
+
+    .qr-frame img {
+      width: 200px;
+      height: 200px;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .qr-url-pill {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #38bdf8;
+      word-break: break-all;
+      margin-bottom: 16px;
+      max-width: 340px;
+    }
+
+    .kiosk-card-left .action-group {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn-download-kiosk {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 320px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff;
+      padding: 11px 18px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      transition: all 0.15s ease;
+    }
+
+    .btn-download-kiosk:hover {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+    }
+
+    .btn-download-kiosk svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    /* 3 Simple Steps */
+    .steps-list {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 340px;
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      gap: 6px;
+    }
+
+    .step-micro {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .step-micro span.num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.2);
+      color: #60a5fa;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+    }
+
+    /* Right Card: Keypad & OTP Entry */
+    .kiosk-card-right {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 26px 26px;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
       position: relative;
     }
 
     .card-title-group {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .card-title-group h2 {
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       font-weight: 800;
       letter-spacing: -0.02em;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
       color: #ffffff;
     }
 
     .card-title-group p {
-      font-size: 0.88rem;
+      font-size: 0.85rem;
       color: var(--text-muted);
     }
 
@@ -198,13 +454,13 @@ KIOSK_HTML = """<!DOCTYPE html>
     .otp-display-container {
       display: flex;
       justify-content: center;
-      gap: 12px;
-      margin-bottom: 22px;
+      gap: 10px;
+      margin-bottom: 18px;
     }
 
     .otp-slot {
-      width: 54px;
-      height: 64px;
+      width: 50px;
+      height: 60px;
       background: var(--surface-card);
       border: 2px solid var(--border);
       border-radius: 12px;
@@ -212,7 +468,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 1.9rem;
+      font-size: 1.85rem;
       font-weight: 700;
       color: #ffffff;
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
@@ -220,8 +476,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .otp-slot.filled {
-      border-color: var(--primary-light, #3b82f6);
-      background: rgba(37, 99, 235, 0.12);
+      border-color: #3b82f6;
+      background: rgba(37, 99, 235, 0.14);
       color: #60a5fa;
       transform: scale(1.02);
     }
@@ -234,9 +490,9 @@ KIOSK_HTML = """<!DOCTYPE html>
     /* Alert / Status Banners */
     .alert-banner {
       display: none;
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-radius: 12px;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       text-align: center;
       animation: slideIn 0.25s ease-out;
     }
@@ -254,34 +510,15 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .alert-banner.error h3 {
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 700;
       color: #f87171;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
     .alert-banner.error p {
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       color: #fca5a5;
-    }
-
-    .alert-banner.success {
-      display: block;
-      background: var(--success-bg);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      color: #86efac;
-    }
-
-    .alert-banner.success h3 {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: #34d399;
-      margin-bottom: 3px;
-    }
-
-    .alert-banner.success p {
-      font-size: 0.82rem;
-      color: #a7f3d0;
     }
 
     /* Keypad Grid */
@@ -289,14 +526,14 @@ KIOSK_HTML = """<!DOCTYPE html>
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .key-btn {
       background: var(--key-bg);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      height: 60px;
+      border-radius: 12px;
+      height: 56px;
       font-size: 1.45rem;
       font-weight: 700;
       color: #ffffff;
@@ -319,7 +556,7 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .key-btn.action-btn {
-      font-size: 0.88rem;
+      font-size: 0.85rem;
       font-weight: 700;
       letter-spacing: 0.03em;
       color: var(--text-muted);
@@ -344,12 +581,12 @@ KIOSK_HTML = """<!DOCTYPE html>
     /* Primary Print Button */
     .print-btn {
       width: 100%;
-      height: 58px;
+      height: 56px;
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       border: none;
-      border-radius: 14px;
+      border-radius: 12px;
       color: #ffffff;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 800;
       letter-spacing: 0.02em;
       cursor: pointer;
@@ -381,23 +618,9 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .print-btn svg {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       fill: currentColor;
-    }
-
-    /* Spinner in Button / Overlay */
-    .spinner {
-      width: 22px;
-      height: 22px;
-      border: 3px solid rgba(255, 255, 255, 0.25);
-      border-top-color: #ffffff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
     }
 
     /* Fullscreen Modal / Progress Overlay */
@@ -408,7 +631,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(11, 15, 25, 0.85);
+      background: rgba(11, 15, 25, 0.88);
       backdrop-filter: blur(10px);
       z-index: 100;
       align-items: center;
@@ -421,11 +644,11 @@ KIOSK_HTML = """<!DOCTYPE html>
       to { opacity: 1; }
     }
 
-    .modal-content {
+    .modal-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 24px;
-      padding: 36px 40px;
+      padding: 36px 32px;
       text-align: center;
       max-width: 440px;
       width: 90%;
@@ -452,16 +675,17 @@ KIOSK_HTML = """<!DOCTYPE html>
       border: 2px solid rgba(16, 185, 129, 0.3);
     }
 
-    .modal-icon-wrap.loading .spinner {
+    .spinner {
       width: 38px;
       height: 38px;
-      border-width: 4px;
+      border: 4px solid rgba(255, 255, 255, 0.25);
       border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
 
-    .modal-icon-wrap svg {
-      width: 44px;
-      height: 44px;
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     .modal-content h3 {
@@ -488,27 +712,13 @@ KIOSK_HTML = """<!DOCTYPE html>
       color: var(--text-dim);
     }
 
-    /* Footer Note */
     footer {
       width: 100%;
       text-align: center;
-      padding: 14px 20px;
-      font-size: 0.78rem;
+      padding: 12px 20px;
+      font-size: 0.76rem;
       color: var(--text-dim);
       border-top: 1px solid rgba(31, 45, 68, 0.4);
-    }
-
-    /* Responsive adjustments for 1024x768 */
-    @media (max-height: 800px) {
-      header { padding: 10px 24px; }
-      .brand-icon { width: 38px; height: 38px; }
-      .kiosk-card { padding: 18px 24px; }
-      .card-title-group { margin-bottom: 14px; }
-      .card-title-group h2 { font-size: 1.35rem; }
-      .otp-slot { width: 48px; height: 56px; font-size: 1.65rem; }
-      .key-btn { height: 52px; font-size: 1.3rem; }
-      .print-btn { height: 52px; font-size: 1.02rem; }
-      footer { padding: 10px 16px; }
     }
   </style>
 </head>
@@ -528,104 +738,175 @@ KIOSK_HTML = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="station-pills">
-      <span class="printer-model-badge">{{ printer_name }}</span>
-      <div class="status-badge" id="stationStatusBadge">
-        <span class="status-dot" id="stationStatusDot"></span>
-        <span id="stationStatusText">READY</span>
+    <div class="station-actions">
+      <!-- Download APK in Header -->
+      <a href="{{ apk_url }}" download="autonomous-printer.apk" class="header-apk-btn" id="headerApkBtn" title="Download Android Mobile App (.apk)">
+        <svg viewBox="0 0 24 24">
+          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9996.4482.9996.9993.0001.5511-.4485.9997-.9996.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.996-3.4572c.1147-.1994.0463-.4543-.1531-.569-.1998-.1147-.4547-.0463-.5694.1531l-2.0258 3.5088C15.426 8.1633 13.7667 7.76 12 7.76s-3.426.4033-5.1292 1.1971L4.845 5.4483c-.1147-.1994-.3696-.2678-.5694-.1531-.1994.1147-.2678.3696-.1531.569l1.996 3.4572C2.6889 11.1867 0 14.92 0 19.28h24c0-4.36-2.6889-8.0933-6.1185-9.9586"/>
+        </svg>
+        <span>Download App</span>
+        <span class="apk-tag">.APK</span>
+      </a>
+
+      <div class="station-pills">
+        <span class="printer-model-badge">{{ printer_name }}</span>
+        <div class="status-badge" id="stationStatusBadge">
+          <span class="status-dot" id="stationStatusDot"></span>
+          <span id="stationStatusText">READY</span>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Main Kiosk Body -->
+  <!-- Main Kiosk Body: Side-by-Side View -->
   <main>
-    <div class="kiosk-card">
-      <div class="card-title-group">
-        <h2>Enter your 6-digit OTP</h2>
-        <p>Enter the OTP received after completing payment.</p>
+    <div class="kiosk-grid">
+      
+      <!-- LEFT COLUMN: Mobile QR Scan & APK Download -->
+      <div class="kiosk-card-left">
+        <div>
+          <div class="qr-badge-pill">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+            </svg>
+            1. SCAN FROM PHONE
+          </div>
+          <h2>Print from your Phone</h2>
+          <p>Scan with your phone camera to open the Web App or Android App instantly.</p>
+        </div>
+
+        <!-- High-Contrast QR Code -->
+        <div class="qr-frame">
+          <img src="{{ qr_data_uri }}" alt="Scan QR Code to Print" id="kioskQrImg" />
+        </div>
+
+        <div class="qr-url-pill">
+          {{ web_url }}
+        </div>
+
+        <!-- Direct Actions -->
+        <div class="action-group">
+          <a href="{{ apk_url }}" download="autonomous-printer.apk" class="btn-download-kiosk" id="kioskDownloadApkBtn">
+            <svg viewBox="0 0 24 24">
+              <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+            </svg>
+            <span>Download Mobile App (.apk)</span>
+          </a>
+
+          <div class="steps-list">
+            <div class="step-micro">
+              <span class="num">1</span>
+              <span>Scan QR Code</span>
+            </div>
+            <div class="step-micro">
+              <span class="num">2</span>
+              <span>Upload & Pay</span>
+            </div>
+            <div class="step-micro">
+              <span class="num">3</span>
+              <span>Enter OTP Here</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Alert Banner for Errors or Notices -->
-      <div class="alert-banner" id="alertBanner">
-        <h3 id="alertTitle">Invalid OTP</h3>
-        <p id="alertMessage">Please check the OTP and try again.</p>
-      </div>
+      <!-- RIGHT COLUMN: 6-Digit Release Keypad -->
+      <div class="kiosk-card-right">
+        <div class="card-title-group">
+          <div class="qr-badge-pill" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); color: #34d399;">
+            2. INSTANT RELEASE
+          </div>
+          <h2>Enter your 6-digit OTP</h2>
+          <p>Enter the release code from your phone to print immediately.</p>
+        </div>
 
-      <!-- 6 OTP Slots -->
-      <div class="otp-display-container" id="otpSlotsContainer">
-        <div class="otp-slot active" data-index="0">_</div>
-        <div class="otp-slot" data-index="1">_</div>
-        <div class="otp-slot" data-index="2">_</div>
-        <div class="otp-slot" data-index="3">_</div>
-        <div class="otp-slot" data-index="4">_</div>
-        <div class="otp-slot" data-index="5">_</div>
-      </div>
+        <!-- Alert Banner for Errors or Notices -->
+        <div class="alert-banner" id="alertBanner">
+          <h3 id="alertTitle">Invalid OTP</h3>
+          <p id="alertMessage">Please check the OTP and try again.</p>
+        </div>
 
-      <!-- Touch Keypad -->
-      <div class="keypad-grid">
-        <button type="button" class="key-btn" onclick="pressDigit('1')">1</button>
-        <button type="button" class="key-btn" onclick="pressDigit('2')">2</button>
-        <button type="button" class="key-btn" onclick="pressDigit('3')">3</button>
+        <!-- 6 Discrete Digit Slots -->
+        <div class="otp-display-container" id="otpContainer">
+          <div class="otp-slot" data-index="0"></div>
+          <div class="otp-slot" data-index="1"></div>
+          <div class="otp-slot" data-index="2"></div>
+          <div class="otp-slot" data-index="3"></div>
+          <div class="otp-slot" data-index="4"></div>
+          <div class="otp-slot" data-index="5"></div>
+        </div>
 
-        <button type="button" class="key-btn" onclick="pressDigit('4')">4</button>
-        <button type="button" class="key-btn" onclick="pressDigit('5')">5</button>
-        <button type="button" class="key-btn" onclick="pressDigit('6')">6</button>
+        <!-- Touchscreen 3x4 Keypad -->
+        <div class="keypad-grid">
+          <button class="key-btn" data-key="1">1</button>
+          <button class="key-btn" data-key="2">2</button>
+          <button class="key-btn" data-key="3">3</button>
 
-        <button type="button" class="key-btn" onclick="pressDigit('7')">7</button>
-        <button type="button" class="key-btn" onclick="pressDigit('8')">8</button>
-        <button type="button" class="key-btn" onclick="pressDigit('9')">9</button>
+          <button class="key-btn" data-key="4">4</button>
+          <button class="key-btn" data-key="5">5</button>
+          <button class="key-btn" data-key="6">6</button>
 
-        <button type="button" class="key-btn action-btn clear-btn" onclick="clearOTP()">CLEAR</button>
-        <button type="button" class="key-btn" onclick="pressDigit('0')">0</button>
-        <button type="button" class="key-btn action-btn" onclick="backspaceOTP()">
+          <button class="key-btn" data-key="7">7</button>
+          <button class="key-btn" data-key="8">8</button>
+          <button class="key-btn" data-key="9">9</button>
+
+          <button class="key-btn action-btn clear-btn" data-action="clear">CLEAR</button>
+          <button class="key-btn" data-key="0">0</button>
+          <button class="key-btn action-btn backspace-btn" data-action="backspace">
+            <svg viewBox="0 0 24 24">
+              <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Action / Submit Button -->
+        <button class="print-btn" id="printBtn" disabled>
           <svg viewBox="0 0 24 24">
-            <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/>
+            <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
           </svg>
+          <span>PRINT DOCUMENT</span>
         </button>
-      </div>
 
-      <!-- Action Button -->
-      <button type="button" class="print-btn" id="printBtn" onclick="submitOTP()" disabled>
-        <svg viewBox="0 0 24 24">
-          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-        </svg>
-        <span>PRINT DOCUMENT</span>
-      </button>
+      </div>
     </div>
   </main>
 
-  <!-- Interactive Modal / Overlay for Verifying & Printing states -->
+  <!-- Fullscreen Printing Status / Modal -->
   <div class="modal-overlay" id="statusModal">
-    <div class="modal-content">
-      <div class="modal-icon-wrap loading" id="modalIconWrap">
+    <div class="modal-card">
+      <div class="modal-icon-wrap" id="modalIconWrap">
         <div class="spinner" id="modalSpinner"></div>
-        <svg viewBox="0 0 24 24" id="modalCheckIcon" style="display:none; fill:#10b981;">
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        <svg id="modalCheckIcon" viewBox="0 0 24 24" style="display:none; fill:#10b981;">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
       </div>
-      <h3 id="modalTitle">OTP Verified</h3>
-      <p id="modalMessage">Printing...</p>
-      <div class="countdown-pill" id="modalCountdown" style="display:none;">Resetting in 8s...</div>
+      <div class="modal-content">
+        <h3 id="modalTitle">OTP Verified</h3>
+        <p id="modalMessage">Sending document to physical printer...</p>
+        <div class="countdown-pill" id="modalCountdown" style="display:none;">
+          Resetting screen in 8s...
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Footer -->
+  <!-- Bottom Kiosk Footer -->
   <footer>
-    Hardware Queue: {{ printer_name }} &bull; Station ID: {{ agent_id }} &bull; Local Print Node
+    Station ID: {{ agent_id }} &bull; Printer: {{ printer_name }} &bull; OTP Valid for 24 Hours &bull; Autonomous Self-Service
   </footer>
 
   <script>
-    // State
     let currentOtp = "";
     let isSubmitting = false;
-    let autoResetTimer = null;
     let inactivityTimer = null;
+    let autoResetTimer = null;
 
-    const slots = document.querySelectorAll('.otp-slot');
+    const otpSlots = document.querySelectorAll('.otp-slot');
     const printBtn = document.getElementById('printBtn');
     const alertBanner = document.getElementById('alertBanner');
     const alertTitle = document.getElementById('alertTitle');
     const alertMessage = document.getElementById('alertMessage');
+
     const statusModal = document.getElementById('statusModal');
     const modalIconWrap = document.getElementById('modalIconWrap');
     const modalSpinner = document.getElementById('modalSpinner');
@@ -634,101 +915,115 @@ KIOSK_HTML = """<!DOCTYPE html>
     const modalMessage = document.getElementById('modalMessage');
     const modalCountdown = document.getElementById('modalCountdown');
 
-    // Touch & Keyboard inputs
-    function pressDigit(d) {
-      if (isSubmitting || currentOtp.length >= 6) return;
-      currentOtp += d;
-      updateDisplay();
-      resetInactivityTimer();
-    }
-
-    function backspaceOTP() {
-      if (isSubmitting || currentOtp.length === 0) return;
-      currentOtp = currentOtp.slice(0, -1);
-      updateDisplay();
-      resetInactivityTimer();
-    }
-
-    function clearOTP() {
-      if (isSubmitting) return;
-      currentOtp = "";
-      hideAlert();
-      updateDisplay();
-      resetInactivityTimer();
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimer);
+      if (currentOtp.length > 0 && !isSubmitting) {
+        inactivityTimer = setTimeout(() => {
+          currentOtp = "";
+          updateDisplay();
+          hideAlert();
+        }, 30000);
+      }
     }
 
     function updateDisplay() {
-      hideAlert();
-      slots.forEach((slot, index) => {
+      otpSlots.forEach((slot, index) => {
         if (index < currentOtp.length) {
           slot.textContent = currentOtp[index];
           slot.classList.add('filled');
           slot.classList.remove('active');
         } else if (index === currentOtp.length) {
-          slot.textContent = '_';
+          slot.textContent = "";
           slot.classList.remove('filled');
           slot.classList.add('active');
         } else {
-          slot.textContent = '_';
-          slot.classList.remove('filled', 'active');
+          slot.textContent = "";
+          slot.classList.remove('filled');
+          slot.classList.remove('active');
         }
       });
 
-      printBtn.disabled = (currentOtp.length !== 6 || isSubmitting);
+      if (currentOtp.length === 6 && !isSubmitting) {
+        printBtn.disabled = false;
+      } else {
+        printBtn.disabled = true;
+      }
+
+      resetInactivityTimer();
     }
 
     function showAlert(title, message, isError = true) {
       alertTitle.textContent = title;
       alertMessage.textContent = message;
-      alertBanner.className = 'alert-banner ' + (isError ? 'error' : 'success');
-      alertBanner.style.display = 'block';
-
-      if (isError) {
-        // Auto hide error banner after 6 seconds
-        clearTimeout(alertBanner._timeout);
-        alertBanner._timeout = setTimeout(hideAlert, 6000);
-      }
+      alertBanner.className = isError ? 'alert-banner error' : 'alert-banner success';
     }
 
     function hideAlert() {
       alertBanner.style.display = 'none';
+      alertBanner.className = 'alert-banner';
     }
 
-    function resetInactivityTimer() {
-      clearTimeout(inactivityTimer);
-      if (currentOtp.length > 0) {
-        inactivityTimer = setTimeout(() => {
-          if (!isSubmitting) {
-            clearOTP();
-          }
-        }, 30000); // 30s inactivity resets screen
-      }
+    function pressDigit(val) {
+      handleKeyPress(val);
     }
 
-    // Physical Keyboard Support
-    window.addEventListener('keydown', (e) => {
+    function clearOtp() {
+      handleKeyPress('clear');
+    }
+
+    function handleKeyPress(val) {
       if (isSubmitting) return;
+      hideAlert();
+
+      if (val === 'clear') {
+        currentOtp = "";
+      } else if (val === 'backspace') {
+        currentOtp = currentOtp.slice(0, -1);
+      } else if (/^[0-9]$/.test(val)) {
+        if (currentOtp.length < 6) {
+          currentOtp += val;
+        }
+      }
+      updateDisplay();
+    }
+
+    document.querySelectorAll('.key-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const key = btn.getAttribute('data-key');
+        const action = btn.getAttribute('data-action');
+        if (key) handleKeyPress(key);
+        else if (action) handleKeyPress(action);
+      });
+    });
+
+    document.addEventListener('keydown', (e) => {
       if (e.key >= '0' && e.key <= '9') {
-        pressDigit(e.key);
+        handleKeyPress(e.key);
       } else if (e.key === 'Backspace') {
-        backspaceOTP();
-      } else if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
-        clearOTP();
+        handleKeyPress('backspace');
+      } else if (e.key === 'Escape' || e.key === 'Delete') {
+        handleKeyPress('clear');
       } else if (e.key === 'Enter') {
-        if (currentOtp.length === 6) {
+        if (currentOtp.length === 6 && !isSubmitting) {
           submitOTP();
         }
       }
     });
 
-    // Verification & Print Release Flow
+    printBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (currentOtp.length === 6 && !isSubmitting) {
+        submitOTP();
+      }
+    });
+
     async function submitOTP() {
       if (currentOtp.length !== 6 || isSubmitting) return;
       isSubmitting = true;
       printBtn.disabled = true;
       hideAlert();
 
-      // Show verifying modal
       modalIconWrap.className = 'modal-icon-wrap loading';
       modalSpinner.style.display = 'block';
       modalCheckIcon.style.display = 'none';
@@ -747,15 +1042,13 @@ KIOSK_HTML = """<!DOCTYPE html>
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.status === 'RELEASED') {
-          // Success state
           modalIconWrap.className = 'modal-icon-wrap success';
           modalSpinner.style.display = 'none';
           modalCheckIcon.style.display = 'block';
           modalTitle.textContent = 'Printing Started';
-          modalMessage.textContent = 'Please collect your document.';
+          modalMessage.textContent = 'Please collect your document from the printer.';
           modalCountdown.style.display = 'inline-block';
 
-          // Countdown to reset terminal
           let secondsLeft = 8;
           modalCountdown.textContent = `Resetting screen in ${secondsLeft}s...`;
           const countdownInterval = setInterval(() => {
@@ -769,7 +1062,6 @@ KIOSK_HTML = """<!DOCTYPE html>
           }, 1000);
 
         } else {
-          // Failure handling matching requirements exactly
           statusModal.style.display = 'none';
           isSubmitting = false;
 
@@ -779,7 +1071,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
           if (errCode === 'OTP_EXPIRED') {
             errTitle = 'OTP Expired';
-            errMsg = 'Please generate/request a new OTP.';
+            errMsg = 'OTP has expired (valid 24h). Please request a new order.';
           } else if (errCode === 'ORDER_ALREADY_COMPLETED') {
             errTitle = 'Already Printed';
             errMsg = 'This order has already been printed.';
@@ -797,7 +1089,7 @@ KIOSK_HTML = """<!DOCTYPE html>
             errMsg = 'The verification request timed out. Please try again.';
           } else if (errCode === 'TOO_MANY_ATTEMPTS') {
             errTitle = 'Attempts Exceeded';
-            errMsg = 'Maximum OTP attempts exceeded. Please generate/request a new OTP.';
+            errMsg = 'Maximum OTP attempts exceeded. Please generate a new OTP.';
           } else {
             errMsg = data.message || 'Please check the OTP and try again.';
           }
@@ -807,7 +1099,6 @@ KIOSK_HTML = """<!DOCTYPE html>
           updateDisplay();
         }
       } catch (err) {
-        // Network or local agent offline
         statusModal.style.display = 'none';
         isSubmitting = false;
         showAlert('Connection Error', 'Local print station cannot communicate with service.', true);
@@ -826,7 +1117,6 @@ KIOSK_HTML = """<!DOCTYPE html>
       updateDisplay();
     }
 
-    // Live status polling every 10 seconds
     async function checkPrinterHealth() {
       try {
         const res = await fetch('/local/status');
@@ -845,14 +1135,108 @@ KIOSK_HTML = """<!DOCTYPE html>
             txt.textContent = 'ATTENTION';
           }
         }
-      } catch (e) {
-        // Local agent offline
-      }
+      } catch (e) {}
     }
     setInterval(checkPrinterHealth, 10000);
 
-    // Initial render
     updateDisplay();
+  </script>
+</body>
+</html>
+"""
+
+SMART_GATEWAY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous Printer - Connecting...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0f19;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2d44;
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255,255,255,0.2);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h2 { font-size: 1.35rem; margin-bottom: 8px; }
+    p { font-size: 0.88rem; color: #94a3b8; line-height: 1.5; margin-bottom: 24px; }
+    .btn-group { display: flex; flex-direction: column; gap: 12px; }
+    .btn {
+      padding: 13px 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+    }
+    .btn-web { background: #2563eb; color: #ffffff; }
+    .btn-apk { background: #10b981; color: #ffffff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h2>Connecting to Autonomous Printer</h2>
+    <p>Opening Mobile App or Web App for seamless printing...</p>
+
+    <div class="btn-group">
+      <a href="{{ web_url }}/?scan=1" class="btn btn-web" id="webBtn">
+        <span>Open Web App</span>
+      </a>
+      <a href="/downloads/autonomous-printer.apk" class="btn btn-apk" id="apkBtn">
+        <span>Download Mobile App (.apk)</span>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Try launching the installed app via intent/scheme
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = 'autonomousprinter://open';
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        try { document.body.removeChild(iframe); } catch (_) {}
+        // Fallback to web app after 600ms
+        window.location.href = "{{ web_url }}/?scan=1";
+      }, 700);
+    } else {
+      setTimeout(() => {
+        window.location.href = "{{ web_url }}/?scan=1";
+      }, 500);
+    }
   </script>
 </body>
 </html>
@@ -860,11 +1244,45 @@ KIOSK_HTML = """<!DOCTYPE html>
 
 @kiosk_bp.route("/kiosk", methods=["GET"])
 def render_kiosk():
+    web_url = get_web_url()
+    # QR code points to the smart gateway or directly to the web app
+    qr_target = f"http://{get_station_ip()}:{config.PORT}/kiosk/open"
+    qr_data_uri = generate_qr_base64(qr_target)
+    apk_url = f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
+
     return render_template_string(
         KIOSK_HTML,
         printer_name=config.PRINTER_NAME,
-        agent_id=config.AGENT_ID
+        agent_id=config.AGENT_ID,
+        web_url=web_url,
+        qr_data_uri=qr_data_uri,
+        apk_url=apk_url
     )
+
+@kiosk_bp.route("/kiosk/open", methods=["GET"])
+def smart_gateway():
+    """Smart gateway: opens installed app if present, or redirects to web app."""
+    web_url = get_web_url()
+    return render_template_string(SMART_GATEWAY_HTML, web_url=web_url)
+
+@kiosk_bp.route("/downloads/autonomous-printer.apk", methods=["GET"])
+@kiosk_bp.route("/kiosk/download-apk", methods=["GET"])
+def download_apk():
+    """Serves the autonomous-printer.apk package."""
+    candidates = [
+        Path(os.getcwd()) / "downloads" / "autonomous-printer.apk",
+        Path(__file__).parent.parent / "static" / "autonomous-printer.apk",
+        Path(os.getcwd()) / "frontend-react" / "public" / "downloads" / "autonomous-printer.apk"
+    ]
+    for p in candidates:
+        if p.exists():
+            return send_file(
+                str(p),
+                mimetype="application/vnd.android.package-archive",
+                as_attachment=True,
+                download_name="autonomous-printer.apk"
+            )
+    return jsonify({"error": "APK not yet generated"}), 404
 
 @kiosk_bp.route("/", methods=["GET"])
 def index():
