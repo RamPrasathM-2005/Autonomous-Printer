@@ -218,69 +218,58 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Autonomous Printer',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: AppTheme.textPrimary,
-                    ),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'QwikPrint',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: AppTheme.textPrimary,
                   ),
-                  Text(
-                    'Self-Service Autonomous Kiosk',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
+                ),
+                Text(
+                  'Autonomous Self-Service Kiosk',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textSecondary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
-          _isLoadingStations
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                )
-              : IconButton(
-                  onPressed: _loadStations,
-                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
-                  tooltip: 'Refresh Kiosk Status',
-                ),
+          IconButton(
+            onPressed: _loadStations,
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
+            tooltip: 'Refresh Kiosk Status',
+          ),
           const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 1),
+          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Kiosk Connection Banner
+                      _buildStationCard(),
+
+                      const SizedBox(height: 20),
+
                       // Section Title & File Count
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -471,10 +460,10 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                           shadowColor: AppTheme.primary.withOpacity(0.4),
                         ),
                         child: _isUploading
-                            ? Row(
+                            ? const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const SizedBox(
+                                  SizedBox(
                                     width: 18,
                                     height: 18,
                                     child: CircularProgressIndicator(
@@ -482,11 +471,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    _uploadStatusText.isNotEmpty ? _uploadStatusText : 'Uploading...',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
+                                  SizedBox(width: 10),
+                                  Text('Uploading...', style: TextStyle(fontWeight: FontWeight.w700)),
                                 ],
                               )
                             : const Row(
@@ -515,8 +501,78 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     );
   }
 
-
-
+  Widget _buildStationCard() {
+    final isOnline = _selectedStation?.status.toLowerCase() == 'online';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.print_rounded,
+              color: isOnline ? AppTheme.success : AppTheme.warning,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      _selectedStation?.name ?? 'Central Kiosk Station',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        (isOnline ? 'ONLINE' : 'CONNECTING').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: isOnline ? const Color(0xFF047857) : const Color(0xFFB45309),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _selectedStation?.location ?? 'Location: Main Campus Library Terminal #1',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDropzoneCard() {
     return Container(
@@ -638,6 +694,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 children: [
                   _buildFormatPill('PDF Document', Icons.picture_as_pdf_rounded, const Color(0xFFE11D48)),
                   _buildFormatPill('Images (JPG, PNG)', Icons.image_rounded, const Color(0xFF2563EB)),
+                  _buildFormatPill('Up to 50 MB', Icons.check_circle_outline_rounded, const Color(0xFF059669)),
                 ],
               ),
             ],

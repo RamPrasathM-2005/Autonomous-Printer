@@ -20,20 +20,8 @@ class WorkflowStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      color: AppTheme.surfaceWhite,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: List.generate(_steps.length * 2 - 1, (i) {
           if (i.isOdd) {
@@ -42,11 +30,11 @@ class WorkflowStepper extends StatelessWidget {
             return Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                height: 4,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
-                  color: isPassed ? AppTheme.primary : const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(3),
+                  color: isPassed ? AppTheme.primary : AppTheme.border,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             );
@@ -66,20 +54,20 @@ class WorkflowStepper extends StatelessWidget {
             bgColor = AppTheme.primary;
             iconColor = Colors.white;
           } else if (isCurrent) {
-            bgColor = AppTheme.primary;
-            iconColor = Colors.white;
-            border = Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3), width: 4);
+            bgColor = AppTheme.primarySurface;
+            iconColor = AppTheme.primary;
+            border = Border.all(color: AppTheme.primary, width: 2);
             shadow = [
               BoxShadow(
-                color: AppTheme.primary.withValues(alpha: 0.35),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+                color: AppTheme.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ];
           } else {
-            bgColor = const Color(0xFFF1F5F9);
-            iconColor = const Color(0xFF64748B);
-            border = Border.all(color: const Color(0xFFCBD5E1), width: 1.5);
+            bgColor = AppTheme.surfaceSubtle;
+            iconColor = AppTheme.textMuted;
+            border = Border.all(color: AppTheme.border, width: 1);
           }
 
           return Column(
@@ -87,8 +75,8 @@ class WorkflowStepper extends StatelessWidget {
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                width: isCurrent ? 42 : 36,
-                height: isCurrent ? 42 : 36,
+                width: isCurrent ? 36 : 30,
+                height: isCurrent ? 36 : 30,
                 decoration: BoxDecoration(
                   color: bgColor,
                   shape: BoxShape.circle,
@@ -97,25 +85,23 @@ class WorkflowStepper extends StatelessWidget {
                 ),
                 child: Center(
                   child: isCompleted
-                      ? const Icon(Icons.check_rounded, size: 20, color: Colors.white)
+                      ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
                       : Icon(
                           stepData['icon'] as IconData,
-                          size: isCurrent ? 20 : 18,
+                          size: isCurrent ? 17 : 14,
                           color: iconColor,
                         ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 stepData['label'] as String,
                 style: TextStyle(
-                  fontSize: isCurrent ? 13 : 12,
-                  fontWeight: isCurrent
-                      ? FontWeight.w800
-                      : (isCompleted ? FontWeight.w700 : FontWeight.w600),
+                  fontSize: 11,
+                  fontWeight: isCurrent ? FontWeight.w700 : (isCompleted ? FontWeight.w600 : FontWeight.w500),
                   color: isCurrent
                       ? AppTheme.primary
-                      : (isCompleted ? AppTheme.textPrimary : const Color(0xFF64748B)),
+                      : (isCompleted ? AppTheme.textPrimary : AppTheme.textMuted),
                 ),
               ),
             ],

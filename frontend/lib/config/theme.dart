@@ -15,9 +15,9 @@ class AppTheme {
   static const Color bgLight = Color(0xFFF8FAFC); // Slate 50
   static const Color surfaceWhite = Color(0xFFFFFFFF);
   static const Color surfaceSubtle = Color(0xFFF1F5F9); // Slate 100
-  static const Color surfaceLight = Color(0xFFF1F5F9); // Slate 100 (alias)
   static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color cardDark = Color(0xFF1E293B); // Slate 800 (alias)
+  static const Color surfaceLight = surfaceSubtle;
+  static const Color cardDark = surfaceWhite;
 
   // Border & Dividers
   static const Color border = Color(0xFFE2E8F0); // Slate 200
