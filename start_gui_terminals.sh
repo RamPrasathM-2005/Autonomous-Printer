@@ -7,15 +7,16 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$HOME/flutter/bin:$PATH"
 
-# 1. Kill any existing instances on ports 8000, 5000, 3000
+# 1. Kill any existing instances on ports 8000, 5000, 3000, 3100
 fuser -k 8000/tcp 2>/dev/null || true
 fuser -k 5000/tcp 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
+fuser -k 3100/tcp 2>/dev/null || true
 
-echo "Launching 3 Live Terminal Console Windows on your screen..."
+echo "Launching Live Terminal Console Windows on your screen..."
 
 # Window 1: FastAPI Backend
-gnome-terminal --geometry=80x25+50+50 --title="[1] FastAPI Backend (Port 8000)" -- bash -c "
+gnome-terminal --geometry=80x20+50+50 --title="[1] FastAPI Backend (Port 8000)" -- bash -c "
   echo -e '\033[1;32m=====================================================\033[0m'
   echo -e '\033[1;32m   [BACKEND] FastAPI REST API (Port 8000)            \033[0m'
   echo -e '\033[1;32m   Docs:  http://127.0.0.1:8000/docs                 \033[0m'
@@ -27,7 +28,7 @@ gnome-terminal --geometry=80x25+50+50 --title="[1] FastAPI Backend (Port 8000)" 
 "
 
 # Window 2: Flask Print Agent & CUPS
-gnome-terminal --geometry=80x25+650+50 --title="[2] Flask Print Agent (Port 5000)" -- bash -c "
+gnome-terminal --geometry=80x20+650+50 --title="[2] Flask Print Agent (Port 5000)" -- bash -c "
   echo -e '\033[1;34m=====================================================\033[0m'
   echo -e '\033[1;34m   [PRINT AGENT] Hardware CUPS Controller (Port 5000)\033[0m'
   echo -e '\033[1;34m   Printer: HP_LaserJet_400_M401dn_F36EC0            \033[0m'
@@ -39,7 +40,7 @@ gnome-terminal --geometry=80x25+650+50 --title="[2] Flask Print Agent (Port 5000
 "
 
 # Window 3: Flutter Web Application
-gnome-terminal --geometry=80x25+350+450 --title="[3] Flutter Frontend (Port 3000)" -- bash -c "
+gnome-terminal --geometry=80x20+50+500 --title="[3] Flutter Frontend (Port 3000)" -- bash -c "
   echo -e '\033[1;36m=====================================================\033[0m'
   echo -e '\033[1;36m   [FRONTEND] Flutter Web App (Port 3000)            \033[0m'
   echo -e '\033[1;36m   URL: http://127.0.0.1:3000                         \033[0m'
@@ -49,4 +50,15 @@ gnome-terminal --geometry=80x25+350+450 --title="[3] Flutter Frontend (Port 3000
   exec bash
 "
 
-echo "Terminals launched on your screen!"
+# Window 4: React Web Application
+gnome-terminal --geometry=80x20+650+500 --title="[4] React Web App (Port 3100)" -- bash -c "
+  echo -e '\033[1;35m=====================================================\033[0m'
+  echo -e '\033[1;35m   [FRONTEND] React Web Interface (Port 3100)        \033[0m'
+  echo -e '\033[1;35m   URL: http://127.0.0.1:3100                         \033[0m'
+  echo -e '\033[1;35m=====================================================\033[0m'
+  echo ''
+  cd '$SCRIPT_DIR/frontend-react' && npm run dev
+  exec bash
+"
+
+echo "All 4 Terminals launched on your screen!"
