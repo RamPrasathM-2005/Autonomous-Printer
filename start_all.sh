@@ -89,12 +89,12 @@ sleep 2
 
 # 6. Launch Flutter Web Frontend (Port 3000)
 if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
-    echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://127.0.0.1:3000 ...\033[0m"
-    (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 127.0.0.1) &
+    echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://0.0.0.0:3000 ...\033[0m"
+    (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 0.0.0.0) &
     PIDS+=($!)
 elif command -v flutter &> /dev/null; then
-    echo -e "\033[1;36m[3/4] Starting Flutter Web Server on http://127.0.0.1:3000 ...\033[0m"
-    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 127.0.0.1) &
+    echo -e "\033[1;36m[3/4] Starting Flutter Web Server on http://0.0.0.0:3000 ...\033[0m"
+    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0) &
     PIDS+=($!)
 else
     echo -e "\033[1;33m[3/4] Flutter build not found. Skipping Port 3000.\033[0m"
