@@ -11,6 +11,7 @@ from flask import Flask
 from app.config import config
 from app.routes.health import health_bp
 from app.routes.local import local_bp
+from app.routes.kiosk import kiosk_bp
 from app.services.job_poller import job_poller
 from app.utils.logging import agent_logger
 
@@ -36,7 +37,6 @@ def create_app() -> Flask:
     # Register blueprints
     app.register_blueprint(health_bp)
     app.register_blueprint(local_bp)
-    from app.routes.kiosk import kiosk_bp
     app.register_blueprint(kiosk_bp)
 
     return app

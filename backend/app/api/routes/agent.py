@@ -76,7 +76,7 @@ def release_job_kiosk(
     Public endpoint for station touchscreen or mobile client.
     Verifies OTP and triggers printing without requiring agent device authentication.
     """
-    print(f"[BACKEND] Kiosk OTP release requested for OTP: {req.otp}")
+    print("[BACKEND] Kiosk OTP release requested.")
     job = otp_service.verify_and_release_job(
         db=db,
         server_id=None,
@@ -93,20 +93,16 @@ def release_job_kiosk(
 
     # Try notifying print agent directly on localhost if online (port 5001, fallback 5000)
     notified_agent = False
-    try:
-        import requests
+    for port in (5001, 5000):
         try:
-            resp = requests.post("http://127.0.0.1:5001/local/release", json={"otp": req.otp}, timeout=5)
+            import requests
+            resp = requests.post(f"http://127.0.0.1:{port}/local/release", json={"otp": req.otp}, timeout=3)
             if resp.status_code == 200:
                 notified_agent = True
-                print(f"[KIOSK] Real print agent on 5001 notified for job {job.id}")
+                print(f"[KIOSK] Real print agent on {port} notified for job {job.id}")
+                break
         except Exception:
-            resp = requests.post("http://127.0.0.1:5000/local/release", json={"otp": req.otp}, timeout=5)
-            if resp.status_code == 200:
-                notified_agent = True
-                print(f"[KIOSK] Real print agent on 5000 notified for job {job.id}")
-    except Exception as e:
-        print(f"[KIOSK] Print agent local release notice: {e}")
+            pass
 
     # Fallback simulation ONLY IF physical print agent is offline
     if not notified_agent and order:

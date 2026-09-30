@@ -1,11 +1,6 @@
-import json
-from flask import Blueprint, render_template_string, jsonify, request
+import os
+from flask import Blueprint, render_template_string, redirect, url_for
 from app.config import config
-from app.services.printer_monitor import printer_monitor
-from app.services.job_poller import job_poller
-from app.services.backend_client import backend_client
-from app.services.print_service import print_service
-from app.utils.errors import OtpReleaseException, BackendCommunicationException
 
 kiosk_bp = Blueprint("kiosk", __name__)
 
@@ -14,20 +9,32 @@ KIOSK_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Autonomous Print | Station Kiosk</title>
+  <title>Autonomous Print Station - Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #0b0f19;
-      --card-bg: #141b2d;
-      --card-border: #1f2a44;
-      --text: #ffffff;
+      --surface: #111827;
+      --surface-card: #162032;
+      --border: #1f2d44;
+      --border-focus: #3b82f6;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-glow: rgba(37, 99, 235, 0.4);
+      --accent: #06b6d4;
+      --text: #f8fafc;
       --text-muted: #94a3b8;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --accent-glow: rgba(37, 99, 235, 0.4);
+      --text-dim: #64748b;
       --success: #10b981;
-      --error: #ef4444;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
       --warning: #f59e0b;
+      --key-bg: #1a2538;
+      --key-hover: #22324b;
+      --key-active: #2e4363;
     }
 
     * {
@@ -36,514 +43,829 @@ KIOSK_HTML = """<!DOCTYPE html>
       padding: 0;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg) 65%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Top Kiosk Header */
+    header {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .station-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      border-radius: 12px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
-      overflow: hidden;
+      box-shadow: 0 4px 16px var(--primary-glow);
     }
 
-    .kiosk-card {
-      background: var(--card-bg);
-      border: 2px solid var(--card-border);
-      border-radius: 20px;
-      width: 100%;
-      max-width: 520px;
-      padding: 32px 28px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-      text-align: center;
-      position: relative;
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: #ffffff;
     }
 
-    .station-header {
-      border-bottom: 2px dashed var(--card-border);
-      padding-bottom: 18px;
-      margin-bottom: 20px;
-    }
-
-    .station-title {
-      font-size: 24px;
+    .brand-text h1 {
+      font-size: 1.15rem;
       font-weight: 800;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: #f1f5f9;
-      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+      color: #ffffff;
     }
 
-    .station-subtitle {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 3px;
-      color: #60a5fa;
-      text-transform: uppercase;
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .station-pills {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
       border: 1px solid rgba(16, 185, 129, 0.3);
-      margin-top: 10px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #34d399;
     }
 
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulseDot 2s infinite ease-in-out;
     }
 
-    .prompt-text {
-      font-size: 18px;
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .printer-model-badge {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
       font-weight: 600;
-      color: #e2e8f0;
-      margin-bottom: 18px;
+      color: var(--text-muted);
     }
 
+    /* Main Terminal Workspace */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-width: 580px;
+      padding: 16px 20px;
+    }
+
+    .kiosk-card {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+
+    .card-title-group {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .card-title-group h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+
+    .card-title-group p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    /* 6-Digit Display Slots */
     .otp-display-container {
       display: flex;
       justify-content: center;
-      gap: 10px;
+      gap: 12px;
       margin-bottom: 22px;
     }
 
-    .otp-box {
+    .otp-slot {
       width: 54px;
       height: 64px;
-      background: #0f172a;
-      border: 2px solid #334155;
+      background: var(--surface-card);
+      border: 2px solid var(--border);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.9rem;
       font-weight: 700;
-      font-family: 'Courier New', Courier, monospace;
       color: #ffffff;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
       transition: all 0.15s ease;
     }
 
-    .otp-box.filled {
+    .otp-slot.filled {
+      border-color: var(--primary-light, #3b82f6);
+      background: rgba(37, 99, 235, 0.12);
+      color: #60a5fa;
+      transform: scale(1.02);
+    }
+
+    .otp-slot.active {
       border-color: var(--accent);
-      background: rgba(37, 99, 235, 0.15);
-      box-shadow: 0 0 14px var(--accent-glow);
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
     }
 
-    .otp-box.active {
-      border-color: #60a5fa;
-      box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+    /* Alert / Status Banners */
+    .alert-banner {
+      display: none;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      text-align: center;
+      animation: slideIn 0.25s ease-out;
     }
 
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .alert-banner.error {
+      display: block;
+      background: var(--danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .alert-banner.error h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f87171;
+      margin-bottom: 3px;
+    }
+
+    .alert-banner.error p {
+      font-size: 0.82rem;
+      color: #fca5a5;
+    }
+
+    .alert-banner.success {
+      display: block;
+      background: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #86efac;
+    }
+
+    .alert-banner.success h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #34d399;
+      margin-bottom: 3px;
+    }
+
+    .alert-banner.success p {
+      font-size: 0.82rem;
+      color: #a7f3d0;
+    }
+
+    /* Keypad Grid */
     .keypad-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      max-width: 380px;
-      margin: 0 auto 20px auto;
+      gap: 10px;
+      margin-bottom: 18px;
     }
 
     .key-btn {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      color: #ffffff;
-      font-size: 26px;
+      background: var(--key-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      height: 60px;
+      font-size: 1.45rem;
       font-weight: 700;
-      padding: 16px 0;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
+      transition: all 0.12s ease;
       touch-action: manipulation;
-      transition: all 0.1s ease;
+    }
+
+    .key-btn:hover {
+      background: var(--key-hover);
+      border-color: rgba(255, 255, 255, 0.15);
     }
 
     .key-btn:active {
-      background: #334155;
+      background: var(--key-active);
       transform: scale(0.96);
     }
 
     .key-btn.action-btn {
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      color: #94a3b8;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text-muted);
     }
 
-    .print-btn {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    .key-btn.action-btn:hover {
       color: #ffffff;
+    }
+
+    .key-btn.clear-btn:active {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: var(--danger);
+      color: #f87171;
+    }
+
+    .key-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    /* Primary Print Button */
+    .print-btn {
+      width: 100%;
+      height: 58px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       border: none;
       border-radius: 14px;
-      width: 100%;
-      max-width: 380px;
-      padding: 18px 0;
-      font-size: 20px;
+      color: #ffffff;
+      font-size: 1.1rem;
       font-weight: 800;
-      letter-spacing: 2px;
-      text-transform: uppercase;
+      letter-spacing: 0.02em;
       cursor: pointer;
-      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
-      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 18px var(--primary-glow);
+      transition: all 0.2s ease;
       touch-action: manipulation;
     }
 
     .print-btn:hover:not(:disabled) {
-      filter: brightness(1.1);
-      transform: translateY(-2px);
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 6px 24px rgba(37, 99, 235, 0.5);
+      transform: translateY(-1px);
     }
 
     .print-btn:active:not(:disabled) {
-      transform: translateY(1px);
+      transform: scale(0.98);
     }
 
     .print-btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
+      background: #1e293b;
+      color: var(--text-dim);
       box-shadow: none;
+      cursor: not-allowed;
+      border: 1px solid var(--border);
     }
 
-    .footer-help {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 18px;
-      line-height: 1.4;
+    .print-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
     }
 
-    /* Modal Overlay for Status / Messages */
-    .overlay {
-      position: absolute;
+    /* Spinner in Button / Overlay */
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Fullscreen Modal / Progress Overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
       top: 0;
       left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(11, 15, 25, 0.95);
-      border-radius: 18px;
-      display: none;
-      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(11, 15, 25, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 100;
       align-items: center;
       justify-content: center;
-      padding: 30px;
-      z-index: 10;
+      animation: fadeIn 0.2s ease;
     }
 
-    .overlay.active {
-      display: flex;
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
-    .overlay-icon {
-      width: 72px;
-      height: 72px;
+    .modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 36px 40px;
+      text-align: center;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-icon-wrap {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 36px;
-      margin-bottom: 20px;
     }
 
-    .overlay-icon.loading {
-      border: 4px solid rgba(255, 255, 255, 0.1);
-      border-top-color: var(--accent);
-      animation: spin 1s linear infinite;
+    .modal-icon-wrap.loading {
+      background: rgba(37, 99, 235, 0.15);
+      border: 2px solid rgba(37, 99, 235, 0.3);
     }
 
-    .overlay-icon.success {
-      background: rgba(16, 185, 129, 0.2);
-      color: var(--success);
-      border: 2px solid var(--success);
+    .modal-icon-wrap.success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 2px solid rgba(16, 185, 129, 0.3);
     }
 
-    .overlay-icon.error {
-      background: rgba(239, 68, 68, 0.2);
-      color: var(--error);
-      border: 2px solid var(--error);
+    .modal-icon-wrap.loading .spinner {
+      width: 38px;
+      height: 38px;
+      border-width: 4px;
+      border-top-color: #3b82f6;
     }
 
-    .overlay-title {
-      font-size: 24px;
+    .modal-icon-wrap svg {
+      width: 44px;
+      height: 44px;
+    }
+
+    .modal-content h3 {
+      font-size: 1.45rem;
       font-weight: 800;
-      margin-bottom: 10px;
-    }
-
-    .overlay-msg {
-      font-size: 16px;
-      color: #94a3b8;
-      max-width: 360px;
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-
-    .overlay-btn {
-      background: #1e293b;
-      border: 1px solid #334155;
+      margin-bottom: 8px;
       color: #ffffff;
-      padding: 12px 28px;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
     }
 
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+    .modal-content p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .countdown-pill {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 6px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+
+    /* Footer Note */
+    footer {
+      width: 100%;
+      text-align: center;
+      padding: 14px 20px;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      border-top: 1px solid rgba(31, 45, 68, 0.4);
+    }
+
+    /* Responsive adjustments for 1024x768 */
+    @media (max-height: 800px) {
+      header { padding: 10px 24px; }
+      .brand-icon { width: 38px; height: 38px; }
+      .kiosk-card { padding: 18px 24px; }
+      .card-title-group { margin-bottom: 14px; }
+      .card-title-group h2 { font-size: 1.35rem; }
+      .otp-slot { width: 48px; height: 56px; font-size: 1.65rem; }
+      .key-btn { height: 52px; font-size: 1.3rem; }
+      .print-btn { height: 52px; font-size: 1.02rem; }
+      footer { padding: 10px 16px; }
     }
   </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
 
-  <div class="kiosk-card">
-    <!-- Header -->
-    <div class="station-header">
-      <div class="station-title">AUTONOMOUS PRINT</div>
-      <div class="station-subtitle">PRINT STATION</div>
-      <div class="status-badge">
-        <span class="status-dot"></span>
-        <span id="printer-name">HP_LaserJet_400_M401dn_F36EC0</span>
-        <span style="opacity: 0.6;">(READY)</span>
+  <!-- Header -->
+  <header>
+    <div class="station-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>AUTONOMOUS PRINT STATION</h1>
+        <p>Self-Service Instant Release Terminal</p>
       </div>
     </div>
 
-    <!-- OTP Prompt -->
-    <div class="prompt-text">Enter your 6-digit OTP</div>
-
-    <!-- 6 Digits Display -->
-    <div class="otp-display-container">
-      <div class="otp-box active" id="box-0"></div>
-      <div class="otp-box" id="box-1"></div>
-      <div class="otp-box" id="box-2"></div>
-      <div class="otp-box" id="box-3"></div>
-      <div class="otp-box" id="box-4"></div>
-      <div class="otp-box" id="box-5"></div>
+    <div class="station-pills">
+      <span class="printer-model-badge">{{ printer_name }}</span>
+      <div class="status-badge" id="stationStatusBadge">
+        <span class="status-dot" id="stationStatusDot"></span>
+        <span id="stationStatusText">READY</span>
+      </div>
     </div>
+  </header>
 
-    <!-- Touchscreen Keypad -->
-    <div class="keypad-grid">
-      <button class="key-btn" onclick="pressKey('1')">1</button>
-      <button class="key-btn" onclick="pressKey('2')">2</button>
-      <button class="key-btn" onclick="pressKey('3')">3</button>
-      <button class="key-btn" onclick="pressKey('4')">4</button>
-      <button class="key-btn" onclick="pressKey('5')">5</button>
-      <button class="key-btn" onclick="pressKey('6')">6</button>
-      <button class="key-btn" onclick="pressKey('7')">7</button>
-      <button class="key-btn" onclick="pressKey('8')">8</button>
-      <button class="key-btn" onclick="pressKey('9')">9</button>
-      <button class="key-btn action-btn" onclick="clearOtp()">CLEAR</button>
-      <button class="key-btn" onclick="pressKey('0')">0</button>
-      <button class="key-btn action-btn" onclick="backspaceOtp()">⌫</button>
+  <!-- Main Kiosk Body -->
+  <main>
+    <div class="kiosk-card">
+      <div class="card-title-group">
+        <h2>Enter your 6-digit OTP</h2>
+        <p>Enter the OTP received after completing payment.</p>
+      </div>
+
+      <!-- Alert Banner for Errors or Notices -->
+      <div class="alert-banner" id="alertBanner">
+        <h3 id="alertTitle">Invalid OTP</h3>
+        <p id="alertMessage">Please check the OTP and try again.</p>
+      </div>
+
+      <!-- 6 OTP Slots -->
+      <div class="otp-display-container" id="otpSlotsContainer">
+        <div class="otp-slot active" data-index="0">_</div>
+        <div class="otp-slot" data-index="1">_</div>
+        <div class="otp-slot" data-index="2">_</div>
+        <div class="otp-slot" data-index="3">_</div>
+        <div class="otp-slot" data-index="4">_</div>
+        <div class="otp-slot" data-index="5">_</div>
+      </div>
+
+      <!-- Touch Keypad -->
+      <div class="keypad-grid">
+        <button type="button" class="key-btn" onclick="pressDigit('1')">1</button>
+        <button type="button" class="key-btn" onclick="pressDigit('2')">2</button>
+        <button type="button" class="key-btn" onclick="pressDigit('3')">3</button>
+
+        <button type="button" class="key-btn" onclick="pressDigit('4')">4</button>
+        <button type="button" class="key-btn" onclick="pressDigit('5')">5</button>
+        <button type="button" class="key-btn" onclick="pressDigit('6')">6</button>
+
+        <button type="button" class="key-btn" onclick="pressDigit('7')">7</button>
+        <button type="button" class="key-btn" onclick="pressDigit('8')">8</button>
+        <button type="button" class="key-btn" onclick="pressDigit('9')">9</button>
+
+        <button type="button" class="key-btn action-btn clear-btn" onclick="clearOTP()">CLEAR</button>
+        <button type="button" class="key-btn" onclick="pressDigit('0')">0</button>
+        <button type="button" class="key-btn action-btn" onclick="backspaceOTP()">
+          <svg viewBox="0 0 24 24">
+            <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Action Button -->
+      <button type="button" class="print-btn" id="printBtn" onclick="submitOTP()" disabled>
+        <svg viewBox="0 0 24 24">
+          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+        </svg>
+        <span>PRINT DOCUMENT</span>
+      </button>
     </div>
+  </main>
 
-    <!-- Print Button -->
-    <button class="print-btn" id="btn-print" onclick="submitOtp()" disabled>
-      PRINT
-    </button>
-
-    <!-- Footer Instruction -->
-    <div class="footer-help">
-      Enter the OTP received<br>after completing payment.
-    </div>
-
-    <!-- Status / Overlay Screen -->
-    <div class="overlay" id="overlay">
-      <div class="overlay-icon" id="overlay-icon"></div>
-      <div class="overlay-title" id="overlay-title">Verifying OTP...</div>
-      <div class="overlay-msg" id="overlay-msg">Connecting to printer station...</div>
-      <button class="overlay-btn" id="overlay-close-btn" onclick="closeOverlay()" style="display: none;">Try Again</button>
+  <!-- Interactive Modal / Overlay for Verifying & Printing states -->
+  <div class="modal-overlay" id="statusModal">
+    <div class="modal-content">
+      <div class="modal-icon-wrap loading" id="modalIconWrap">
+        <div class="spinner" id="modalSpinner"></div>
+        <svg viewBox="0 0 24 24" id="modalCheckIcon" style="display:none; fill:#10b981;">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      </div>
+      <h3 id="modalTitle">OTP Verified</h3>
+      <p id="modalMessage">Printing...</p>
+      <div class="countdown-pill" id="modalCountdown" style="display:none;">Resetting in 8s...</div>
     </div>
   </div>
 
+  <!-- Footer -->
+  <footer>
+    Hardware Queue: {{ printer_name }} &bull; Station ID: {{ agent_id }} &bull; Local Print Node
+  </footer>
+
   <script>
+    // State
     let currentOtp = "";
+    let isSubmitting = false;
     let autoResetTimer = null;
+    let inactivityTimer = null;
+
+    const slots = document.querySelectorAll('.otp-slot');
+    const printBtn = document.getElementById('printBtn');
+    const alertBanner = document.getElementById('alertBanner');
+    const alertTitle = document.getElementById('alertTitle');
+    const alertMessage = document.getElementById('alertMessage');
+    const statusModal = document.getElementById('statusModal');
+    const modalIconWrap = document.getElementById('modalIconWrap');
+    const modalSpinner = document.getElementById('modalSpinner');
+    const modalCheckIcon = document.getElementById('modalCheckIcon');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMessage = document.getElementById('modalMessage');
+    const modalCountdown = document.getElementById('modalCountdown');
+
+    // Touch & Keyboard inputs
+    function pressDigit(d) {
+      if (isSubmitting || currentOtp.length >= 6) return;
+      currentOtp += d;
+      updateDisplay();
+      resetInactivityTimer();
+    }
+
+    function backspaceOTP() {
+      if (isSubmitting || currentOtp.length === 0) return;
+      currentOtp = currentOtp.slice(0, -1);
+      updateDisplay();
+      resetInactivityTimer();
+    }
+
+    function clearOTP() {
+      if (isSubmitting) return;
+      currentOtp = "";
+      hideAlert();
+      updateDisplay();
+      resetInactivityTimer();
+    }
 
     function updateDisplay() {
-      for (let i = 0; i < 6; i++) {
-        const box = document.getElementById(`box-${i}`);
-        if (i < currentOtp.length) {
-          box.textContent = currentOtp[i];
-          box.classList.add("filled");
-          box.classList.remove("active");
-        } else if (i === currentOtp.length) {
-          box.textContent = "";
-          box.classList.remove("filled");
-          box.classList.add("active");
+      hideAlert();
+      slots.forEach((slot, index) => {
+        if (index < currentOtp.length) {
+          slot.textContent = currentOtp[index];
+          slot.classList.add('filled');
+          slot.classList.remove('active');
+        } else if (index === currentOtp.length) {
+          slot.textContent = '_';
+          slot.classList.remove('filled');
+          slot.classList.add('active');
         } else {
-          box.textContent = "";
-          box.classList.remove("filled");
-          box.classList.remove("active");
+          slot.textContent = '_';
+          slot.classList.remove('filled', 'active');
         }
-      }
-      document.getElementById("btn-print").disabled = (currentOtp.length !== 6);
+      });
+
+      printBtn.disabled = (currentOtp.length !== 6 || isSubmitting);
     }
 
-    function pressKey(num) {
-      if (currentOtp.length < 6) {
-        currentOtp += num;
-        updateDisplay();
-        if (currentOtp.length === 6) {
-          // Auto submit when 6th digit entered
-          submitOtp();
-        }
+    function showAlert(title, message, isError = true) {
+      alertTitle.textContent = title;
+      alertMessage.textContent = message;
+      alertBanner.className = 'alert-banner ' + (isError ? 'error' : 'success');
+      alertBanner.style.display = 'block';
+
+      if (isError) {
+        // Auto hide error banner after 6 seconds
+        clearTimeout(alertBanner._timeout);
+        alertBanner._timeout = setTimeout(hideAlert, 6000);
       }
     }
 
-    function backspaceOtp() {
+    function hideAlert() {
+      alertBanner.style.display = 'none';
+    }
+
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimer);
       if (currentOtp.length > 0) {
-        currentOtp = currentOtp.slice(0, -1);
-        updateDisplay();
+        inactivityTimer = setTimeout(() => {
+          if (!isSubmitting) {
+            clearOTP();
+          }
+        }, 30000); // 30s inactivity resets screen
       }
     }
 
-    function clearOtp() {
-      currentOtp = "";
-      updateDisplay();
-    }
-
-    // Keyboard support for testing / external hardware keypads
-    window.addEventListener("keydown", (e) => {
-      if (document.getElementById("overlay").classList.contains("active")) {
-        if (e.key === "Escape") closeOverlay();
-        return;
-      }
+    // Physical Keyboard Support
+    window.addEventListener('keydown', (e) => {
+      if (isSubmitting) return;
       if (e.key >= '0' && e.key <= '9') {
-        pressKey(e.key);
+        pressDigit(e.key);
       } else if (e.key === 'Backspace') {
-        backspaceOtp();
+        backspaceOTP();
       } else if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
-        clearOtp();
+        clearOTP();
       } else if (e.key === 'Enter') {
-        submitOtp();
+        if (currentOtp.length === 6) {
+          submitOTP();
+        }
       }
     });
 
-    async function submitOtp() {
-      if (currentOtp.length !== 6) return;
+    // Verification & Print Release Flow
+    async function submitOTP() {
+      if (currentOtp.length !== 6 || isSubmitting) return;
+      isSubmitting = true;
+      printBtn.disabled = true;
+      hideAlert();
 
-      const overlay = document.getElementById("overlay");
-      const icon = document.getElementById("overlay-icon");
-      const title = document.getElementById("overlay-title");
-      const msg = document.getElementById("overlay-msg");
-      const closeBtn = document.getElementById("overlay-close-btn");
-
-      // Show Loading State
-      overlay.classList.add("active");
-      icon.className = "overlay-icon loading";
-      icon.textContent = "";
-      title.textContent = "Verifying OTP...";
-      msg.textContent = "Connecting to backend verification flow...";
-      closeBtn.style.display = "none";
+      // Show verifying modal
+      modalIconWrap.className = 'modal-icon-wrap loading';
+      modalSpinner.style.display = 'block';
+      modalCheckIcon.style.display = 'none';
+      modalTitle.textContent = 'OTP Verified';
+      modalMessage.textContent = 'Printing...';
+      modalCountdown.style.display = 'none';
+      statusModal.style.display = 'flex';
 
       try {
-        const resp = await fetch("/local/release", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/local/release', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ otp: currentOtp })
         });
 
-        const data = await resp.json().catch(() => ({}));
+        const data = await response.json().catch(() => ({}));
 
-        if (resp.ok) {
-          // Stage 1: Verified
-          icon.className = "overlay-icon success";
-          icon.textContent = "✓";
-          title.textContent = "OTP Verified";
-          msg.textContent = "Printing...";
+        if (response.ok && data.status === 'RELEASED') {
+          // Success state
+          modalIconWrap.className = 'modal-icon-wrap success';
+          modalSpinner.style.display = 'none';
+          modalCheckIcon.style.display = 'block';
+          modalTitle.textContent = 'Printing Started';
+          modalMessage.textContent = 'Please collect your document.';
+          modalCountdown.style.display = 'inline-block';
 
-          setTimeout(() => {
-            // Stage 2: Printing Started
-            title.textContent = "Printing Started";
-            msg.textContent = "Please collect your document from the printer tray.";
-
-            // Reset after 8 seconds
-            if (autoResetTimer) clearTimeout(autoResetTimer);
-            autoResetTimer = setTimeout(() => {
-              closeOverlay();
-            }, 8000);
-          }, 1500);
+          // Countdown to reset terminal
+          let secondsLeft = 8;
+          modalCountdown.textContent = `Resetting screen in ${secondsLeft}s...`;
+          const countdownInterval = setInterval(() => {
+            secondsLeft -= 1;
+            if (secondsLeft > 0) {
+              modalCountdown.textContent = `Resetting screen in ${secondsLeft}s...`;
+            } else {
+              clearInterval(countdownInterval);
+              resetTerminal();
+            }
+          }, 1000);
 
         } else {
-          // Specific Error Handling as required:
-          icon.className = "overlay-icon error";
-          icon.textContent = "✕";
-          closeBtn.style.display = "block";
+          // Failure handling matching requirements exactly
+          statusModal.style.display = 'none';
+          isSubmitting = false;
 
-          const errCode = data.error || data.error_code || "";
-          const errMsg = data.message || "";
+          const errCode = data.error || 'ERROR';
+          let errTitle = 'Invalid OTP';
+          let errMsg = 'Please check the OTP and try again.';
 
-          if (errCode === "ALREADY_PRINTED" || errMsg.includes("already been printed")) {
-            title.textContent = "This order has already been printed.";
-            msg.textContent = "This OTP was already used and cannot be reprinted.";
-          } else if (errCode === "OTP_EXPIRED" || errMsg.includes("expired")) {
-            title.textContent = "OTP Expired";
-            msg.textContent = "Please generate/request a new OTP from your mobile or web app.";
-          } else if (errCode === "PAYMENT_REQUIRED" || errMsg.includes("Payment")) {
-            title.textContent = "Payment Pending";
-            msg.textContent = "Payment has not been completed for this order.";
-          } else if (errCode === "TOO_MANY_ATTEMPTS") {
-            title.textContent = "Too Many Attempts";
-            msg.textContent = "Maximum attempts exceeded. Please request a new OTP.";
-          } else if (errCode === "INVALID_OTP") {
-            title.textContent = "Invalid OTP";
-            msg.textContent = "Please check the OTP and try again.";
-          } else if (resp.status === 503 || errCode === "BACKEND_UNAVAILABLE") {
-            title.textContent = "Backend Unavailable";
-            msg.textContent = "Printer station backend is currently unreachable. Please wait a moment and try again.";
+          if (errCode === 'OTP_EXPIRED') {
+            errTitle = 'OTP Expired';
+            errMsg = 'Please generate/request a new OTP.';
+          } else if (errCode === 'ORDER_ALREADY_COMPLETED') {
+            errTitle = 'Already Printed';
+            errMsg = 'This order has already been printed.';
+          } else if (errCode === 'ORDER_PRINTING') {
+            errTitle = 'Printing in Progress';
+            errMsg = 'This order is currently printing. Please collect your document.';
+          } else if (errCode === 'PRINTER_OFFLINE') {
+            errTitle = 'Printer Offline';
+            errMsg = data.message || 'Printer is currently offline. Please notify attendant.';
+          } else if (errCode === 'BACKEND_UNAVAILABLE' || response.status === 503) {
+            errTitle = 'System Unavailable';
+            errMsg = 'Print server is temporarily unavailable. Please try again.';
+          } else if (errCode === 'NETWORK_TIMEOUT' || response.status === 504) {
+            errTitle = 'Network Timeout';
+            errMsg = 'The verification request timed out. Please try again.';
+          } else if (errCode === 'TOO_MANY_ATTEMPTS') {
+            errTitle = 'Attempts Exceeded';
+            errMsg = 'Maximum OTP attempts exceeded. Please generate/request a new OTP.';
           } else {
-            title.textContent = "Invalid OTP";
-            msg.textContent = errMsg || "Please check the OTP and try again.";
+            errMsg = data.message || 'Please check the OTP and try again.';
           }
 
-          // Auto reset error overlay after 6 seconds
-          if (autoResetTimer) clearTimeout(autoResetTimer);
-          autoResetTimer = setTimeout(() => {
-            closeOverlay();
-          }, 6000);
+          showAlert(errTitle, errMsg, true);
+          currentOtp = "";
+          updateDisplay();
+        }
+      } catch (err) {
+        // Network or local agent offline
+        statusModal.style.display = 'none';
+        isSubmitting = false;
+        showAlert('Connection Error', 'Local print station cannot communicate with service.', true);
+        currentOtp = "";
+        updateDisplay();
+      }
+    }
+
+    function resetTerminal() {
+      clearTimeout(autoResetTimer);
+      clearTimeout(inactivityTimer);
+      currentOtp = "";
+      isSubmitting = false;
+      statusModal.style.display = 'none';
+      hideAlert();
+      updateDisplay();
+    }
+
+    // Live status polling every 10 seconds
+    async function checkPrinterHealth() {
+      try {
+        const res = await fetch('/local/status');
+        if (res.ok) {
+          const data = await res.json();
+          const dot = document.getElementById('stationStatusDot');
+          const txt = document.getElementById('stationStatusText');
+          if (data.printer_state === 'READY') {
+            dot.style.background = '#10b981';
+            txt.textContent = 'READY';
+          } else if (data.printer_state === 'BUSY') {
+            dot.style.background = '#f59e0b';
+            txt.textContent = 'BUSY';
+          } else {
+            dot.style.background = '#ef4444';
+            txt.textContent = 'ATTENTION';
+          }
         }
       } catch (e) {
-        icon.className = "overlay-icon error";
-        icon.textContent = "✕";
-        closeBtn.style.display = "block";
-        title.textContent = "Connection Error";
-        msg.textContent = "Print agent communication failed. Ensure station services are running.";
-        
-        if (autoResetTimer) clearTimeout(autoResetTimer);
-        autoResetTimer = setTimeout(() => {
-          closeOverlay();
-        }, 5000);
+        // Local agent offline
       }
     }
+    setInterval(checkPrinterHealth, 10000);
 
-    function closeOverlay() {
-      if (autoResetTimer) clearTimeout(autoResetTimer);
-      document.getElementById("overlay").classList.remove("active");
-      clearOtp();
-    }
-
-    // Refresh printer name from local agent
-    fetch("/local/status").then(r => r.json()).then(d => {
-      if (d && d.printer_name) {
-        document.getElementById("printer-name").textContent = d.printer_name;
-      }
-    }).catch(() => {});
+    // Initial render
+    updateDisplay();
   </script>
 </body>
 </html>
 """
 
 @kiosk_bp.route("/kiosk", methods=["GET"])
+def render_kiosk():
+    return render_template_string(
+        KIOSK_HTML,
+        printer_name=config.PRINTER_NAME,
+        agent_id=config.AGENT_ID
+    )
+
 @kiosk_bp.route("/", methods=["GET"])
-def get_kiosk_page():
-    return render_template_string(KIOSK_HTML)
+def index():
+    return redirect(url_for("kiosk.render_kiosk"))

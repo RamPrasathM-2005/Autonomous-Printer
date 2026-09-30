@@ -7,6 +7,7 @@ from app.db.models.order import Order, OrderStatus
 from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.db.models.otp import OTP
 from app.db.models.document import Document
+from app.db.models.payment import Payment, PaymentStatus
 from app.utils.crypto import generate_secure_otp, hash_sha256, encrypt_value, decrypt_value
 from app.utils.errors import AppException
 from app.utils.state_machine import validate_order_transition, validate_job_transition
@@ -111,14 +112,14 @@ class OTPService:
                         raise AppException(
                             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             error_code="TOO_MANY_ATTEMPTS",
-                            message="Maximum OTP attempts exceeded. Please request a new OTP."
+                            message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
                         )
                     db.commit()
             db.commit()
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="INVALID_OTP",
-                message="Invalid OTP code. Please verify the code displayed on your screen."
+                message="Invalid OTP. Please check the OTP and try again."
             )
 
         # Pick matching entry for this server if specified, otherwise latest
@@ -133,16 +134,40 @@ class OTPService:
 
         otp_rec, order_rec, job_rec, doc_rec = matching_entry
 
-        if order_rec.status == OrderStatus.COMPLETED or job_rec.status == PrintJobStatus.COMPLETED:
+        # Check if already completed/printed
+        if order_rec.status == OrderStatus.COMPLETED or job_rec.status == PrintJobStatus.COMPLETED or otp_rec.used_at is not None:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="ALREADY_PRINTED",
                 message="This order has already been printed."
             )
 
-        # IDEMPOTENCY: If already released or printing, return successfully
-        if order_rec.status in (OrderStatus.RELEASED, OrderStatus.PRINTING):
+        # Check if currently printing
+        if order_rec.status == OrderStatus.PRINTING or job_rec.status == PrintJobStatus.PRINTING:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="ORDER_PRINTING",
+                message="This order is currently printing. Please collect your document."
+            )
+
+        # Idempotency for already released jobs
+        if order_rec.status == OrderStatus.RELEASED and job_rec.status == PrintJobStatus.RELEASED:
             return job_rec
+
+        # Verify payment completion
+        if order_rec.status == OrderStatus.CREATED:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="PAYMENT_NOT_COMPLETED",
+                message="Payment has not been completed for this order."
+            )
+        payment = db.query(Payment).filter(Payment.order_id == order_rec.id).first()
+        if payment and payment.status != PaymentStatus.CAPTURED:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="PAYMENT_NOT_COMPLETED",
+                message="Payment has not been completed for this order."
+            )
 
         # Check attempts lockout
         if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
@@ -151,7 +176,7 @@ class OTPService:
             raise AppException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 error_code="TOO_MANY_ATTEMPTS",
-                message="Maximum OTP attempts exceeded. Please request a new OTP."
+                message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
             )
 
         # Check expiration
@@ -165,7 +190,7 @@ class OTPService:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="OTP_EXPIRED",
-                message="OTP has expired. Please place a new print request."
+                message="OTP Expired. Please generate/request a new OTP."
             )
 
         # Legal state transitions

@@ -90,8 +90,8 @@ def test_kiosk_page_endpoint(agent_client):
     assert "AUTONOMOUS PRINT" in html
     assert "PRINT STATION" in html
     assert "Enter your 6-digit OTP" in html
-    assert "pressKey" in html
-    assert "submitOtp" in html
+    assert "pressDigit" in html
+    assert "submitOTP" in html
 
 def test_local_release_invalid_otp(agent_client):
     from app.utils.errors import OtpReleaseException

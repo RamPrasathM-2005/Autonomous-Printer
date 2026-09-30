@@ -224,7 +224,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'QwikPrint',
+                    'Autonomous Printer',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -235,7 +235,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                     ),
                   ),
                   Text(
-                    'Autonomous Self-Service Kiosk',
+                    'Self-Service Autonomous Kiosk',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -272,21 +272,15 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 1),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Kiosk Connection Banner
-                      _buildStationCard(),
-
-                      const SizedBox(height: 20),
-
                       // Section Title & File Count
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -523,84 +517,6 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
 
 
 
-  Widget _buildStationCard() {
-    final isOnline = _selectedStation?.status.toLowerCase() == 'online';
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.print_rounded,
-              color: isOnline ? AppTheme.success : AppTheme.warning,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        _selectedStation?.name ?? 'Central Kiosk Station',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isOnline ? AppTheme.successSurface : AppTheme.warningSurface,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        (isOnline ? 'ONLINE' : 'CONNECTING').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: isOnline ? const Color(0xFF047857) : const Color(0xFFB45309),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _selectedStation?.location ?? 'Location: Main Campus Library Terminal #1',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildDropzoneCard() {
     return Container(
@@ -722,7 +638,6 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 children: [
                   _buildFormatPill('PDF Document', Icons.picture_as_pdf_rounded, const Color(0xFFE11D48)),
                   _buildFormatPill('Images (JPG, PNG)', Icons.image_rounded, const Color(0xFF2563EB)),
-                  _buildFormatPill('Up to 50 MB', Icons.check_circle_outline_rounded, const Color(0xFF059669)),
                 ],
               ),
             ],

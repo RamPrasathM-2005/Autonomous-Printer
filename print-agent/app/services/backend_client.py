@@ -1,7 +1,7 @@
 import requests
 from typing import List, Dict, Any, Optional
 from app.config import config
-from app.utils.errors import BackendCommunicationException
+from app.utils.errors import BackendCommunicationException, OTPReleaseException
 from app.utils.logging import agent_logger
 
 class BackendClient:
@@ -44,28 +44,37 @@ class BackendClient:
 
     def release_job(self, otp: str) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/agent/release"
+        agent_logger.info("Submitting OTP verification request to central backend...")
         try:
             resp = self.session.post(url, json={"otp": otp}, timeout=10)
             if resp.status_code == 200:
+                agent_logger.info("Backend verified OTP successfully. Job released.")
                 return resp.json()
             else:
-                agent_logger.warning(f"OTP release failed ({resp.status_code}): {resp.text}")
-                err_code = "INVALID_OTP"
-                err_msg = "Invalid OTP code. Please check and try again."
+                agent_logger.warning(f"Backend OTP verification failed with status {resp.status_code}")
                 try:
-                    data = resp.json()
-                    err_code = data.get("error") or data.get("error_code") or data.get("detail", {}).get("error_code") or err_code
-                    err_msg = data.get("message") or data.get("detail", {}).get("message") or err_msg
+                    err_payload = resp.json()
+                    err_code = err_payload.get("error") or err_payload.get("error_code") or err_payload.get("detail", {}).get("error") or "RELEASE_FAILED"
+                    err_msg = err_payload.get("message") or err_payload.get("detail", {}).get("message") or "OTP verification failed."
                 except Exception:
-                    pass
-                from app.utils.errors import OtpReleaseException
-                raise OtpReleaseException(err_msg, error_code=err_code)
+                    err_code = "RELEASE_FAILED"
+                    err_msg = "OTP verification failed."
+                from app.utils.errors import OTPReleaseException
+                raise OTPReleaseException(message=err_msg, error_code=err_code, status_code=resp.status_code)
+        except requests.exceptions.Timeout:
+            agent_logger.error("Timeout connecting to backend for OTP release.")
+            from app.utils.errors import BackendCommunicationException
+            raise BackendCommunicationException("Backend communication timed out. Please try again.", error_code="NETWORK_TIMEOUT", status_code=504)
+        except requests.exceptions.ConnectionError:
+            agent_logger.error("FastAPI backend connection refused for OTP release.")
+            from app.utils.errors import BackendCommunicationException
+            raise BackendCommunicationException("FastAPI backend is unavailable. Please ensure the backend is running.", error_code="BACKEND_UNAVAILABLE", status_code=503)
+        except (OTPReleaseException, BackendCommunicationException):
+            raise
         except Exception as e:
-            from app.utils.errors import OtpReleaseException
-            if isinstance(e, OtpReleaseException):
-                raise
-            agent_logger.error(f"Failed to submit OTP to backend: {e}")
-            raise BackendCommunicationException(str(e))
+            agent_logger.error(f"Unexpected error communicating with backend: {e}")
+            from app.utils.errors import BackendCommunicationException
+            raise BackendCommunicationException(str(e), error_code="COMMUNICATION_ERROR", status_code=500)
 
     def update_job_status(
         self,

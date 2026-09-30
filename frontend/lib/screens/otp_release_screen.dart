@@ -182,7 +182,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 4),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),

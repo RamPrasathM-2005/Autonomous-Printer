@@ -13,9 +13,13 @@ class CupsException(AgentException):
         super().__init__(message, error_code="CUPS_ERROR")
 
 class BackendCommunicationException(AgentException):
-    def __init__(self, message: str):
-        super().__init__(message, error_code="BACKEND_COMMUNICATION_ERROR")
-
-class OtpReleaseException(AgentException):
-    def __init__(self, message: str, error_code: str = "INVALID_OTP"):
+    def __init__(self, message: str, error_code: str = "BACKEND_UNAVAILABLE", status_code: int = 503):
+        self.status_code = status_code
         super().__init__(message, error_code=error_code)
+
+class OTPReleaseException(AgentException):
+    def __init__(self, message: str, error_code: str = "RELEASE_FAILED", status_code: int = 400):
+        self.status_code = status_code
+        super().__init__(message, error_code=error_code)
+
+OtpReleaseException = OTPReleaseException

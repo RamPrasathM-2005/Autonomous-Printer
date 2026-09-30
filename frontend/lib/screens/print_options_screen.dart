@@ -42,7 +42,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   bool _isValidating = false;
   String? _validationError;
   bool _showCostBreakdown = false;
-  int _visualizerMode = 0; // 0: 3D Smart Printer, 1: Document/Photo Preview
 
   @override
   void initState() {
@@ -177,10 +176,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       body: Column(
         children: [
           const WorkflowStepper(currentStep: 2),
-          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -262,13 +260,13 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                         const SizedBox(height: 20),
                       ],
 
-                      // Active Document Summary Card (Inspired by Image 2 Header Card)
+                      // Active Document Summary Card
                       _buildDocumentHeaderCard(),
 
                       const SizedBox(height: 20),
 
-                      // Interactive 3D Smart Printer & Document Visualizer (Reference Image 2)
-                      _buildInteractiveVisualizerCard(),
+                      // Document Preview Card (PDF Sheet Preview or Image Canvas)
+                      _buildDocumentPreviewCard(),
 
                       const SizedBox(height: 20),
 
@@ -361,27 +359,42 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
                       const SizedBox(height: 16),
 
-                      // Segment 3: Duplex & Copies Counter Card (Reference Image 3: Copies stepper card)
-                      Row(
-                        children: [
-                          // Copies Counter (Reference Image 3: - 1 + Pill Card)
-                          Expanded(
-                            flex: 1,
-                            child: _buildSectionContainer(
-                              title: 'Copies',
+                      // Segment 3: Copies Stepper
+                      _buildSectionContainer(
+                        title: 'Number of Copies',
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Select copies to print',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceSubtle,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppTheme.border),
+                              ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton.filledTonal(
+                                  IconButton(
                                     onPressed: _currentConfig.copies > 1
                                         ? () => _updateActiveSetting(() => _currentConfig.copies--)
                                         : null,
                                     icon: const Icon(Icons.remove_rounded),
                                     style: IconButton.styleFrom(
-                                      backgroundColor: AppTheme.surfaceSubtle,
+                                      backgroundColor: AppTheme.surfaceWhite,
                                       foregroundColor: AppTheme.textPrimary,
+                                      elevation: 1,
                                     ),
                                   ),
+                                  const SizedBox(width: 16),
                                   Text(
                                     '${_currentConfig.copies}',
                                     style: const TextStyle(
@@ -390,43 +403,21 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                       color: AppTheme.textPrimary,
                                     ),
                                   ),
-                                  IconButton.filledTonal(
+                                  const SizedBox(width: 16),
+                                  IconButton(
                                     onPressed: () => _updateActiveSetting(() => _currentConfig.copies++),
                                     icon: const Icon(Icons.add_rounded),
                                     style: IconButton.styleFrom(
-                                      backgroundColor: AppTheme.primarySurface,
-                                      foregroundColor: AppTheme.primary,
+                                      backgroundColor: AppTheme.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 1,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Print Quality Pill Card
-                          Expanded(
-                            flex: 1,
-                            child: _buildSectionContainer(
-                              title: 'Print Quality',
-                              child: DropdownButtonFormField<String>(
-                                value: _currentConfig.printQuality,
-                                decoration: const InputDecoration(
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(value: 'Standard', child: Text('Standard (300 DPI)')),
-                                  DropdownMenuItem(value: 'High (600 DPI)', child: Text('High Quality')),
-                                  DropdownMenuItem(value: 'Draft', child: Text('Draft Fast')),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    _updateActiveSetting(() => _currentConfig.printQuality = val);
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -766,12 +757,15 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildInteractiveVisualizerCard() {
+  Widget _buildDocumentPreviewCard() {
+    final doc = _currentConfig.document;
+    final isPdf = doc.isPdf;
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
@@ -779,28 +773,29 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 10,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.success,
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: isPdf ? const Color(0xFFFEF2F2) : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                        size: 16,
+                        color: isPdf ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Hardware Preview',
-                      style: TextStyle(
-                        fontSize: 13,
+                    const SizedBox(width: 10),
+                    Text(
+                      isPdf ? 'PDF Document Preview' : 'Image Document Preview',
+                      style: const TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.textPrimary,
                       ),
@@ -808,17 +803,35 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                   ],
                 ),
                 Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.border),
+                    color: _currentConfig.isColor
+                        ? const Color(0xFFEEF2FF)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _currentConfig.isColor
+                          ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                          : const Color(0xFFCBD5E1),
+                    ),
                   ),
-                  padding: const EdgeInsets.all(2),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildVisualizerToggleBtn('3D Printer', 0),
-                      _buildVisualizerToggleBtn('Document View', 1),
+                      Icon(
+                        _currentConfig.isColor ? Icons.color_lens_rounded : Icons.tonality_rounded,
+                        size: 13,
+                        color: _currentConfig.isColor ? const Color(0xFF6366F1) : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _currentConfig.isColor ? 'Color' : 'Grayscale',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _currentConfig.isColor ? const Color(0xFF6366F1) : const Color(0xFF475569),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -827,107 +840,19 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           ),
           const Divider(height: 1),
           Container(
-            height: 240,
+            height: 250,
             width: double.infinity,
             padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+            ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: _visualizerMode == 0
-                    ? Container(
-                        key: const ValueKey('printer_view'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/smart_printer.jpg',
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.print_rounded,
-                                size: 64,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.65),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.success),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Autonomous Station Ready',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : Container(
-                        key: const ValueKey('doc_view'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/mountain_preview.jpg',
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.image_rounded,
-                                size: 64,
-                                color: AppTheme.primary,
-                              ),
-                            ),
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.7),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'High Resolution (A4)',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
+              child: isPdf ? _buildPdfPreviewCanvas() : _buildImagePreviewCanvas(),
             ),
           ),
         ],
@@ -935,34 +860,165 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildVisualizerToggleBtn(String label, int mode) {
-    final isSelected = _visualizerMode == mode;
-    return InkWell(
-      onTap: () => setState(() => _visualizerMode = mode),
-      borderRadius: BorderRadius.circular(8),
+  Widget _buildPdfPreviewCanvas() {
+    final doc = _currentConfig.document;
+    final isColor = _currentConfig.isColor;
+
+    return Center(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        width: 175,
+        height: 220,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.surfaceWhite : Colors.transparent,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                  )
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 36,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isColor ? const Color(0xFFDC2626) : const Color(0xFF64748B),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                Text(
+                  _currentConfig.paperSize,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              doc.filename,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isColor ? const Color(0xFF0F172A) : const Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${_currentConfig.calculatedPages} pg • ${_currentConfig.pageRangeDescription}',
+              style: const TextStyle(
+                fontSize: 8,
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 8),
+            for (int i = 0; i < 5; i++) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                width: i % 2 == 0 ? double.infinity : 110,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: isColor
+                      ? (i == 0 ? const Color(0xFF818CF8) : const Color(0xFFE2E8F0))
+                      : const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+            const Spacer(),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isColor ? const Color(0xFFEEF2FF) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  isColor ? '● Color Mode' : '● Grayscale Mode',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: isColor ? const Color(0xFF4F46E5) : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImagePreviewCanvas() {
+    final isColor = _currentConfig.isColor;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        ColorFiltered(
+          colorFilter: isColor
+              ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply)
+              : const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+          child: Image.asset(
+            'assets/images/mountain_preview.jpg',
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (_, __, ___) => Center(
+              child: Icon(
+                Icons.image_rounded,
+                size: 64,
+                color: isColor ? AppTheme.primary : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isColor ? Icons.color_lens_rounded : Icons.tonality_rounded,
+                  size: 13,
+                  color: isColor ? const Color(0xFFA5B4FC) : Colors.white,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isColor ? 'Preview: Full Color Image' : 'Preview: Grayscale B&W Image',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
