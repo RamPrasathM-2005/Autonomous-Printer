@@ -321,42 +321,6 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           const Divider(height: 14),
           const SizedBox(height: 4),
 
-          // Station Details
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceSubtle,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.print_outlined, size: 16, color: AppTheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Pickup Station',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        widget.selectedStationId,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -577,19 +541,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               ),
             ),
           ],
-
-          const SizedBox(height: 14),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.shield_outlined, size: 14, color: AppTheme.textSecondary),
-              SizedBox(width: 6),
-              Text(
-                'Secured with 256-bit Razorpay Checkout',
-                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
+          
         ],
       ),
     );

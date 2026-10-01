@@ -195,30 +195,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
             ],
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.primarySurface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.bolt_rounded, size: 16, color: AppTheme.primary),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Cloudflare Quick Tunnel: Run ./start_tunnel.sh on the PC, copy the generated https://xxxx.trycloudflare.com URL, and paste it here.',
-                      style: TextStyle(fontSize: 11, color: AppTheme.primary, height: 1.3),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
           ],
         ),
       ),

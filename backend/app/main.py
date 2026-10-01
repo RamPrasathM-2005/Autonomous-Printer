@@ -70,6 +70,10 @@ async def log_requests_middleware(request: Request, call_next):
         response = await call_next(request)
         duration_ms = (time.time() - start) * 1000
         print(f"[BACKEND_LOG] <<< {method} {path} - Status: {response.status_code} ({duration_ms:.1f}ms)")
+        if path == "/" or path.endswith(".html") or path.endswith(".js") or "flutter" in path:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         return response
     except Exception as e:
         duration_ms = (time.time() - start) * 1000

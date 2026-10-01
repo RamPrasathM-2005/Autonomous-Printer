@@ -878,7 +878,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Icon(Icons.download_rounded, size: 16),
-                  label: const Text('Download Invoice', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  label: const Text('Invoice', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,

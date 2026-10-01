@@ -624,59 +624,11 @@ class _UploadScreenState extends State<UploadScreen>
                       ],
 
                       // Station Live Hardware Status
-                      _buildStationStatusCard(),
-                      const SizedBox(height: 16),
-
                       // Dropzone Card
                       _buildDropzoneCard(),
 
                       // Upload progress — visible when uploading
-                      if (_isUploading) ...[
-                        const SizedBox(height: 14),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    _uploadStatusText,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(
-                                  '${(_uploadProgress * 100).toStringAsFixed(0)}%',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: _uploadProgress,
-                                minHeight: 8,
-                                backgroundColor: AppTheme.primarySurface,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  AppTheme.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
+                      
                       const SizedBox(height: 24),
 
                       // Uploaded Files Progress Listing (Inspired by Image 1 & Image 2)
@@ -716,11 +668,8 @@ class _UploadScreenState extends State<UploadScreen>
                         ),
                       ],
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height:12),
                       _buildHowItWorks(),
-                      const SizedBox(height: 16),
-                      _buildTransparentPricing(),
-                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -762,15 +711,7 @@ class _UploadScreenState extends State<UploadScreen>
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            _selectedFiles.isEmpty
-                                ? 'PDF, PNG or JPG'
-                                : 'Total size: ${_formatFileSize(_totalSizeBytes)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
+                          
                         ],
                       );
                       final action = ElevatedButton(
@@ -1060,7 +1001,7 @@ class _UploadScreenState extends State<UploadScreen>
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
               // Format Chips & Size Limit
               Wrap(
                 alignment: WrapAlignment.center,
@@ -1070,18 +1011,6 @@ class _UploadScreenState extends State<UploadScreen>
                   _buildFormatPill('PDF', Icons.picture_as_pdf_outlined),
                   _buildFormatPill('PNG', Icons.image_outlined),
                   _buildFormatPill('JPG', Icons.photo_outlined),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shield_outlined, size: 13, color: AppTheme.primary.withValues(alpha: 0.8)),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Direct encrypted transfer · Auto-purged after printing',
-                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                  ),
                 ],
               ),
             ],
@@ -1138,20 +1067,20 @@ class _UploadScreenState extends State<UploadScreen>
               color: AppTheme.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           Row(
             children: [
-              _buildStepPill('1', 'Upload Files', 'Select PDF or images'),
+              _buildStepPill('1', 'Upload', 'Select Files'),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
               ),
-              _buildStepPill('2', 'Options & Pay', 'Customize & pay online'),
+              _buildStepPill('2', 'Pay', 'Pay online'),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
               ),
-              _buildStepPill('3', 'Print at Kiosk', 'Enter 6-digit OTP code'),
+              _buildStepPill('3', 'Print', 'Enter OTP'),
             ],
           ),
         ],
