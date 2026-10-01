@@ -411,6 +411,7 @@ export default function OtpStep({ finalData, onReset }) {
           </div>
         </div>
       </div>
+    )}
 
       {/* Physical Kiosk Walk-Up Guidance Card */}
       <div className="card-white" style={{ textAlign: 'left', marginBottom: '1.5rem', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '20px', padding: '1.35rem' }}>

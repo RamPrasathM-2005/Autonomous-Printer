@@ -106,6 +106,35 @@ def health_check():
         "environment": settings.ENVIRONMENT
     }
 
+@app.get("/api/tunnel", tags=["System"])
+def get_tunnel_status():
+    """Returns the active Cloudflare quick tunnel URL if available."""
+    candidates = [
+        Path(settings.STORAGE_DIR) / "tunnel_url.txt",
+        Path(__file__).resolve().parent.parent.parent / "storage" / "tunnel_url.txt",
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                url = p.read_text().strip()
+                if url.startswith("http"):
+                    return {"active": True, "tunnel_url": url}
+            except Exception:
+                pass
+    return {"active": False, "tunnel_url": None}
+
+from fastapi.staticfiles import StaticFiles
+
+# Mount downloads directory for mobile APK package
+downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
+if downloads_dir.exists():
+    app.mount("/downloads", StaticFiles(directory=str(downloads_dir)), name="downloads")
+
+# Mount customer web client if built (e.g. for tunneled remote access)
+react_dist = Path(__file__).resolve().parent.parent.parent / "frontend-react" / "dist"
+if react_dist.exists() and (react_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(react_dist), html=True), name="frontend-web")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)

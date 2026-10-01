@@ -23,11 +23,30 @@ def get_station_ip() -> str:
     except Exception:
         return "127.0.0.1"
 
+def get_tunnel_url() -> str | None:
+    """Returns active Cloudflare quick tunnel URL if running."""
+    candidates = [
+        Path(os.getcwd()) / "storage" / "tunnel_url.txt",
+        Path(__file__).resolve().parent.parent.parent.parent / "storage" / "tunnel_url.txt",
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                url = p.read_text().strip()
+                if url.startswith("http"):
+                    return url
+            except Exception:
+                pass
+    return None
+
 def get_web_url() -> str:
-    """Returns the URL of the customer web app (port 3100 for React client)."""
+    """Returns the URL of the customer web app (prefers active Cloudflare tunnel if available)."""
     override = os.getenv("KIOSK_WEB_URL")
     if override:
         return override
+    tunnel = get_tunnel_url()
+    if tunnel:
+        return tunnel
     ip = get_station_ip()
     return f"http://{ip}:3100"
 
@@ -787,8 +806,11 @@ KIOSK_HTML = """<!DOCTYPE html>
           <img src="{{ qr_data_uri }}" alt="Scan QR Code to Print" id="kioskQrImg" />
         </div>
 
-        <div class="qr-url-pill">
+        <div class="qr-url-pill" id="kioskQrUrlText">
           {{ web_url }}
+        </div>
+        <div id="kioskTunnelBadge" style="display: {{ 'inline-flex' if is_tunneled else 'none' }}; align-items: center; justify-content: center; gap: 6px; margin: 8px auto 0; font-size: 0.75rem; font-weight: 700; color: #60a5fa; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); padding: 4px 12px; border-radius: 20px; width: fit-content;">
+          ⚡ Cloudflare Quick Tunnel Active
         </div>
 
         <!-- Direct Actions -->
@@ -1143,8 +1165,24 @@ KIOSK_HTML = """<!DOCTYPE html>
           }
         }
       } catch (e) {}
+
+      // Poll active QR status (dynamically updates when Cloudflare tunnel is started)
+      try {
+        const qrRes = await fetch('/kiosk/qr-status');
+        if (qrRes.ok) {
+          const qrData = await qrRes.json();
+          const qrImg = document.getElementById('kioskQrImg');
+          const qrUrl = document.getElementById('kioskQrUrlText');
+          const tunnelBadge = document.getElementById('kioskTunnelBadge');
+          const dlBtn = document.getElementById('kioskDownloadApkBtn');
+          if (qrImg && qrData.qr_data_uri) qrImg.src = qrData.qr_data_uri;
+          if (qrUrl && qrData.target_url) qrUrl.textContent = qrData.target_url;
+          if (tunnelBadge) tunnelBadge.style.display = qrData.is_tunneled ? 'inline-flex' : 'none';
+          if (dlBtn && qrData.apk_url) dlBtn.href = qrData.apk_url;
+        }
+      } catch (e) {}
     }
-    setInterval(checkPrinterHealth, 10000);
+    setInterval(checkPrinterHealth, 4000);
 
     updateDisplay();
   </script>
@@ -1251,11 +1289,12 @@ SMART_GATEWAY_HTML = """<!DOCTYPE html>
 
 @kiosk_bp.route("/kiosk", methods=["GET"])
 def render_kiosk():
-    web_url = get_web_url()
-    # QR code points to the smart gateway or directly to the web app
-    qr_target = f"http://{get_station_ip()}:{config.PORT}/kiosk/open"
+    tunnel_url = get_tunnel_url()
+    web_url = tunnel_url if tunnel_url else get_web_url()
+    # QR code points directly to the active Cloudflare tunnel if available
+    qr_target = tunnel_url if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/kiosk/open"
     qr_data_uri = generate_qr_base64(qr_target)
-    apk_url = f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
+    apk_url = f"{tunnel_url}/downloads/autonomous-printer.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
 
     return render_template_string(
         KIOSK_HTML,
@@ -1263,8 +1302,23 @@ def render_kiosk():
         agent_id=config.AGENT_ID,
         web_url=web_url,
         qr_data_uri=qr_data_uri,
-        apk_url=apk_url
+        apk_url=apk_url,
+        is_tunneled=bool(tunnel_url)
     )
+
+@kiosk_bp.route("/kiosk/qr-status", methods=["GET"])
+def get_qr_status():
+    """Live QR code status polling endpoint for kiosk display screen."""
+    tunnel_url = get_tunnel_url()
+    target_url = tunnel_url if tunnel_url else get_web_url()
+    qr_data_uri = generate_qr_base64(target_url)
+    apk_url = f"{tunnel_url}/downloads/autonomous-printer.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
+    return jsonify({
+        "is_tunneled": bool(tunnel_url),
+        "target_url": target_url,
+        "qr_data_uri": qr_data_uri,
+        "apk_url": apk_url,
+    })
 
 @kiosk_bp.route("/kiosk/open", methods=["GET"])
 def smart_gateway():

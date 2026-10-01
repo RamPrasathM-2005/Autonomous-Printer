@@ -4,6 +4,7 @@ import '../models/document.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
+import '../widgets/server_config_dialog.dart';
 import 'payment_screen.dart';
 
 class PrintOptionsScreen extends StatefulWidget {
@@ -172,6 +173,30 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         title: const Text('Fast Print Mode'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            child: OutlinedButton.icon(
+              onPressed: () => showServerConfigModal(context),
+              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              label: const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceSubtle,
+                side: const BorderSide(color: AppTheme.border, width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

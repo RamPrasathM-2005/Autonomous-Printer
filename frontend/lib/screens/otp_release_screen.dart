@@ -6,6 +6,7 @@ import '../models/order.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import '../services/print_agent_service.dart';
+import '../widgets/server_config_dialog.dart';
 import 'print_progress_screen.dart';
 
 class OtpReleaseScreen extends StatefulWidget {
@@ -346,6 +347,30 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         title: const Text('Release OTP Code'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            child: OutlinedButton.icon(
+              onPressed: () => showServerConfigModal(context),
+              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              label: const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceSubtle,
+                side: const BorderSide(color: AppTheme.border, width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

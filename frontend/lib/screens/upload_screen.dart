@@ -7,6 +7,7 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
+import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
 
 class SelectedDocItem {
@@ -195,164 +196,13 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   }
 
   Future<void> _showServerConfigDialog() async {
-    final controller = TextEditingController(text: ApiConfig.backendUrl);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.dns_outlined, color: AppTheme.primary, size: 22),
-            SizedBox(width: 8),
-            Text(
-              'Server Configuration',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the backend API server URL (e.g. Cloudflare Quick Tunnel or LAN IP):',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'https://xxxx.trycloudflare.com',
-                labelText: 'Backend API URL',
-                labelStyle: const TextStyle(fontSize: 12),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18),
-                  onPressed: () => controller.clear(),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-              style: const TextStyle(fontSize: 13),
-              keyboardType: TextInputType.url,
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final data = await Clipboard.getData(Clipboard.kTextPlain);
-                      if (data != null && data.text != null && data.text!.trim().isNotEmpty) {
-                        controller.text = data.text!.trim();
-                      }
-                    },
-                    icon: const Icon(Icons.paste_rounded, size: 16),
-                    label: const Text(
-                      'Paste Tunnel URL from Clipboard',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primary,
-                      side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.primarySurface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.bolt_rounded, size: 16, color: AppTheme.primary),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Free Cloudflare Tunnel: Run ./start_tunnel.sh on the station machine, copy the generated trycloudflare.com URL, and paste it here.',
-                      style: TextStyle(fontSize: 11, color: AppTheme.primary, height: 1.3),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Quick Presets:',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _buildPresetChip('Localhost (127.0.0.1)', 'http://127.0.0.1:8000', controller),
-                _buildPresetChip('Station Wi-Fi (10.11.6.148)', 'http://10.11.6.148:8000', controller),
-                _buildPresetChip('Android Emulator (10.0.2.2)', 'http://10.0.2.2:8000', controller),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            child: const Text('Save & Connect'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && controller.text.trim().isNotEmpty) {
-      final newUrl = controller.text.trim();
-      await ApiConfig.updateBackendUrl(newUrl);
-      if (mounted) {
-        setState(() {
-          _uploadError = null;
-        });
-        await _loadStations();
-      }
+    final confirmed = await showServerConfigModal(context);
+    if (confirmed == true && mounted) {
+      setState(() {
+        _uploadError = null;
+      });
+      await _loadStations();
     }
-  }
-
-  Widget _buildPresetChip(String label, String url, TextEditingController controller) {
-    return InkWell(
-      onTap: () => controller.text = url,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceSubtle,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-        ),
-      ),
-    );
   }
 
   @override
@@ -417,25 +267,43 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: _showServerConfigDialog,
-            icon: const Icon(Icons.dns_outlined, color: AppTheme.textSecondary),
-            tooltip: 'Configure Backend Server / Tunnel URL',
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: OutlinedButton.icon(
+              onPressed: _showServerConfigDialog,
+              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              label: const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceSubtle,
+                side: const BorderSide(color: AppTheme.border, width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ),
+          const SizedBox(width: 4),
           _isLoadingStations
               ? const Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 8),
                     child: SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 )
               : IconButton(
                   onPressed: _loadStations,
-                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
+                  icon: const Icon(Icons.refresh_rounded, size: 20, color: AppTheme.textSecondary),
                   tooltip: 'Refresh Kiosk Status',
                 ),
           const SizedBox(width: 8),

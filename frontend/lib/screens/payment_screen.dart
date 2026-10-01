@@ -6,6 +6,7 @@ import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import '../services/razorpay_web_service.dart';
+import '../widgets/server_config_dialog.dart';
 import 'otp_release_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isVerifying = false;
   PaymentOrderResponse? _paymentData;
   String? _paymentError;
+  String _selectedPaymentMethod = 'upi';
 
   @override
   void initState() {
@@ -163,6 +165,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
         title: const Text('Checkout & Payment'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            child: OutlinedButton.icon(
+              onPressed: () => showServerConfigModal(context),
+              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              label: const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceSubtle,
+                side: const BorderSide(color: AppTheme.border, width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -223,6 +249,46 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Select Payment Method Card (Matches React Web PaymentStep)
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceWhite,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.border),
+                          boxShadow: AppTheme.cardShadow,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Payment Method',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildPaymentMethodTile(
+                              id: 'upi',
+                              title: 'UPI Instant Payment • QR Code',
+                              subtitle: 'Google Pay, PhonePe, Paytm, BHIM UPI',
+                              icon: Icons.qr_code_scanner_rounded,
+                            ),
+                            const SizedBox(height: 8),
+                            _buildPaymentMethodTile(
+                              id: 'card',
+                              title: 'Debit / Credit Card • Net Banking',
+                              subtitle: 'Visa, MasterCard, RuPay, All Major Banks',
+                              icon: Icons.credit_card_rounded,
                             ),
                           ],
                         ),
@@ -493,6 +559,81 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodTile({
+    required String id,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedPaymentMethod == id;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedPaymentMethod = id;
+        });
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.primary : AppTheme.surfaceSubtle,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 20,
+                color: AppTheme.primary,
+              ),
+          ],
+        ),
       ),
     );
   }
