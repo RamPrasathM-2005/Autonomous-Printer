@@ -8,7 +8,7 @@ import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
 import '../widgets/workflow_stepper.dart';
-import 'payment_success_screen.dart';
+import 'otp_release_screen.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
   final PrintOrder? order;
@@ -152,9 +152,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => PaymentSuccessScreen(
+          builder: (_) => OtpReleaseScreen(
+            orderId: confirmedOrder.id,
             order: confirmedOrder,
             configs: widget.configs,
+            documents: widget.configs.map((c) => c.document).toList(),
             paymentId: result.razorpayPaymentId,
           ),
         ),
@@ -190,9 +192,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => PaymentSuccessScreen(
+            builder: (_) => OtpReleaseScreen(
+              orderId: order.id,
               order: order,
               configs: widget.configs,
+              documents: widget.configs.map((c) => c.document).toList(),
             ),
           ),
         );

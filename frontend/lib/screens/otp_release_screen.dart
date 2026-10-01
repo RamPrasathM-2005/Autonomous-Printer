@@ -734,20 +734,21 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFDCFCE7),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF86EFAC)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF16A34A)),
-                const SizedBox(width: 6),
+                const Icon(Icons.lock_rounded, size: 16, color: Color(0xFF166534)),
+                const SizedBox(width: 8),
                 Text(
-                  'Assigned to $targetPrinterTitle (Locked)',
+                  'Locked to $targetPrinterTitle',
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF166534),
                   ),
@@ -1148,14 +1149,15 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                             // 1. Payment Summary Card (Placed at the top)
                             _buildPaymentSummary(),
 
-                            const SizedBox(height: 16),
+                            // 2. Destination Printer Selection Card (Only shown before printer is locked)
+                            if (!_isPrinterLocked && !_otpRevealed) ...[
+                              const SizedBox(height: 16),
+                              _buildPrinterSelector(),
+                            ],
 
-                            // 2. Destination Printer Selection Card (Placed below Payment Summary with View OTP button)
-                            _buildPrinterSelector(),
-
+                            // 3. OTP Section with Download Invoice & Share Receipt options (Revealed once locked)
                             if (_otpRevealed || _isPrinterLocked) ...[
                               const SizedBox(height: 16),
-                              // 3. OTP Section with Download Invoice & Share Receipt options
                               _buildOtpSection(),
                             ],
 
