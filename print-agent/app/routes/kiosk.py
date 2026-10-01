@@ -2,6 +2,7 @@ import os
 import io
 import socket
 import base64
+import subprocess
 from pathlib import Path
 from flask import Blueprint, render_template_string, redirect, url_for, send_file, request, jsonify, Response
 import qrcode
@@ -23,11 +24,22 @@ def get_station_ip() -> str:
     except Exception:
         return "127.0.0.1"
 
+def is_tunnel_alive() -> bool:
+    """Checks whether cloudflared quick tunnel daemon is actively running."""
+    try:
+        res = subprocess.run(["pgrep", "-f", "cloudflared.*tunnel"], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
 def get_tunnel_url() -> str | None:
-    """Returns active Cloudflare quick tunnel URL if running."""
+    """Returns active Cloudflare quick tunnel URL if cloudflared is running."""
+    if not is_tunnel_alive():
+        return None
     candidates = [
         Path(os.getcwd()) / "storage" / "tunnel_url.txt",
         Path(__file__).resolve().parent.parent.parent.parent / "storage" / "tunnel_url.txt",
+        Path(__file__).resolve().parent.parent.parent / "storage" / "tunnel_url.txt",
     ]
     for p in candidates:
         if p.exists():
@@ -48,7 +60,7 @@ def get_web_url() -> str:
     if tunnel:
         return tunnel
     ip = get_station_ip()
-    return f"http://{ip}:3100"
+    return f"http://{ip}:3000"
 
 def generate_qr_base64(url: str) -> str:
     """Generates a high-contrast PNG QR code as a base64 Data URI."""

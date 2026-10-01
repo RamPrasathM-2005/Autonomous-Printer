@@ -72,6 +72,9 @@ cleanup() {
     fuser -k 5001/tcp 2>/dev/null || true
     fuser -k 3000/tcp 2>/dev/null || true
     fuser -k 3100/tcp 2>/dev/null || true
+    pkill -f "cloudflared.*tunnel" 2>/dev/null || true
+    rm -f "$SCRIPT_DIR/storage/tunnel_url.txt" 2>/dev/null || true
+    rm -f "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt" 2>/dev/null || true
     wait 2>/dev/null || true
     echo -e "\033[1;32m[✓] All services cleanly stopped.\033[0m"
 }
@@ -134,8 +137,15 @@ if [ -d "$SCRIPT_DIR/frontend-react" ]; then
     sleep 2
 fi
 
-# Optional: Cloudflare Quick Tunnel (--tunnel flag)
-if [[ "$*" == *"--tunnel"* ]]; then
+# Optional: Cloudflare Quick Tunnel (--tunnel / -tunnel / -t / -Tunnel flag)
+WANT_TUNNEL=false
+for arg in "$@"; do
+    case "$arg" in
+        --tunnel|-tunnel|-Tunnel|-t) WANT_TUNNEL=true ;;
+    esac
+done
+
+if [ "$WANT_TUNNEL" = true ]; then
     echo -e "\033[1;33m[5/5] Starting Cloudflare Quick Tunnel...\033[0m"
     "$SCRIPT_DIR/start_tunnel.sh" &
     PIDS+=($!)

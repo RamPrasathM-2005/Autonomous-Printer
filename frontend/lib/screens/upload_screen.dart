@@ -13,6 +13,7 @@ import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
 import '../widgets/workflow_stepper.dart';
+import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
 
 
@@ -168,111 +169,13 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Future<void> _showServerConfigDialog() async {
-    final controller = TextEditingController(text: ApiConfig.backendUrl);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.dns_outlined, color: AppTheme.primary, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Server Configuration',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the backend API server URL (IP or domain):',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'http://127.0.0.1:8000',
-                labelText: 'Backend URL',
-                labelStyle: const TextStyle(fontSize: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-              style: const TextStyle(fontSize: 13),
-              keyboardType: TextInputType.url,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Quick Presets:',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _buildPresetChip('USB Cable (127.0.0.1)', 'http://127.0.0.1:8000', controller),
-                _buildPresetChip('PC Wi-Fi (10.11.14.85)', 'http://10.11.14.85:8000', controller),
-                _buildPresetChip('PC LAN (172.17.3.5)', 'http://172.17.3.5:8000', controller),
-                _buildPresetChip('Emulator (10.0.2.2)', 'http://10.0.2.2:8000', controller),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            child: const Text('Save & Connect'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && controller.text.trim().isNotEmpty) {
-      final newUrl = controller.text.trim();
-      await ApiConfig.updateBackendUrl(newUrl);
-      if (mounted) {
-        setState(() {
-          _uploadError = null;
-        });
-        await _loadStations();
-      }
+    final changed = await showServerConfigModal(context);
+    if (changed == true && mounted) {
+      setState(() {
+        _uploadError = null;
+      });
+      await _loadStations();
     }
-  }
-
-  Widget _buildPresetChip(String label, String url, TextEditingController controller) {
-    return InkWell(
-      onTap: () => controller.text = url,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceSubtle,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
   }
 
   String _formatFileSize(int bytes) {
@@ -476,17 +379,21 @@ class _UploadScreenState extends State<UploadScreen>
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
             child: ElevatedButton.icon(
               onPressed: _showServerConfigDialog,
-              icon: const Icon(Icons.dns_rounded, size: 14, color: Colors.white),
-              label: const Text(
-                'Server',
-                style: TextStyle(
+              icon: Icon(
+                ApiConfig.isTunneled ? Icons.cloud_done_rounded : Icons.dns_rounded,
+                size: 14,
+                color: Colors.white,
+              ),
+              label: Text(
+                ApiConfig.isTunneled ? 'Cloudflare' : 'Server',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: ApiConfig.isTunneled ? const Color(0xFF16A34A) : AppTheme.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),

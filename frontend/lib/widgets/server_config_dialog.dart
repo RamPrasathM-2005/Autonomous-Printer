@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/api_config.dart';
 import '../config/theme.dart';
+import '../services/api_service.dart';
 
 Future<bool?> showServerConfigModal(BuildContext context) {
   return showDialog<bool>(
@@ -19,11 +20,25 @@ class ServerConfigDialog extends StatefulWidget {
 
 class _ServerConfigDialogState extends State<ServerConfigDialog> {
   late final TextEditingController _controller;
+  String? _detectedTunnelUrl;
+  bool _detectingTunnel = false;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: ApiConfig.backendUrl);
+    _detectTunnel();
+  }
+
+  Future<void> _detectTunnel() async {
+    setState(() => _detectingTunnel = true);
+    final tunnel = await ApiService().fetchActiveTunnelUrl();
+    if (mounted) {
+      setState(() {
+        _detectingTunnel = false;
+        _detectedTunnelUrl = tunnel;
+      });
+    }
   }
 
   @override
@@ -32,7 +47,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
     super.dispose();
   }
 
-  Widget _buildPresetChip(String label, String url) {
+  Widget _buildPresetChip(String label, String url, {bool isTunnel = false}) {
     final isSelected = _controller.text.trim() == url;
     return InkWell(
       onTap: () {
@@ -44,20 +59,35 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
+          color: isSelected
+              ? (isTunnel ? const Color(0xFFEFF6FF) : AppTheme.primarySurface)
+              : AppTheme.surfaceSubtle,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? AppTheme.primary : AppTheme.border,
+            color: isSelected
+                ? (isTunnel ? const Color(0xFF2563EB) : AppTheme.primary)
+                : (isTunnel ? const Color(0xFF93C5FD) : AppTheme.border),
             width: isSelected ? 1.5 : 1,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-            color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isTunnel) ...[
+              const Icon(Icons.cloud_done_rounded, size: 13, color: Color(0xFF2563EB)),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                color: isSelected
+                    ? (isTunnel ? const Color(0xFF2563EB) : AppTheme.primary)
+                    : AppTheme.textPrimary,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -135,7 +165,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                     },
                     icon: const Icon(Icons.paste_rounded, size: 16),
                     label: const Text(
-                      'Paste Tunnel URL from Clipboard',
+                      'Paste from Clipboard',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                     style: OutlinedButton.styleFrom(
@@ -146,9 +176,73 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                IconButton.outlined(
+                  onPressed: _detectingTunnel ? null : _detectTunnel,
+                  icon: _detectingTunnel
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 18),
+                  tooltip: 'Scan for active Cloudflare tunnel',
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
+            if (_detectedTunnelUrl != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_done_rounded, color: Color(0xFF16A34A), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Active Cloudflare Quick Tunnel Found',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
+                          ),
+                          Text(
+                            _detectedTunnelUrl!,
+                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF15803D)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _controller.text = _detectedTunnelUrl!;
+                        });
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: const Color(0xFF16A34A),
+                      ),
+                      child: const Text('Use', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -180,6 +274,8 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
+                if (_detectedTunnelUrl != null)
+                  _buildPresetChip('Cloudflare Tunnel (Live)', _detectedTunnelUrl!, isTunnel: true),
                 _buildPresetChip('USB Cable (127.0.0.1)', 'http://127.0.0.1:8000'),
                 _buildPresetChip('PC Wi-Fi (10.11.14.85)', 'http://10.11.14.85:8000'),
                 _buildPresetChip('PC LAN (172.17.3.5)', 'http://172.17.3.5:8000'),

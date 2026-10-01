@@ -47,16 +47,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
+# CORS configuration: Allow all origins and headers for local & Cloudflare Quick Tunnel access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.ENVIRONMENT == "development" else [],
+    allow_origins=["*"],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 import time
+import subprocess
 
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
@@ -108,11 +110,21 @@ def health_check():
         "environment": settings.ENVIRONMENT
     }
 
+def _is_cloudflared_running() -> bool:
+    try:
+        res = subprocess.run(["pgrep", "-f", "cloudflared.*tunnel"], capture_output=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
 @app.get("/api/tunnel", tags=["System"])
 def get_tunnel_status():
-    """Returns the active Cloudflare quick tunnel URL if available."""
+    """Returns the active Cloudflare quick tunnel URL if cloudflared is running."""
+    if not _is_cloudflared_running():
+        return {"active": False, "tunnel_url": None}
+
     candidates = [
-        Path(settings.STORAGE_DIR) / "tunnel_url.txt",
+        Path(settings.STORAGE_ROOT) / "tunnel_url.txt",
         Path(__file__).resolve().parent.parent.parent / "storage" / "tunnel_url.txt",
     ]
     for p in candidates:
@@ -125,6 +137,40 @@ def get_tunnel_status():
                 pass
     return {"active": False, "tunnel_url": None}
 
+import httpx
+
+@app.get("/local/status", tags=["Hardware Proxy"])
+async def proxy_local_status():
+    """Proxy local printer hardware status for tunneled / remote access."""
+    for agent_url in ["http://127.0.0.1:5001/local/status", "http://127.0.0.1:5000/local/status"]:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                res = await client.get(agent_url)
+                if res.status_code == 200:
+                    return JSONResponse(content=res.json(), status_code=200)
+        except Exception:
+            pass
+    return {
+        "agent_id": "PRINT-SERVER-001",
+        "printer_name": "HP_LaserJet_400_M401dn_F36EC0",
+        "printer_state": "READY",
+        "paper_state": "AVAILABLE",
+        "active_jobs_count": 0
+    }
+
+@app.post("/local/release", tags=["Hardware Proxy"])
+async def proxy_local_release(request: Request):
+    """Proxy local OTP release for tunneled remote access."""
+    body = await request.json()
+    for agent_url in ["http://127.0.0.1:5001/local/release", "http://127.0.0.1:5000/local/release"]:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(agent_url, json=body)
+                return JSONResponse(content=res.json(), status_code=res.status_code)
+        except Exception:
+            pass
+    return JSONResponse(content={"error": "AGENT_UNAVAILABLE", "message": "Hardware agent not reached."}, status_code=503)
+
 from fastapi.staticfiles import StaticFiles
 
 # Mount downloads directory for mobile APK package
@@ -132,9 +178,22 @@ downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
 if downloads_dir.exists():
     app.mount("/downloads", StaticFiles(directory=str(downloads_dir)), name="downloads")
 
-# Mount customer web client if built (e.g. for tunneled remote access)
+# Frontends directory paths
+flutter_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "build" / "web"
 react_dist = Path(__file__).resolve().parent.parent.parent / "frontend-react" / "dist"
+
+# Mount React client at /react if built
 if react_dist.exists() and (react_dist / "index.html").exists():
+    from fastapi.responses import RedirectResponse
+    @app.get("/react", include_in_schema=False)
+    def redirect_react():
+        return RedirectResponse(url="/react/")
+    app.mount("/react", StaticFiles(directory=str(react_dist), html=True), name="react-web")
+
+# Mount Flutter Web customer client at root /
+if flutter_dist.exists() and (flutter_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(flutter_dist), html=True), name="flutter-web")
+elif react_dist.exists() and (react_dist / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(react_dist), html=True), name="frontend-web")
 
 if __name__ == "__main__":

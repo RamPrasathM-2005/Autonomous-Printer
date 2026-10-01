@@ -37,6 +37,8 @@ fi
 
 # Clean up any old tunnel log and process
 rm -f "$TUNNEL_LOG"
+rm -f "$TUNNEL_URL_FILE"
+rm -f "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt"
 pkill -f "cloudflared tunnel --url" 2>/dev/null || true
 sleep 1
 
@@ -54,7 +56,9 @@ cleanup() {
     echo ""
     echo -e "\033[1;33m[!] Stopping Cloudflare Quick Tunnel...\033[0m"
     kill "$TUNNEL_PID" 2>/dev/null || true
-    pkill -f "cloudflared tunnel --url" 2>/dev/null || true
+    pkill -f "cloudflared tunnel" 2>/dev/null || true
+    rm -f "$TUNNEL_URL_FILE"
+    rm -f "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt"
     echo -e "\033[1;32m[✓] Tunnel stopped.\033[0m"
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -80,6 +84,8 @@ fi
 
 # 5. Save URL to persistent storage
 echo "$TUNNEL_URL" > "$TUNNEL_URL_FILE"
+mkdir -p "$SCRIPT_DIR/print-agent/storage"
+echo "$TUNNEL_URL" > "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt"
 
 # Try copying to clipboard if desktop clipboard tool is available
 if command -v xclip &>/dev/null; then

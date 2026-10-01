@@ -29,6 +29,10 @@ pkill -9 -f "frontend_server_aot" 2>/dev/null || true
 pkill -9 -f "scripts/serve_frontend.py" 2>/dev/null || true
 pkill -9 -f "cloudflared.*tunnel" 2>/dev/null || true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+rm -f "$SCRIPT_DIR/storage/tunnel_url.txt" 2>/dev/null || true
+rm -f "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt" 2>/dev/null || true
+
 sleep 1
 
 echo -e "\033[1;32m[✓] All services cleanly stopped.\033[0m"

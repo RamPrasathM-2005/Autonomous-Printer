@@ -99,6 +99,35 @@ class ApiService {
     }
   }
 
+  Future<String?> fetchActiveTunnelUrl() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_baseUrl/api/tunnel'))
+          .timeout(const Duration(seconds: 2));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['active'] == true && data['tunnel_url'] != null) {
+          return data['tunnel_url'] as String;
+        }
+      }
+    } catch (_) {}
+
+    for (final candidate in ApiConfig.fallbackCandidates) {
+      try {
+        final res = await http
+            .get(Uri.parse('$candidate/api/tunnel'))
+            .timeout(const Duration(milliseconds: 1500));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['active'] == true && data['tunnel_url'] != null) {
+            return data['tunnel_url'] as String;
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   Future<bool> probeAndSwitchWorkingBackend() async {
     if (await checkHealth()) return true;
     for (final candidate in ApiConfig.fallbackCandidates) {
@@ -108,6 +137,26 @@ class ApiService {
             .get(Uri.parse('$candidate/health'))
             .timeout(const Duration(seconds: 2));
         if (res.statusCode == 200) {
+          // If on mobile app, check if candidate exposes an active Cloudflare tunnel
+          try {
+            final tunnelRes = await http
+                .get(Uri.parse('$candidate/api/tunnel'))
+                .timeout(const Duration(seconds: 2));
+            if (tunnelRes.statusCode == 200) {
+              final tData = jsonDecode(tunnelRes.body);
+              if (tData['active'] == true && tData['tunnel_url'] != null) {
+                final tUrl = tData['tunnel_url'] as String;
+                final tHealth = await http
+                    .get(Uri.parse('$tUrl/health'))
+                    .timeout(const Duration(seconds: 3));
+                if (tHealth.statusCode == 200) {
+                  await ApiConfig.updateBackendUrl(tUrl);
+                  return true;
+                }
+              }
+            }
+          } catch (_) {}
+
           await ApiConfig.updateBackendUrl(candidate);
           return true;
         }

@@ -39,12 +39,30 @@ class ApiConfig {
     final prefs = await SharedPreferences.getInstance();
     String? storedBackend = prefs.getString(_keyBackendUrl);
     String? storedAgent = prefs.getString(_keyAgentUrl);
-
-    // Auto-correct stale 10.0.2.2 URLs which cause timeouts on real devices and web
-    if (storedBackend == null || (storedBackend.contains('10.0.2.2') && kIsWeb)) {
-      storedBackend = defaultBackendUrl;
-      await prefs.setString(_keyBackendUrl, storedBackend);
+    // Smart Cloudflare Tunnel & Web Origin synchronization
+    if (kIsWeb) {
+      final host = Uri.base.host.toLowerCase();
+      final queryBackend = Uri.base.queryParameters['backend'] ?? Uri.base.queryParameters['tunnel'];
+      if (queryBackend != null && queryBackend.trim().isNotEmpty) {
+        storedBackend = queryBackend.trim().replaceAll(RegExp(r'/+$'), '');
+        await prefs.setString(_keyBackendUrl, storedBackend);
+      } else if (!['localhost', '127.0.0.1'].contains(host)) {
+        // When accessed via Cloudflare Tunnel or remote hostname on mobile browser,
+        // ALWAYS use the origin to avoid Mixed Content / unreachable localhost!
+        storedBackend = Uri.base.origin;
+        await prefs.setString(_keyBackendUrl, storedBackend);
+      } else if (storedBackend == null || storedBackend.contains('10.0.2.2')) {
+        storedBackend = defaultBackendUrl;
+        await prefs.setString(_keyBackendUrl, storedBackend);
+      }
+    } else {
+      // Native Android / iOS mobile app
+      if (storedBackend == null || storedBackend.contains('10.0.2.2')) {
+        storedBackend = defaultBackendUrl;
+        await prefs.setString(_keyBackendUrl, storedBackend);
+      }
     }
+
     if (storedAgent == null || (storedAgent.contains('10.0.2.2') && kIsWeb)) {
       storedAgent = defaultAgentUrl;
       await prefs.setString(_keyAgentUrl, storedAgent);
@@ -55,6 +73,8 @@ class ApiConfig {
     selectedStationId =
         prefs.getString(_keySelectedStationId) ?? 'PRINT-SERVER-001';
   }
+
+  static bool get isTunneled => backendUrl.contains('trycloudflare.com');
 
   static Future<void> updateBackendUrl(String url) async {
     backendUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
