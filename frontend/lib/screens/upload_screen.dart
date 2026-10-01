@@ -623,6 +623,10 @@ class _UploadScreenState extends State<UploadScreen>
                         const SizedBox(height: 16),
                       ],
 
+                      // Station Live Hardware Status
+                      _buildStationStatusCard(),
+                      const SizedBox(height: 16),
+
                       // Dropzone Card
                       _buildDropzoneCard(),
 
@@ -711,6 +715,14 @@ class _UploadScreenState extends State<UploadScreen>
                           },
                         ),
                       ],
+
+                      const SizedBox(height: 24),
+                      _buildHowItWorks(),
+                      const SizedBox(height: 16),
+                      _buildFeatureHighlights(),
+                      const SizedBox(height: 16),
+                      _buildTransparentPricing(),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -847,6 +859,99 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
 
+  Widget _buildStationStatusCard() {
+    final station = _selectedStation;
+    final isOnline = station == null || station.status.toLowerCase() == 'online';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isOnline ? const Color(0xFF86EFAC) : AppTheme.border,
+          width: 1.2,
+        ),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isOnline ? const Color(0xFFDCFCE7) : AppTheme.surfaceSubtle,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.print_rounded,
+              size: 18,
+              color: isOnline ? const Color(0xFF16A34A) : AppTheme.textMuted,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      station?.name ?? 'Station 1 · Autonomous Kiosk',
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isOnline ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: isOnline ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isOnline ? 'Online' : 'Offline',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isOnline ? const Color(0xFF166534) : const Color(0xFF991B1B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'HP LaserJet 400 (B&W) & Color Ready · A4 Paper Loaded',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDropzoneCard() {
     return Container(
       width: double.infinity,
@@ -863,16 +968,16 @@ class _UploadScreenState extends State<UploadScreen>
         onTap: _isUploading ? null : _pickFiles,
         borderRadius: BorderRadius.circular(24),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
           child: Column(
             children: [
-              // Illustration / Custom Upload Icon Container (Inspired by Reference Images 1 & 2)
+              // Custom Upload Icon Container
               Stack(
                 alignment: Alignment.center,
                 children: [
                   Container(
-                    width: 90,
-                    height: 90,
+                    width: 86,
+                    height: 86,
                     decoration: BoxDecoration(
                       color: AppTheme.primarySurface,
                       shape: BoxShape.circle,
@@ -883,8 +988,8 @@ class _UploadScreenState extends State<UploadScreen>
                     ),
                   ),
                   Container(
-                    width: 66,
-                    height: 66,
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
                       gradient: AppTheme.primaryGradient,
                       shape: BoxShape.circle,
@@ -898,26 +1003,42 @@ class _UploadScreenState extends State<UploadScreen>
                     ),
                     child: const Icon(
                       Icons.cloud_upload_rounded,
-                      size: 32,
+                      size: 30,
                       color: Colors.white,
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 20),
-
-              const SizedBox(height: 20),
-
-              // Browse Files Button — pure blue/white, no accent color
+              const SizedBox(height: 16),
+              const Text(
+                'Drop your files here, or browse',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Supports multi-page documents and image files',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppTheme.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 18),
+              // Browse Files Button
               ElevatedButton(
                 onPressed: _isUploading ? null : _pickFiles,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 36,
-                    vertical: 14,
+                    horizontal: 32,
+                    vertical: 13,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -933,7 +1054,7 @@ class _UploadScreenState extends State<UploadScreen>
                     Text(
                       'Browse Files',
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.3,
                       ),
@@ -941,11 +1062,328 @@ class _UploadScreenState extends State<UploadScreen>
                   ],
                 ),
               ),
-
-
+              const SizedBox(height: 20),
+              // Format Chips & Size Limit
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _buildFormatPill('PDF', Icons.picture_as_pdf_outlined),
+                  _buildFormatPill('PNG', Icons.image_outlined),
+                  _buildFormatPill('JPG', Icons.photo_outlined),
+                  _buildFormatPill('Max 50MB', Icons.speed_rounded),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shield_outlined, size: 13, color: AppTheme.primary.withValues(alpha: 0.8)),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Direct encrypted transfer · Auto-purged after printing',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFormatPill(String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceSubtle,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppTheme.primary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHowItWorks() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'How It Works',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildStepPill('1', 'Upload Files', 'Select PDF or images'),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
+              ),
+              _buildStepPill('2', 'Options & Pay', 'Customize & pay online'),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
+              ),
+              _buildStepPill('3', 'Print at Kiosk', 'Enter 6-digit OTP code'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepPill(String num, String title, String subtitle) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySurface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                ),
+                child: Center(
+                  child: Text(
+                    num,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.only(left: 26),
+            child: Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 10.5,
+                color: AppTheme.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureHighlights() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 500;
+
+        final items = [
+          _buildFeatureCard(
+            icon: Icons.pin_rounded,
+            title: 'Zero-Wait OTP Release',
+            desc: 'Secure 6-digit code release at physical touchscreen terminal.',
+            color: const Color(0xFF2563EB),
+          ),
+          _buildFeatureCard(
+            icon: Icons.tune_rounded,
+            title: 'Custom Print Control',
+            desc: 'Multi-page ranges, copies, monochrome or full vibrant color.',
+            color: const Color(0xFF0284C7),
+          ),
+          _buildFeatureCard(
+            icon: Icons.verified_user_outlined,
+            title: 'Privacy Protected',
+            desc: 'Queues isolate documents. Files wiped automatically after print.',
+            color: const Color(0xFF16A34A),
+          ),
+        ];
+
+        if (isNarrow) {
+          return Column(
+            children: items.map((w) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: w,
+            )).toList(),
+          );
+        }
+
+        return Row(
+          children: items.map((w) => Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: w,
+            ),
+          )).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String title,
+    required String desc,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppTheme.textSecondary,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransparentPricing() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.sell_outlined, size: 16, color: AppTheme.primary),
+              SizedBox(width: 8),
+              Text(
+                'Transparent Self-Service Rates',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              _buildPriceChip('Black & White', '₹2.00 / page', Icons.format_color_reset_rounded),
+              _buildPriceChip('Full Color', '₹5.00 / page', Icons.color_lens_rounded),
+              _buildPriceChip('Auto-Duplex', 'Available', Icons.flip_rounded),
+              _buildPriceChip('Instant Payment', 'UPI / Card', Icons.bolt_rounded),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceChip(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceSubtle,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
