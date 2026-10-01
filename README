@@ -1,3 +1,5 @@
+Historical React Native design. The implemented application is Flutter web; see README.md and docs/SECURITY.md for current setup and security behavior.
+
 # Self-Service Printing Platform
 ## React Native + FastAPI + MySQL + Linux File Storage + Flask Print Agent + CUPS
 

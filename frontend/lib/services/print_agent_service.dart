@@ -1,7 +1,9 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
+
 import '../config/api_config.dart';
+import 'api_error.dart';
 
 class PrintAgentService {
   static final PrintAgentService _instance = PrintAgentService._internal();
@@ -29,46 +31,23 @@ class PrintAgentService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to get agent status');
+      throw const ApiError('Station unavailable. Try again later.');
     }
   }
 
   Future<Map<String, dynamic>> releaseWithOtp(String otp) async {
-    // 1. Try local print-agent on port 5000 first
-    try {
-      final uri = Uri.parse('$_agentUrl/local/release');
-      final response = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'otp': otp.trim()}),
-          )
-          .timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-    } catch (e) {
-      // Local agent unreachable or CORS blocked in browser, fallback to backend
-      debugPrint('[PrintAgentService] Port 5000 call failed, falling back to backend: $e');
-    }
-
-    // 2. Reliable Fallback: Call central FastAPI backend kiosk endpoint
-    final backendUri = Uri.parse('${ApiConfig.baseUrl}/agent/release-kiosk');
     final response = await http
         .post(
-          backendUri,
+          Uri.parse('$_agentUrl/local/release'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'otp': otp.trim()}),
         )
-        .timeout(const Duration(seconds: 15));
-
+        .timeout(const Duration(seconds: 10));
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode == 200) {
-      return data;
-    } else {
-      throw Exception(data['message'] ?? 'OTP Release Failed (${response.statusCode})');
+    if (response.statusCode != 200) {
+      throw ApiError.fromCode(data['error'] as String?);
     }
+    return data;
   }
 
   Future<Map<String, dynamic>> releasePrintJob({
@@ -83,10 +62,7 @@ class PrintAgentService {
       final res = await releaseWithOtp(otp);
       return {'success': true, ...res};
     } catch (e) {
-      return {
-        'success': false,
-        'error': e.toString().replaceAll('Exception: ', ''),
-      };
+      return {'success': false, 'error': userError(e)};
     }
   }
 }

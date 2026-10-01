@@ -1,3 +1,25 @@
+class PrintLineItem {
+  final String filename;
+  final int pages;
+  final int copies;
+  final bool colour;
+  final String amount;
+  const PrintLineItem({
+    required this.filename,
+    required this.pages,
+    required this.copies,
+    required this.colour,
+    required this.amount,
+  });
+  factory PrintLineItem.fromJson(Map<String, dynamic> json) => PrintLineItem(
+    filename: json['filename'] as String? ?? 'Document',
+    pages: (json['pages'] as num?)?.toInt() ?? 0,
+    copies: (json['copies'] as num?)?.toInt() ?? 1,
+    colour: json['colour'] == true,
+    amount: num.tryParse('${json['amount']}')?.toStringAsFixed(2) ?? '',
+  );
+}
+
 class PrintSettings {
   final String pageRange;
   final int copies;
@@ -5,6 +27,8 @@ class PrintSettings {
   final String sides; // one-sided, two-sided-long-edge, two-sided-short-edge
   final String paperSize; // A4, Letter, Legal
   final String orientation; // portrait, landscape
+  final bool mockPrinting;
+  final List<PrintLineItem> items;
 
   PrintSettings({
     this.pageRange = 'all',
@@ -13,6 +37,8 @@ class PrintSettings {
     this.sides = 'one-sided',
     this.paperSize = 'A4',
     this.orientation = 'portrait',
+    this.mockPrinting = false,
+    this.items = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +48,7 @@ class PrintSettings {
         'sides': sides,
         'paperSize': paperSize,
         'orientation': orientation,
+        'mockPrinting': mockPrinting,
       };
 
   factory PrintSettings.fromJson(Map<String, dynamic> json) {
@@ -32,6 +59,13 @@ class PrintSettings {
       sides: json['sides'] ?? 'one-sided',
       paperSize: json['paperSize'] ?? json['paper_size'] ?? 'A4',
       orientation: json['orientation'] ?? 'portrait',
+      mockPrinting: json['mockPrinting'] == true,
+      items: (json['items'] as List? ?? const [])
+          .map(
+            (item) =>
+                PrintLineItem.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
     );
   }
 }
@@ -70,6 +104,19 @@ class PrintOrder {
   String get formattedAmount => '₹${amount.toStringAsFixed(2)}';
 
   bool get isWaitingOtp => status.toUpperCase() == 'WAITING_FOR_OTP';
+  String get statusLabel => switch (status.toUpperCase()) {
+    'CREATED' || 'WAITING_FOR_PAYMENT' => 'Awaiting payment',
+    'PAID' => 'Paid',
+    'JOB_QUEUED' => 'Queued',
+    'WAITING_FOR_OTP' => 'Ready to release',
+    'RELEASED' => 'Queued for printing',
+    'PRINTING' => 'Printing',
+    'COMPLETED' => 'Completed',
+    'FAILED' => 'Needs attention',
+    'EXPIRED' => 'Expired',
+    'REFUNDED' => 'Refunded',
+    _ => 'Status unavailable',
+  };
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
   bool get isPrinting => status.toUpperCase() == 'PRINTING';
   bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
@@ -84,21 +131,26 @@ class PrintOrder {
 
   factory PrintOrder.fromJson(Map<String, dynamic> json) {
     return PrintOrder(
-      id: json['id'] ?? '',
-      userId: json['user_id'],
-      documentId: json['document_id'] ?? '',
-      printServerId: json['print_server_id'] ?? '',
-      printSettings: json['print_settings'] != null
-          ? PrintSettings.fromJson(json['print_settings'] as Map<String, dynamic>)
+      id: json['id'] ?? json['orderId'] ?? '',
+      userId: (json['userId'] ?? json['user_id'])?.toString(),
+      documentId: json['documentId'] ?? json['document_id'] ?? '',
+      printServerId: json['printServerId'] ?? json['print_server_id'] ?? '',
+      printSettings: (json['printSettings'] ?? json['print_settings']) != null
+          ? PrintSettings.fromJson(
+              (json['printSettings'] ?? json['print_settings'])
+                  as Map<String, dynamic>,
+            )
           : PrintSettings(),
-      totalPages: json['total_pages'] ?? 1,
+      totalPages: json['totalPages'] ?? json['total_pages'] ?? 1,
       copies: json['copies'] ?? 1,
-      amount: (json['amount'] is num) ? (json['amount'] as num).toDouble() : 0.0,
+      amount: (json['amount'] is num)
+          ? (json['amount'] as num).toDouble()
+          : 0.0,
       currency: json['currency'] ?? 'INR',
       status: json['status'] ?? 'WAITING_FOR_PAYMENT',
       errorCode: json['errorCode'] ?? json['error_code'],
       errorMessage: json['errorMessage'] ?? json['error_message'],
-      createdAt: json['created_at'] ?? '',
+      createdAt: json['createdAt'] ?? json['created_at'] ?? '',
     );
   }
 }
@@ -118,9 +170,9 @@ class OrderOtp {
 
   factory OrderOtp.fromJson(Map<String, dynamic> json) {
     return OrderOtp(
-      orderId: json['orderId'] ?? json['order_id'] ?? '',
+      orderId: json['order_id'] ?? json['orderId'] ?? '',
       otp: json['otp'] ?? '',
-      expiresAt: json['expiresAt'] ?? json['expires_at'] ?? '',
+      expiresAt: json['expires_at'] ?? json['expiresAt'] ?? '',
     );
   }
 }

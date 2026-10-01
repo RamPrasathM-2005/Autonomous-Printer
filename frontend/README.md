@@ -1,122 +1,22 @@
-# 📱 Autonomous Printer - Flutter Frontend
+# Flutter frontend
 
-Cross-platform client application built with **Flutter 3.x** supporting **Web (Chrome)**, **Android (APK)**, and **Windows Desktop**. It guides users through kiosk selection, multi-document upload, live 3D visualizer & print configuration, Razorpay checkout, and OTP print release.
+Checkout uses Razorpay Standard Checkout on Flutter web and the official `razorpay_flutter` SDK on Android/iOS. Both return callback evidence to the same backend verification endpoint; neither authorizes printing locally. Desktop native builds direct customers to the web app. This is not a React Native application. The web build and native adapter tests run on this Windows installation; Android/iOS builds and device checkout still require validation on their respective toolchains.
 
----
-
-## 📋 Prerequisites
-
-Before running the frontend, ensure you have the following installed:
-
-1. **Flutter SDK (3.13 or newer)**:
-   - Verify installation by running:
-     ```bash
-     flutter doctor
-     ```
-2. **Google Chrome**: For running the web application.
-3. *(Optional for Android)*: **Android Studio** and **Android SDK Command-line Tools** with an Android Emulator or physical USB debugging device.
-4. *(Optional for Windows Desktop)*: **Visual Studio 2022** with "Desktop development with C++" workload installed.
-
----
-
-## ⚙️ Network & API Configuration
-
-The frontend connects to the FastAPI backend (port `8000`) and the local print agent (port `5000`).
-
-### Target Addresses by Platform:
-| Platform | Backend URL | Print Agent URL |
-| :--- | :--- | :--- |
-| **Web Browser (Chrome)** | `http://127.0.0.1:8000` | `http://127.0.0.1:5000` |
-| **Windows Desktop** | `http://127.0.0.1:8000` | `http://127.0.0.1:5000` |
-| **Android Emulator** | `http://10.0.2.2:8000` | `http://10.0.2.2:5000` |
-| **Physical Phone (Wi-Fi)** | `http://<YOUR_PC_LAN_IP>:8000` | `http://<YOUR_PC_LAN_IP>:5000` |
-
-> **Tip**: You can switch or test network endpoints directly inside the running app anytime by navigating to the **Settings (`/settings`)** screen.
-
----
-
-## 🚀 Step-by-Step: How to Run
-
-### Step 1: Navigate to the Frontend Directory
-```bash
-cd frontend
-```
-
-### Step 2: Fetch Flutter Packages
-```bash
+```powershell
 flutter pub get
+flutter test --no-pub
+flutter build web --release --no-pub --no-web-resources-cdn
 ```
 
-### Step 3: Run the Application
+From the repository root, `start_all.bat -Build` builds and serves the app at http://127.0.0.1:3000/ with security headers. Production builds use same-origin `/api` by default; an explicitly separate backend can be set with `--dart-define=API_BASE_URL=https://api.example.com` and requires matching backend origins/CSP.
 
-#### Option A: Run in Web Browser (Google Chrome - Recommended)
-```bash
-flutter run -d chrome --web-port 3000
-```
-The app will open automatically at **[http://localhost:3000](http://localhost:3000)**.
+Android emulator debug builds default to `http://10.0.2.2:8000`. For a USB-connected physical Android device, run `adb reverse tcp:8000 tcp:8000` and `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000`. Release builds require an HTTPS backend and your own signing configuration; HTTP is permitted only by the debug manifest. Install the Android SDK before building Android. On Windows, Flutter plugin setup requires Developer Mode for symlinks; after packages resolve, the web build and tests can run with `--no-pub` without enabling desktop plugin builds. Native customer sessions currently last only for the running app process.
 
-#### Option B: Run on Windows Desktop
-```bash
-flutter run -d windows
-```
+The station keypad runs directly on the station computer at `http://127.0.0.1:5000/kiosk`. Do not expose the agent to phones or the public internet. `AGENT_BASE_URL` can configure a local terminal build, separately from the customer backend. The [official Flutter integration guide](https://razorpay.com/docs/payments/payment-gateway/flutter-integration/standard/integration-steps/) documents the SDK and Android shrinker rules included in this project.
 
-#### Option C: Run on Android (Device or Emulator)
-```bash
-# Check connected devices
-flutter devices
+All prices and capture decisions come from the backend. Standard Checkout returns an untrusted callback which the server verifies. The UI never substitutes payment or print success after an exception. Check payment status recovers lost callbacks; Your orders resumes orders after a reload in the same tab. Session tokens are in sessionStorage, not persistent localStorage. Protect against XSS and clear the session between customers at a shared kiosk.
 
-# Launch on target device
-flutter run -d <device-id>
-```
 
----
+Do not put secrets in `.env`, Dart source, JavaScript, or build definitions. Only the public Razorpay key ID is delivered to checkout. The frontend `.env` is unused.
 
-## 📦 Building Production Bundles
-
-### Build Android APK:
-```bash
-flutter build apk --release
-```
-The output APK is generated at:
-```text
-frontend/build/app/outputs/flutter-apk/app-release.apk
-```
-
-### Build Web Production Bundle:
-```bash
-flutter build web --release
-```
-The deployable static files are placed in:
-```text
-frontend/build/web/
-```
-
----
-
-## 💳 Razorpay Web Payment Note
-
-On the Web platform, Razorpay's JavaScript checkout library is embedded in [frontend/web/index.html](web/index.html):
-```html
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-```
-When running on `http://localhost:3000`, the interactive payment modal will open directly in the browser. In development/test mode, test card and UPI dummy payments are supported without actual financial charges.
-
----
-
-## 🧪 Static Analysis & Code Quality
-
-Verify that all Dart source code passes flutter analysis with 0 errors:
-
-```bash
-flutter analyze
-```
-
----
-
-## 🛠️ Common Troubleshooting
-
-| Issue | Resolution |
-| :--- | :--- |
-| **CORS errors in browser console** | Ensure the backend FastAPI server is running with CORS enabled (CORS is preconfigured for all origins in `backend/app/main.py`). |
-| **Port 3000 occupied** | Run on an alternate port: `flutter run -d chrome --web-port 3001`. |
-| **Pub get failed or lock conflicts** | Delete `.dart_tool/` and `pubspec.lock`, then run `flutter pub get`. |
+See [deployment requirements](../docs/SECURITY.md).

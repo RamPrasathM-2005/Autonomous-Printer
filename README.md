@@ -1,275 +1,58 @@
-# Autonomous Self-Service Printing Platform 🖨️
+# Autonomous Printer
 
-A production-ready, self-hosted autonomous printing platform connecting a modern **Flutter** mobile/desktop frontend, a high-performance **FastAPI** backend, and a lightweight **Flask Print Agent** controlling physical **CUPS** printers.
+Flutter web frontend, FastAPI backend, MySQL, and a local CUPS print agent. Payments use Razorpay Standard Checkout with server verification. The currently configured Windows installation uses **Razorpay test mode and simulated printing**.
 
----
+## Run this installation
 
-## 🏗️ System Architecture
+Double-click `start_all.bat`, then open http://127.0.0.1:3000/. The launcher starts four background processes: API, reconciliation worker, print agent, and frontend. MySQL80 must be running.
 
-```text
-┌────────────────────────────────┐
-│   Flutter Mobile App / Kiosk   │
-│  (Android APK, Web, Desktop)   │
-└───────────────┬────────────────┘
-                │
-                │ 1. Discover stations
-                │ 2. Upload document (PDF/PNG/JPG)
-                │ 3. Configure print options & get price
-                │ 4. Pay via Razorpay
-                │ 5. Receive 6-digit release OTP
-                │
-                ▼
-┌────────────────────────────────┐       Shared Local Storage       ┌────────────────────────────────┐
-│      FastAPI Backend API       │ ◄──────────────────────────────► │       Flask Print Agent        │
-│          (Port 8000)           │      (/var/local/storage)        │          (Port 5001)           │
-├────────────────────────────────┤                                  ├────────────────────────────────┤
-│ - Auth & Session Management    │                                  │ - Heartbeat to backend         │
-│ - Authoritative Pricing Engine │                                  │ - Station keypad OTP release   │
-│ - Razorpay Payment & Webhooks  │                                  │ - CUPS option translation      │
-│ - Secure OTP State Machine     │                                  │ - Real-time job telemetry      │
-│ - MySQL / SQLAlchemy ORM       │                                  │ - pycups / lp execution        │
-└────────────────────────────────┘                                  └───────────────┬────────────────┘
-                                                                                    │
-                                                                                    ▼
-                                                                    ┌────────────────────────────────┐
-                                                                    │      CUPS Printer Daemon       │
-                                                                    │   (Thermal / Laser / Inkjet)   │
-                                                                    └────────────────────────────────┘
-```
+- Stop: `stop_all.bat`.
+- Rebuild Flutter: `start_all.bat -Build`.
+- Logs: `.runtime/`.
+- Backend health: http://127.0.0.1:8000/health.
+- Local API reference: http://127.0.0.1:8000/docs.
+- Agent health: http://127.0.0.1:5000/health.
+- Local station keypad: http://127.0.0.1:5000/kiosk (open on the station computer).
 
-### Key Architectural Tenets
-- **100% Self-Hosted on Linux**: Zero dependency on third-party cloud storage (No S3, Firebase, Firestore, or Cloudinary). All files are stored directly on the local filesystem with atomic write operations and strict path traversal validation.
-- **Backend as Single Source of Truth**: Document metadata, page counts, pricing calculation, order lifecycle, and OTP release tokens are strictly validated on the backend.
-- **Physical Isolation**: The print agent runs directly on the kiosk hardware next to the printer, communicating with the central backend over authenticated REST endpoints and heartbeats.
+The installed Flutter SDK is at `D:\flutter_windows_3.47.5-stable\flutter`. Python dependencies are in `.venv`. Configuration belongs in `backend/.env` and `print-agent/.env`; Flutter does not consume `frontend/.env`. Never place payment secrets or agent tokens in Flutter.
 
----
+Upload a PDF/image, choose options, review the server-priced order, and select **Pay with Razorpay**. Razorpay test keys exercise the same checkout, server verification, release-code and print flow as live keys. The application has no unpaid print shortcut. Use **Check payment status** to recover a lost checkout response; **Your orders** resumes orders in the current browser tab.
 
-## 📖 Component Documentation & Run Guides
+The Windows installation still uses simulated printing and produces no paper. Physical printing requires a configured CUPS agent.
 
-Each sub-service in this repository contains its own dedicated, step-by-step setup and running instructions:
+## Payment and printing flow
 
-| Component | Technology | Directory | Run Guide |
-| :--- | :--- | :--- | :--- |
-| **Backend API** | FastAPI (Python 3.12+), MySQL, SQLAlchemy | `backend/` | 📖 [Backend Run Guide](backend/README.md) |
-| **Frontend Client** | Flutter 3.x (Web, Android APK, Windows) | `frontend/` | 📱 [Frontend Run Guide](frontend/README.md) |
-| **Print Agent** | Flask, CUPS daemon (Python 3.12+) | `print-agent/` | 🖨️ [Print Agent Run Guide](print-agent/README.md) |
+1. Backend issues a random customer session; ownership applies to documents, orders, payment requests, and OTPs.
+2. Backend validates document contents/options, calculates the amount, and renders an immutable print-ready PDF. Client prices and payment status are never accepted.
+3. A durable payment intent creates one Razorpay order. Checkout callback HMAC is checked against the stored provider order ID. Backend fetches the payment and order and checks full capture, amount, currency, receipt, and refund state.
+4. A transaction creates one job and one expiring release code. Signed webhooks and the independent reconciliation worker recover lost callbacks.
+5. A release code works once at its assigned station. The authenticated agent claims the job once and checks file size/hash before submission.
+6. A durable agent journal records submission and CUPS confirmation. Unknown submission or completion stays unresolved for operator review; it is never reported as success or automatically printed again.
+7. Expired unused release codes and confirmed failures before submission enqueue refunds. Provider confirmation is required before a refund is complete; uncertain refund submissions are reconciled without repeated POSTs.
 
----
+## Setup, operations, and deployment
 
-## 🚀 Main User & Kiosk Workflow
+- [Backend guide](backend/README.md)
+- [Frontend guide](frontend/README.md)
+- [Print-agent guide](print-agent/README.md)
+- [Security architecture and deployment requirements](docs/SECURITY.md)
 
-1. **Station Selection**: Discover active kiosk stations via `GET /api/print-servers` or scan a kiosk QR code.
-2. **Document Upload**: Select PDF, JPG, or PNG. Client validates size/type, calculates SHA-256 hash, and uploads via `POST /api/documents/upload`.
-3. **Print Options & Price Calculation**: Configure copies, page ranges, duplex (single/double-sided), color mode (monochrome/color), and paper size (A4, Letter, Legal). The backend computes authoritative pricing.
-4. **Order Placement & Razorpay Payment**: Order is created via `POST /api/orders` and Razorpay payment order initiated via `POST /api/payments/create`.
-5. **Secure 6-Digit OTP Generation**: Once payment is verified, the order enters `WAITING_FOR_OTP` and generates a 6-digit release code with a 15-minute expiration countdown.
-6. **Physical Print Release**: The user approaches the kiosk touchscreen/keypad, enters their 6-digit OTP, and the agent triggers `POST /local/release` to send the document to CUPS.
-7. **Live Tracking & History**: Live polling tracks the order status from `PENDING` → `PAID` → `WAITING_FOR_OTP` → `PRINTING` → `COMPLETED`.
+The additive security migration has been applied to this installation's `printer` MySQL database. Old records remain for review and do not become verified payments. A local pre-migration logical backup is in `.runtime/pre-security-database-backup.json`; restrict access to this file.
 
----
+## Tests
 
-## 📂 Project Structure
+From the repository root:
 
-```text
-Autonomous-Printer/
-├── backend/                         # FastAPI Central Backend
-│   ├── app/
-│   │   ├── api/                     # REST API routes (auth, documents, orders, payments, agent)
-│   │   ├── config/                  # Settings, database connection & security configs
-│   │   ├── db/                      # SQLAlchemy models, sessions & seed data
-│   │   ├── schemas/                 # Pydantic v2 validation models
-│   │   ├── services/                # Pricing, OTP, document storage, and job services
-│   │   └── utils/                   # Crypto, rate limiting, and state machines
-│   ├── tests/                       # Pytest automated test suite
-│   ├── .env.example                 # Backend environment variable template
-│   └── requirements.txt             # Backend Python dependencies
-│
-├── frontend/                        # Flutter Application (Android, Web, Desktop)
-│   ├── android/                     # Android native project files & Gradle build
-│   ├── lib/
-│   │   ├── config/                  # API endpoints, SharedPreferences & dark theme
-│   │   ├── models/                  # Document, Order, Payment & PrintServer models
-│   │   ├── screens/                 # 8 dedicated screens for each step of workflow
-│   │   │   ├── main_nav_screen.dart
-│   │   │   ├── stations_screen.dart
-│   │   │   ├── upload_screen.dart
-│   │   │   ├── print_options_screen.dart
-│   │   │   ├── payment_screen.dart
-│   │   │   ├── otp_release_screen.dart
-│   │   │   ├── station_terminal_screen.dart
-│   │   │   ├── orders_history_screen.dart
-│   │   │   └── settings_screen.dart
-│   │   ├── services/                # Backend API service & Print Agent client
-│   │   └── widgets/                 # Reusable UI widgets (OTP cards, badges, station cards)
-│   └── pubspec.yaml                 # Flutter dependencies & metadata
-│
-├── print-agent/                     # Flask Local Print Agent & CUPS Interface
-│   ├── app/
-│   │   ├── routes/                  # /health, /local/status, /local/release endpoints
-│   │   ├── services/                # Backend poller, CUPS driver, local document finder
-│   │   └── main.py                  # Agent entrypoint (Port 5001)
-│   ├── tests/                       # Agent unit & integration tests
-│   ├── .env.example                 # Agent configuration template
-│   └── requirements.txt             # Agent Python dependencies
-│
-├── requirements.txt                 # Unified repository Python dependencies
-└── README.md                        # Project documentation
-```
-
----
-
-## ⚡ Quickstart Guide
-
-### Prerequisites
-- **Python**: 3.12+
-- **Flutter SDK**: 3.13+ (`dart >= 3.0`)
-- **Android SDK** (for APK generation) or Chrome / Edge / Desktop runner
-- **CUPS** (on Linux hosts running the print agent)
-
----
-
-### 1. Run the FastAPI Backend (Terminal 1)
-
-```bash
+```powershell
 cd backend
-
-# Setup Python environment
-python -m venv venv
-# On Linux/macOS:
-source venv/bin/activate
-# On Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-
-# Run FastAPI development server on port 8000
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
-- **ReDoc**: `http://127.0.0.1:8000/redoc`
-
----
-
-### 2. Run the Flask Print Agent (Terminal 2)
-
-```bash
-cd print-agent
-
-# Setup Python environment
-python -m venv venv
-# On Linux/macOS:
-source venv/bin/activate
-# On Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-
-# Start Flask print agent on port 5001
-python app/main.py
-```
-- **Health Check**: `http://127.0.0.1:5001/health`
-- **Station Status**: `http://127.0.0.1:5001/local/status`
-
----
-
-### 3. Run the Flutter Frontend (Terminal 3)
-
-```bash
-cd frontend
-
-# Fetch dependencies
-flutter pub get
+..\.venv\Scripts\python.exe -m pytest tests -q
+cd ../print-agent
+..\.venv\Scripts\python.exe -m pytest tests -q
+cd ../frontend
+flutter test --no-pub
+flutter analyze --no-pub
 ```
 
-#### Run in Google Chrome (Fastest & Live Hot-Reload):
-```bash
-flutter run -d chrome
-```
+From the root, `.venv\Scripts\python.exe scripts/test-mysql-security.py` creates and drops a disposable MySQL database using the configured database account. MySQL concurrency tests are opt-in using `MYSQL_SECURITY_TEST_URL`, and **destroy their isolated database tables**; only a disposable database whose name begins `printer_security_test_` is accepted. Never point tests at the application database.
 
-#### Run on Windows Desktop:
-```bash
-flutter run -d windows
-```
-
-#### Run on Android Emulator or Physical Phone:
-```bash
-flutter run
-```
-
-#### Build Android APK:
-```bash
-flutter build apk --debug
-```
-The output installable file will be generated at:
-```text
-frontend/build/app/outputs/flutter-apk/app-debug.apk
-```
-
----
-
-## ⚙️ Configuring App Network Endpoints
-
-Inside the Flutter application, tap the **Settings** icon on the top right:
-- **Chrome / Windows Desktop**:
-  - Backend URL: `http://127.0.0.1:8000`
-  - Print Agent URL: `http://127.0.0.1:5001`
-- **Android Emulator**:
-  - Tap the **"Android Emulator (10.0.2.2)"** quick preset button.
-  - Backend URL: `http://10.0.2.2:8000`
-  - Print Agent URL: `http://10.0.2.2:5001`
-- **Physical Android Device (Same Wi-Fi)**:
-  - Backend URL: `http://<YOUR_PC_LAN_IP>:8000`
-  - Print Agent URL: `http://<YOUR_PC_LAN_IP>:5001`
-
-Tap **Test Backend Connection** to verify green ping status.
-
----
-
-## 🔌 API Summary
-
-### Backend Endpoints (`http://127.0.0.1:8000`)
-- `GET  /api/print-servers` — List available kiosk print stations and status.
-- `POST /api/documents/upload` — Multipart upload for PDF, PNG, JPG files.
-- `POST /api/orders` — Create validated order with custom print configuration.
-- `GET  /api/orders/{id}` — Fetch order status, page count, and billing info.
-- `POST /api/payments/create` — Generate Razorpay payment order.
-- `POST /api/payments/webhook` — Razorpay webhook endpoint with HMAC-SHA256 signature verification.
-- `GET  /api/orders/{id}/otp` — Retrieve 6-digit release OTP code.
-- `POST /api/agent/release` — Authenticated release endpoint called by print agent.
-- `POST /api/agent/heartbeat` — Print agent kiosk health registration.
-
-### Print Agent Endpoints (`http://127.0.0.1:5001`)
-- `GET  /health` — Agent uptime and diagnostic status.
-- `GET  /local/status` — Local CUPS printer status and paper levels.
-- `POST /local/release` — Keypad/touchscreen OTP submission releasing local CUPS print job.
-
----
-
-## 🧪 Testing
-
-```bash
-# Backend test suite
-cd backend
-pytest -v
-
-# Print agent test suite
-cd print-agent
-pytest -v
-
-# Flutter widget tests
-cd frontend
-flutter test
-```
-
----
-
-## 📄 License
-This project is licensed under the MIT License.
+Security testing reduces risk; it is not a guarantee against every attack. Public HTTPS webhook delivery, production deployment, and physical CUPS output require verification on the actual server and printer before accepting live payments.

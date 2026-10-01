@@ -1,94 +1,131 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'razorpay_web_service.dart';
 
-Future<RazorpayWebPaymentResult> openRazorpayCheckoutPlatform({
-  required String keyId,
-  required String orderId,
-  required double amount,
-}) async {
-  final completer = Completer<RazorpayWebPaymentResult>();
-  final razorpay = Razorpay();
+import 'razorpay_result.dart';
 
-  final safeKeyId = keyId.trim().isNotEmpty ? keyId.trim() : 'rzp_test_RFxhjAiTxwrpAJ';
-  final amountPaise = (amount * 100).round();
+class RazorpayWebService {
+  static bool _checkoutOpen = false;
 
-  void handlePaymentSuccess(PaymentSuccessResponse response) {
-    debugPrint('[RAZORPAY_MOBILE] Payment Succeeded! paymentId=${response.paymentId}, orderId=${response.orderId}');
-    if (!completer.isCompleted) {
-      completer.complete(
-        RazorpayWebPaymentResult(
-          success: true,
-          razorpayPaymentId: response.paymentId ?? '',
-          razorpayOrderId: response.orderId ?? orderId,
-          razorpaySignature: response.signature ?? '',
-        ),
+  static Future<RazorpayWebPaymentResult> openCheckout({
+    required String keyId,
+    required String orderId,
+    required double amount,
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return const RazorpayWebPaymentResult(
+        success: false,
+        errorMessage: 'Use the web app to pay on this device.',
       );
     }
-    razorpay.clear();
-  }
+    if (_checkoutOpen ||
+        keyId.isEmpty ||
+        orderId.isEmpty ||
+        !amount.isFinite ||
+        amount <= 0) {
+      return const RazorpayWebPaymentResult(
+        success: false,
+        errorMessage: 'Checkout is unavailable. Check payment status.',
+      );
+    }
+    _checkoutOpen = true;
+    final done = Completer<RazorpayWebPaymentResult>();
+    Razorpay? razorpay;
+    void finish(RazorpayWebPaymentResult result) {
+      if (!done.isCompleted) done.complete(result);
+    }
 
-  void handlePaymentError(PaymentFailureResponse response) {
-    debugPrint('[RAZORPAY_MOBILE] Payment Error: code=${response.code}, message=${response.message}');
-    if (!completer.isCompleted) {
-      completer.complete(
-        RazorpayWebPaymentResult(
+    try {
+      // The SDK exposes async-void open/resync methods. Capture their platform
+      // errors in this zone so a missing plugin cannot crash the application.
+      runZonedGuarded(
+        () {
+          final checkout = Razorpay();
+          razorpay = checkout;
+          checkout.on(Razorpay.EVENT_PAYMENT_SUCCESS, (
+            PaymentSuccessResponse response,
+          ) {
+            final payment = response.paymentId ?? '';
+            final order = response.orderId ?? '';
+            final signature = response.signature ?? '';
+            if (payment.isEmpty || order != orderId || signature.isEmpty) {
+              finish(
+                const RazorpayWebPaymentResult(
+                  success: false,
+                  errorMessage: 'Payment unconfirmed. Check payment status.',
+                ),
+              );
+              return;
+            }
+            // A checkout callback is not proof of payment. PaymentScreen asks the
+            // backend to verify the signature and capture before releasing a code.
+            finish(
+              RazorpayWebPaymentResult(
+                success: true,
+                razorpayPaymentId: payment,
+                razorpayOrderId: order,
+                razorpaySignature: signature,
+              ),
+            );
+          });
+          checkout.on(Razorpay.EVENT_PAYMENT_ERROR, (
+            PaymentFailureResponse response,
+          ) {
+            finish(
+              const RazorpayWebPaymentResult(
+                success: false,
+                errorMessage: 'Payment unconfirmed. Check payment status.',
+              ),
+            );
+          });
+          checkout.on(Razorpay.EVENT_EXTERNAL_WALLET, (
+            ExternalWalletResponse response,
+          ) {
+            finish(
+              const RazorpayWebPaymentResult(
+                success: false,
+                errorMessage:
+                    'Check payment status after completing your payment.',
+              ),
+            );
+          });
+          checkout.open({
+            'key': keyId,
+            'order_id': orderId,
+            'amount': (amount * 100).round(),
+            'currency': 'INR',
+            'name': 'Autonomous Printer',
+            'description': 'Print order',
+            'theme': {'color': '#2563EB'},
+          });
+        },
+        (error, stack) {
+          finish(
+            const RazorpayWebPaymentResult(
+              success: false,
+              errorMessage: 'Checkout could not load. Check payment status.',
+            ),
+          );
+        },
+      );
+      return await done.future.timeout(
+        const Duration(minutes: 10),
+        onTimeout: () => const RazorpayWebPaymentResult(
           success: false,
-          errorMessage: response.message ?? 'Payment cancelled or failed (code: ${response.code})',
+          errorMessage:
+              'Checkout timed out. Check payment status before paying again.',
         ),
       );
-    }
-    razorpay.clear();
-  }
-
-  void handleExternalWallet(ExternalWalletResponse response) {
-    debugPrint('[RAZORPAY_MOBILE] External Wallet selected: ${response.walletName}');
-    if (!completer.isCompleted) {
-      completer.complete(
-        RazorpayWebPaymentResult(
-          success: false,
-          errorMessage: 'External wallet ${response.walletName} selected',
-        ),
+    } catch (_) {
+      return const RazorpayWebPaymentResult(
+        success: false,
+        errorMessage: 'Checkout could not load. Check payment status.',
       );
+    } finally {
+      razorpay?.clear();
+      _checkoutOpen = false;
     }
-    razorpay.clear();
   }
-
-  razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, handlePaymentSuccess);
-  razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, handlePaymentError);
-  razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, handleExternalWallet);
-
-  final options = {
-    'key': safeKeyId,
-    'amount': amountPaise,
-    'name': 'AutosPrint Hub',
-    'description': 'Instant Print Payment',
-    'order_id': orderId,
-    'prefill': {
-      'contact': '9876543210',
-      'email': 'student@printstation.edu',
-    },
-    'theme': {
-      'color': '#2563EB',
-    },
-  };
-
-  try {
-    debugPrint('[RAZORPAY_MOBILE] Launching Razorpay Mobile SDK modal: amount=₹$amount, key=$safeKeyId, order=$orderId');
-    razorpay.open(options);
-  } catch (e) {
-    debugPrint('[RAZORPAY_MOBILE] Exception while opening Razorpay modal: $e');
-    if (!completer.isCompleted) {
-      completer.complete(
-        RazorpayWebPaymentResult(
-          success: false,
-          errorMessage: 'Failed to launch Razorpay: $e',
-        ),
-      );
-    }
-    razorpay.clear();
-  }
-
-  return completer.future;
 }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../services/api_error.dart';
+
 import '../config/theme.dart';
 import '../services/print_agent_service.dart';
 
@@ -67,7 +70,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
   Future<void> _submitOtp() async {
     if (_enteredPin.length != 6) {
       setState(() {
-        _statusMessage = 'Please enter a complete 6-digit OTP code.';
+        _statusMessage = 'Enter the 6-digit release code.';
         _isSuccess = false;
       });
       return;
@@ -79,18 +82,18 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
     });
 
     try {
-      final result = await _agentService.releaseWithOtp(_enteredPin);
+      await _agentService.releaseWithOtp(_enteredPin);
       setState(() {
         _isReleasing = false;
         _isSuccess = true;
-        _statusMessage = result['message'] ?? 'OTP Verified! CUPS printing initiated.';
+        _statusMessage = 'Print released.';
       });
       _loadStationStatus();
     } catch (e) {
       setState(() {
         _isReleasing = false;
         _isSuccess = false;
-        _statusMessage = e.toString().replaceAll('Exception: ', '');
+        _statusMessage = userError(e);
       });
     }
   }
@@ -98,20 +101,20 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kiosk Station Terminal'),
-      ),
+      appBar: AppBar(title: const Text('Print station')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           children: [
-            // Kiosk Monitor Header
+            // Print Station Monitor Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: const Color(0xFF0F172A),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppTheme.primaryLight.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
@@ -119,19 +122,25 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: _stationStatus != null ? AppTheme.success : AppTheme.warning,
+                      color: _stationStatus != null
+                          ? AppTheme.success
+                          : AppTheme.warning,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'PRINTER KIOSK: ${_stationStatus?['printer_name'] ?? 'Ubuntu Local CUPS'}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
+                      _stationStatus?['printer_name'] ?? 'Printer unavailable',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                   Text(
-                    'State: ${_stationStatus?['printer_state'] ?? 'Ready'}',
+                    _stationStatus?['printer_state'] ?? 'Unavailable',
                     style: const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 ],
@@ -141,12 +150,11 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
 
             const Text(
               'Enter Release Code',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Type your 6-digit OTP code to print your queued job',
-              style: TextStyle(fontSize: 13, color: Colors.white54),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 20),
 
@@ -166,14 +174,20 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                     color: AppTheme.surfaceDark,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: char.isNotEmpty ? AppTheme.secondary : Colors.white24,
+                      color: char.isNotEmpty
+                          ? AppTheme.secondary
+                          : Colors.white24,
                       width: char.isNotEmpty ? 2 : 1,
                     ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     char,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 );
               }),
@@ -186,9 +200,13 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: (_isSuccess ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.15),
+                  color: (_isSuccess ? AppTheme.success : AppTheme.danger)
+                      .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: (_isSuccess ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.4)),
+                  border: Border.all(
+                    color: (_isSuccess ? AppTheme.success : AppTheme.danger)
+                        .withValues(alpha: 0.4),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -223,16 +241,9 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _keyButton(
-                      label: 'C',
-                      isSpecial: true,
-                      onTap: _onClear,
-                    ),
+                    _keyButton(label: 'C', isSpecial: true, onTap: _onClear),
                     const SizedBox(width: 12),
-                    _keyButton(
-                      label: '0',
-                      onTap: () => _onKeyPressed('0'),
-                    ),
+                    _keyButton(label: '0', onTap: () => _onKeyPressed('0')),
                     const SizedBox(width: 12),
                     _keyButton(
                       icon: Icons.backspace_outlined,
@@ -249,7 +260,9 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (_isReleasing || _enteredPin.length != 6) ? null : _submitOtp,
+                onPressed: (_isReleasing || _enteredPin.length != 6)
+                    ? null
+                    : _submitOtp,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.secondary,
                   foregroundColor: Colors.black,
@@ -259,9 +272,16 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                     ? const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)),
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.black,
+                              strokeWidth: 2,
+                            ),
+                          ),
                           SizedBox(width: 12),
-                          Text('Releasing to CUPS...'),
+                          Text('Releasing...'),
                         ],
                       )
                     : const Row(
@@ -269,7 +289,10 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                         children: [
                           Icon(Icons.print_rounded, size: 20),
                           SizedBox(width: 8),
-                          Text('RELEASE PRINT JOB', style: TextStyle(fontWeight: FontWeight.w800)),
+                          Text(
+                            'RELEASE PRINT JOB',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
                         ],
                       ),
               ),

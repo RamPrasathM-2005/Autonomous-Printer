@@ -26,7 +26,8 @@ class UploadedDocument {
   factory UploadedDocument.fromJson(Map<String, dynamic> json) {
     return UploadedDocument(
       documentId: json['documentId'] ?? json['id'] ?? '',
-      originalFilename: json['originalFilename'] ?? json['original_filename'] ?? 'file',
+      originalFilename:
+          json['originalFilename'] ?? json['original_filename'] ?? 'file',
       pages: json['pages'] ?? json['page_count'] ?? 1,
       size: json['size'] ?? json['file_size'] ?? 0,
       status: json['status'] ?? 'UPLOADED',
@@ -44,6 +45,7 @@ class DocumentPrintConfig {
   String rangeOption; // 'all', 'odd', 'even', 'custom'
   String customRange;
   String orientation; // 'portrait', 'landscape'
+  bool hasCustomSettings;
 
   DocumentPrintConfig({
     required this.document,
@@ -55,21 +57,27 @@ class DocumentPrintConfig {
     this.rangeOption = 'all',
     this.customRange = '',
     this.orientation = 'portrait',
+    this.hasCustomSettings = false,
   });
 
   bool get isCustomRange => rangeOption == 'custom';
 
   String get colorDescription => isColor ? 'Full Color' : 'Black & White';
-  String get sidesDescription => sides == 'one-sided' ? 'Single-Sided' : 'Double-Sided';
+  String get sidesDescription =>
+      sides == 'one-sided' ? 'Single-Sided' : 'Double-Sided';
   String get pageRangeDescription =>
-      (isCustomRange && customRange.trim().isNotEmpty) ? customRange.trim() : 'All Pages';
+      (isCustomRange && customRange.trim().isNotEmpty)
+          ? customRange.trim()
+          : (rangeOption == 'all'
+              ? 'All Pages'
+              : (rangeOption == 'odd' ? 'Odd Pages' : 'Even Pages'));
 
   int get calculatedPages {
-    final total = document.pages;
+    final total = document.pages <= 0 ? 1 : document.pages;
     if (rangeOption == 'all') return total;
     if (rangeOption == 'odd') return (total / 2).ceil();
     if (rangeOption == 'even') return (total / 2).floor();
-    if (rangeOption == 'custom' && customRange.isNotEmpty) {
+    if (rangeOption == 'custom' && customRange.trim().isNotEmpty) {
       try {
         int count = 0;
         final parts = customRange.split(',');
@@ -78,11 +86,17 @@ class DocumentPrintConfig {
           if (part.contains('-')) {
             final range = part.split('-');
             if (range.length == 2) {
-              final start = int.parse(range[0]);
-              final end = int.parse(range[1]);
-              count += (end - start + 1).clamp(0, total);
+              final start = int.parse(range[0].trim());
+              final end = int.parse(range[1].trim());
+              if (start <= end) {
+                final validStart = start.clamp(1, total);
+                final validEnd = end.clamp(1, total);
+                if (validEnd >= validStart) {
+                  count += (validEnd - validStart + 1);
+                }
+              }
             }
-          } else {
+          } else if (part.isNotEmpty) {
             final page = int.parse(part);
             if (page >= 1 && page <= total) count++;
           }
@@ -96,8 +110,34 @@ class DocumentPrintConfig {
   }
 
   double get estimatedCost {
-    final perPageBase = isColor ? 5.0 : 2.0;
+    final perPageBase = isColor ? 10.0 : 2.0;
     final totalPg = calculatedPages;
     return totalPg * copies * perPageBase;
+  }
+
+  DocumentPrintConfig copyWith({
+    UploadedDocument? document,
+    int? copies,
+    bool? isColor,
+    String? sides,
+    String? paperSize,
+    String? printQuality,
+    String? rangeOption,
+    String? customRange,
+    String? orientation,
+    bool? hasCustomSettings,
+  }) {
+    return DocumentPrintConfig(
+      document: document ?? this.document,
+      copies: copies ?? this.copies,
+      isColor: isColor ?? this.isColor,
+      sides: sides ?? this.sides,
+      paperSize: paperSize ?? this.paperSize,
+      printQuality: printQuality ?? this.printQuality,
+      rangeOption: rangeOption ?? this.rangeOption,
+      customRange: customRange ?? this.customRange,
+      orientation: orientation ?? this.orientation,
+      hasCustomSettings: hasCustomSettings ?? this.hasCustomSettings,
+    );
   }
 }

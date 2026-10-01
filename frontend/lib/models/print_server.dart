@@ -36,7 +36,8 @@ class Printer {
       isActive: json['is_active'] ?? true,
       supportsColor: json['supports_color'] ?? false,
       supportsDuplex: json['supports_duplex'] ?? false,
-      supportedMedia: (json['supported_media'] as List<dynamic>?)
+      supportedMedia:
+          (json['supported_media'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           ['A4'],
@@ -73,8 +74,9 @@ class PrintServer {
     var rawPrinters = json['printers'] as List<dynamic>?;
     List<Printer> parsedPrinters = [];
     if (rawPrinters != null) {
-      parsedPrinters =
-          rawPrinters.map((p) => Printer.fromJson(p as Map<String, dynamic>)).toList();
+      parsedPrinters = rawPrinters
+          .map((p) => Printer.fromJson(p as Map<String, dynamic>))
+          .toList();
     }
 
     return PrintServer(

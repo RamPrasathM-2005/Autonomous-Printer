@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../services/api_error.dart';
+
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/print_server.dart';
@@ -39,7 +42,9 @@ class _StationsScreenState extends State<StationsScreen> {
       setState(() {
         _servers = servers;
         _isLoading = false;
-        if (_servers.isNotEmpty && (_selectedStationId == null || !_servers.any((s) => s.id == _selectedStationId))) {
+        if (_servers.isNotEmpty &&
+            (_selectedStationId == null ||
+                !_servers.any((s) => s.id == _selectedStationId))) {
           _selectedStationId = _servers.first.id;
           ApiConfig.updateSelectedStationId(_selectedStationId!);
         }
@@ -47,7 +52,7 @@ class _StationsScreenState extends State<StationsScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = userError(e);
       });
     }
   }
@@ -62,7 +67,7 @@ class _StationsScreenState extends State<StationsScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Selected Station: $stationId'),
+        content: Text('Station selected'),
         duration: const Duration(seconds: 2),
         backgroundColor: AppTheme.primaryDark,
       ),
@@ -70,7 +75,9 @@ class _StationsScreenState extends State<StationsScreen> {
   }
 
   void _manualStationDialog() {
-    final controller = TextEditingController(text: _selectedStationId ?? 'PRINT-SERVER-001');
+    final controller = TextEditingController(
+      text: _selectedStationId ?? 'PRINT-SERVER-001',
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -79,11 +86,6 @@ class _StationsScreenState extends State<StationsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Enter the station or kiosk identifier (or scan QR code from the printer station).',
-              style: TextStyle(fontSize: 13, color: Colors.white70),
-            ),
-            const SizedBox(height: 16),
             TextField(
               controller: controller,
               decoration: const InputDecoration(
@@ -144,7 +146,7 @@ class _StationsScreenState extends State<StationsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded),
-            tooltip: 'Enter Station / QR',
+            tooltip: 'Enter station ID',
             onPressed: _manualStationDialog,
           ),
           IconButton(
@@ -164,11 +166,7 @@ class _StationsScreenState extends State<StationsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF3730A3), Color(0xFF4F46E5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -186,7 +184,11 @@ class _StationsScreenState extends State<StationsScreen> {
                       color: Colors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.location_city_rounded, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.location_city_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -219,7 +221,10 @@ class _StationsScreenState extends State<StationsScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: AppTheme.primaryDark,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       minimumSize: Size.zero,
                     ),
                     child: const Text('Change'),
@@ -229,11 +234,11 @@ class _StationsScreenState extends State<StationsScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Available Printing Kiosks',
+              'Available stations',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -251,22 +256,28 @@ class _StationsScreenState extends State<StationsScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.danger.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppTheme.danger.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 36),
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: AppTheme.danger,
+                      size: 36,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       _errorMessage!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppTheme.danger),
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: _loadServers,
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Retry Connection'),
+                      label: const Text('Retry'),
                     ),
                   ],
                 ),
@@ -276,22 +287,23 @@ class _StationsScreenState extends State<StationsScreen> {
                 margin: const EdgeInsets.symmetric(vertical: 20),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceDark,
+                  color: AppTheme.primarySurface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.print_disabled_rounded, size: 48, color: Colors.white38),
+                    const Icon(
+                      Icons.print_disabled_rounded,
+                      size: 48,
+                      color: AppTheme.textSecondary,
+                    ),
                     const SizedBox(height: 12),
                     const Text(
                       'No Print Stations Found',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Ensure the FastAPI backend and print-agent are started.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Colors.white60),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     OutlinedButton(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../config/theme.dart';
 
 class StatusBadge extends StatelessWidget {
@@ -15,13 +16,25 @@ class StatusBadge extends StatelessWidget {
 
   Color _getColor() {
     final s = status.toUpperCase();
-    if (s == 'ONLINE' || s == 'COMPLETED' || s == 'SUCCESS' || s == 'NORMAL' || s == 'IDLE' || s == 'RELEASED') {
+    if (s == 'ONLINE' ||
+        s == 'COMPLETED' ||
+        s == 'SUCCESS' ||
+        s == 'NORMAL' ||
+        s == 'IDLE' ||
+        s == 'RELEASED') {
       return AppTheme.success;
     }
-    if (s == 'WAITING_FOR_OTP' || s == 'WAITING_FOR_PAYMENT' || s == 'LOW' || s == 'PRINTING') {
+    if (s == 'WAITING_FOR_OTP' ||
+        s == 'WAITING_FOR_PAYMENT' ||
+        s == 'LOW' ||
+        s == 'PRINTING') {
       return AppTheme.warning;
     }
-    if (s == 'OFFLINE' || s == 'FAILED' || s == 'ERROR' || s == 'EMPTY' || s == 'CANCELLED') {
+    if (s == 'OFFLINE' ||
+        s == 'FAILED' ||
+        s == 'ERROR' ||
+        s == 'EMPTY' ||
+        s == 'CANCELLED') {
       return AppTheme.danger;
     }
     return AppTheme.info;
@@ -43,10 +56,7 @@ class StatusBadge extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(

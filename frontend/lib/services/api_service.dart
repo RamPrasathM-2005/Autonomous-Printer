@@ -314,4 +314,10 @@ class ApiService {
       return false;
     }
   }
+
+  // 11. End Session
+  Future<void> endSession() async {
+    // Session reset
+  }
 }
+
