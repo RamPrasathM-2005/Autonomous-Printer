@@ -592,39 +592,43 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: Row(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedFiles.isEmpty
-                                ? 'No documents selected'
-                                : '${_selectedFiles.length} file(s) ready',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.textPrimary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _selectedFiles.isEmpty
+                                  ? 'No documents selected'
+                                  : '${_selectedFiles.length} file(s) ready',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _selectedFiles.isEmpty
-                                ? 'Select PDF or images above'
-                                : 'Total size: ${_formatFileSize(_totalSizeBytes)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                            const SizedBox(height: 2),
+                            Text(
+                              _selectedFiles.isEmpty
+                                  ? 'Select PDF or images above'
+                                  : 'Size: ${_formatFileSize(_totalSizeBytes)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 12),
                       ElevatedButton(
                         onPressed: (_selectedFiles.isEmpty || _isUploading) ? null : _handleNext,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -654,7 +658,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    'Continue to Options',
+                                    'Continue',
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
