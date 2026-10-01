@@ -80,28 +80,7 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# 4. Launch FastAPI Backend (Port 8000)
-echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://0.0.0.0:8000 ...\033[0m"
-(cd "$SCRIPT_DIR/backend" && "$UVICORN_EXE" app.main:app --host 0.0.0.0 --port 8000 --reload) &
-PIDS+=($!)
-sleep 2
-
-# Auto-configure ADB reverse proxy for connected Android devices (for mobile app USB connection)
-if command -v adb &> /dev/null; then
-    if adb get-state 2>/dev/null | grep -q "device"; then
-        echo -e "\033[1;32m[*] Configuring USB reverse proxy (adb reverse) for Android device...\033[0m"
-        adb reverse tcp:8000 tcp:8000 2>/dev/null || true
-        adb reverse tcp:5001 tcp:5001 2>/dev/null || true
-    fi
-fi
-
-# 5. Launch Flask Print Agent & Kiosk Terminal (Port 5001)
-echo -e "\033[1;34m[2/4] Starting Flask Print Agent & Kiosk Terminal on http://127.0.0.1:5001 ...\033[0m"
-(cd "$SCRIPT_DIR/print-agent" && "$PYTHON_EXE" app/main.py) &
-PIDS+=($!)
-sleep 2
-
-# 6. Launch Flutter Web Frontend (Port 3000)
+# Parse CLI Options
 HOT_RELOAD=false
 FORCE_BUILD=false
 BUILD_APK=false
@@ -121,6 +100,35 @@ if [ "$BUILD_APK" = true ]; then
     "$SCRIPT_DIR/scripts/build_apk.sh"
 fi
 
+# 4. Launch FastAPI Backend (Port 8000)
+echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://0.0.0.0:8000 ...\033[0m"
+(cd "$SCRIPT_DIR/backend" && "$UVICORN_EXE" app.main:app --host 0.0.0.0 --port 8000 --reload) &
+PIDS+=($!)
+sleep 2
+
+# Cloudflare Quick Tunnel (starts immediately in background so public HTTPS URL is ready for kiosk QR code)
+if [ "$WANT_TUNNEL" = true ]; then
+    echo -e "\033[1;33m[*] Starting Cloudflare Quick Tunnel in background (for instant kiosk QR)...\033[0m"
+    "$SCRIPT_DIR/start_tunnel.sh" &
+    PIDS+=($!)
+fi
+
+# Auto-configure ADB reverse proxy for connected Android devices (for mobile app USB connection)
+if command -v adb &> /dev/null; then
+    if adb get-state 2>/dev/null | grep -q "device"; then
+        echo -e "\033[1;32m[*] Configuring USB reverse proxy (adb reverse) for Android device...\033[0m"
+        adb reverse tcp:8000 tcp:8000 2>/dev/null || true
+        adb reverse tcp:5001 tcp:5001 2>/dev/null || true
+    fi
+fi
+
+# 5. Launch Flask Print Agent & Kiosk Terminal (Port 5001)
+echo -e "\033[1;34m[2/4] Starting Flask Print Agent & Kiosk Terminal on http://127.0.0.1:5001 ...\033[0m"
+(cd "$SCRIPT_DIR/print-agent" && "$PYTHON_EXE" app/main.py) &
+PIDS+=($!)
+sleep 2
+
+# 6. Launch Flutter Web Frontend (Port 3000)
 if [ "$HOT_RELOAD" = true ]; then
     echo -e "\033[1;36m[3/4] Starting Flutter Web in LIVE HOT-RELOAD mode on http://0.0.0.0:3000 ...\033[0m"
     echo -e "\033[2m      (Auto-watches frontend/lib/*.dart; press 'r' for manual reload, 'R' for restart)\033[0m"
@@ -155,14 +163,6 @@ else
     echo -e "\033[1;33m[3/4] Flutter build not found. Skipping Port 3000.\033[0m"
 fi
 sleep 1
-
-# Cloudflare Quick Tunnel (Runs always by default; pass --no-tunnel to disable)
-if [ "$WANT_TUNNEL" = true ]; then
-    echo -e "\033[1;33m[4/4] Starting Cloudflare Quick Tunnel...\033[0m"
-    "$SCRIPT_DIR/start_tunnel.sh" &
-    PIDS+=($!)
-    sleep 3
-fi
 
 echo ""
 echo -e "\033[1;32m====================================================================\033[0m"

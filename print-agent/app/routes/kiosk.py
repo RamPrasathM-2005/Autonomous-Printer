@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import socket
 import base64
 import subprocess
@@ -33,9 +34,7 @@ def is_tunnel_alive() -> bool:
         return False
 
 def get_tunnel_url() -> str | None:
-    """Returns active Cloudflare quick tunnel URL if cloudflared is running."""
-    if not is_tunnel_alive():
-        return None
+    """Returns active Cloudflare quick tunnel URL immediately if available."""
     candidates = [
         Path(os.getcwd()) / "storage" / "tunnel_url.txt",
         Path(__file__).resolve().parent.parent.parent.parent / "storage" / "tunnel_url.txt",
@@ -49,6 +48,25 @@ def get_tunnel_url() -> str | None:
                     return url
             except Exception:
                 pass
+
+    # Instantaneous fallback: inspect active cloudflared quick tunnel log directly
+    log_file = Path("/tmp/cloudflared_quick_tunnel.log")
+    if log_file.exists():
+        try:
+            content = log_file.read_text()
+            m = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
+            if m:
+                found_url = m.group(0)
+                for p in candidates[:2]:
+                    try:
+                        p.parent.mkdir(parents=True, exist_ok=True)
+                        p.write_text(found_url)
+                    except Exception:
+                        pass
+                return found_url
+        except Exception:
+            pass
+
     return None
 
 def get_web_url() -> str:
@@ -1256,7 +1274,21 @@ KIOSK_HTML = """<!DOCTYPE html>
         }
       } catch (e) {}
     }
-    setInterval(checkPrinterHealth, 4000);
+
+    // Run check immediately on load:
+    checkPrinterHealth();
+
+    // Fast-poll every 500ms for the first 12s so Cloudflare QR renders without delay
+    let pollCount = 0;
+    const fastPoll = setInterval(async () => {
+      pollCount++;
+      await checkPrinterHealth();
+      const badge = document.getElementById('kioskTunnelBadge');
+      if ((badge && badge.style.display !== 'none') || pollCount >= 24) {
+        clearInterval(fastPoll);
+        setInterval(checkPrinterHealth, 3000);
+      }
+    }, 500);
 
     updateDisplay();
   </script>

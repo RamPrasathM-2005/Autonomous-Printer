@@ -13,6 +13,7 @@ from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.schemas.order import OrderCreateRequest, OrderResponse, OTPResponse
 from app.services.order_service import order_service
 from app.services.otp_service import otp_service
+from app.utils.crypto import hash_sha256, encrypt_value
 from app.utils.errors import AppException
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
@@ -121,7 +122,8 @@ def get_order_otp(
             active_otp.active = False
             db.commit()
 
-    if not active_otp or is_expired or order.status != OrderStatus.WAITING_FOR_OTP:
+    cur_cfg = dict(order.print_settings or {})
+    if not active_otp or is_expired or order.status != OrderStatus.WAITING_FOR_OTP or not cur_cfg.get("printer_otps"):
         # Provision print job if not already present
         existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
         if not existing_job:
@@ -188,12 +190,32 @@ def select_order_printer(
         if p:
             chosen_printer = p.cups_printer_name
 
+    # Canonicalize printer name
+    if any(k in str(chosen_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
+        chosen_printer = "HP_LaserJet_400_M401dn_E9A0F4"
+    else:
+        chosen_printer = "HP_LaserJet_400_M401dn_F36EC0"
+
     current_settings["printer_name"] = chosen_printer
     current_settings["cups_printer_name"] = chosen_printer
     current_settings["selected_printer"] = chosen_printer
     current_settings["printer_switch_count"] = current_settings.get("printer_switch_count", 0) + 1
     current_settings["printer_selection_locked"] = True
     order.print_settings = current_settings
+
+    # Also update active OTP record in database to match the chosen printer
+    potps = current_settings.get("printer_otps", {})
+    p_info = potps.get(chosen_printer)
+    if not p_info:
+        if chosen_printer == "HP_LaserJet_400_M401dn_E9A0F4":
+            p_info = potps.get("Printer_2") or potps.get("HP_LaserJet_400_M401dn_E9A0F4")
+        else:
+            p_info = potps.get("HP_LaserJet_400_M401dn_F36EC0")
+    if p_info and p_info.get("otp"):
+        otp_rec = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
+        if otp_rec:
+            otp_rec.otp_hash = p_info.get("otp_hash") or hash_sha256(str(p_info["otp"]))
+            otp_rec.encrypted_value = encrypt_value(str(p_info["otp"]))
 
     # Also update any queued print job
     job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()

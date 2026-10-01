@@ -82,7 +82,12 @@ class PrintService:
     def _do_execute(self, job_id: str, order_id: str, storage_key: str, settings: Dict[str, Any]) -> bool:
         agent_logger.info(f"Starting execution of job {job_id} (Order {order_id})")
         raw_printer = settings.get("cups_printer_name") or settings.get("printer_name") or settings.get("selected_printer") or config.PRINTER_NAME
-        friendly_printer = "HP LaserJet 400 M401dn" if ("HP" in raw_printer or "M401" in raw_printer) else ("Printer 2" if "2" in raw_printer else raw_printer.replace("_", " "))
+        if any(k in str(raw_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
+            raw_printer = "HP_LaserJet_400_M401dn_E9A0F4"
+            friendly_printer = "HP LaserJet 400 (Unit 2)"
+        else:
+            raw_printer = "HP_LaserJet_400_M401dn_F36EC0"
+            friendly_printer = "HP LaserJet 400 (Unit 1)"
 
         self.set_job_state(job_id, {
             "job_id": job_id,

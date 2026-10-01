@@ -65,14 +65,14 @@ trap cleanup SIGINT SIGTERM EXIT
 
 # 4. Wait for the trycloudflare.com URL to appear in logs (up to 30s)
 TUNNEL_URL=""
-for i in {1..30}; do
+for i in {1..200}; do
     if grep -q "trycloudflare.com" "$TUNNEL_LOG" 2>/dev/null; then
         TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -n 1)
         if [ -n "$TUNNEL_URL" ]; then
             break
         fi
     fi
-    sleep 1
+    sleep 0.15
 done
 
 if [ -z "$TUNNEL_URL" ]; then

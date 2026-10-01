@@ -255,6 +255,11 @@ class CupsService:
 
         # Dynamic printer selection
         target_printer = settings.get("cups_printer_name") or settings.get("printer_name") or self.printer_name
+        if any(k in str(target_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
+            target_printer = "HP_LaserJet_400_M401dn_E9A0F4"
+        elif any(k in str(target_printer) for k in ["F36EC0", "Unit 1", "central_01"]):
+            target_printer = "HP_LaserJet_400_M401dn_F36EC0"
+
         if self.has_pycups:
             try:
                 conn = self.cups.Connection(host=config.CUPS_SERVER)

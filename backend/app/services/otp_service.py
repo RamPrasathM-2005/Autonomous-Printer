@@ -127,6 +127,17 @@ class OTPService:
             )
 
         plaintext = decrypt_value(otp_record.encrypted_value)
+        selected_printer = settings.get("cups_printer_name") or settings.get("selected_printer")
+        if selected_printer and printer_otps:
+            p_data = printer_otps.get(selected_printer)
+            if not p_data:
+                if any(k in str(selected_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
+                    p_data = printer_otps.get("HP_LaserJet_400_M401dn_E9A0F4") or printer_otps.get("Printer_2")
+                else:
+                    p_data = printer_otps.get("HP_LaserJet_400_M401dn_F36EC0")
+            if isinstance(p_data, dict) and p_data.get("otp"):
+                plaintext = str(p_data["otp"])
+
         return plaintext, otp_record.expires_at, printer_otps
 
     @staticmethod
@@ -160,7 +171,20 @@ class OTPService:
 
         if candidates:
             matching_entry = candidates[0]
-            matched_printer_name = "HP_LaserJet_400_M401dn_F36EC0"
+            ord_obj = matching_entry[1]
+            ord_cfg = dict(ord_obj.print_settings or {})
+            potps = ord_cfg.get("printer_otps", {})
+            for p_cups, p_info in potps.items():
+                if isinstance(p_info, dict) and ((p_info.get("otp") == raw_otp) or (p_info.get("otp_hash") == hashed_input)):
+                    matched_printer_name = p_info.get("cups_printer_name") or p_cups
+                    break
+            if not matched_printer_name:
+                matched_printer_name = (
+                    ord_cfg.get("cups_printer_name")
+                    or ord_cfg.get("printer_name")
+                    or ord_cfg.get("selected_printer")
+                    or "HP_LaserJet_400_M401dn_F36EC0"
+                )
 
         # 2. If not matched in primary OTP row, check active orders' printer_otps dictionary
         if not matching_entry:
@@ -185,7 +209,7 @@ class OTPService:
                 for p_cups, p_info in potps.items():
                     if (p_info.get("otp") == raw_otp) or (p_info.get("otp_hash") == hashed_input):
                         # Found order matching this printer's OTP
-                        matched_printer_name = p_cups
+                        matched_printer_name = p_info.get("cups_printer_name") or p_cups
                         otp_rec = (
                             db.query(OTP)
                             .filter(OTP.order_id == ord_row.id)
@@ -296,6 +320,10 @@ class OTPService:
 
         # Determine target printer for this job
         target_printer = matched_printer_name or order_settings.get("cups_printer_name") or "HP_LaserJet_400_M401dn_F36EC0"
+        if any(k in str(target_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
+            target_printer = "HP_LaserJet_400_M401dn_E9A0F4"
+        else:
+            target_printer = "HP_LaserJet_400_M401dn_F36EC0"
 
         # Apply state transitions
         validate_order_transition(order_rec.status, OrderStatus.RELEASED)

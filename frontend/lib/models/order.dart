@@ -162,7 +162,30 @@ class OrderOtp {
     this.printerSelectionLocked = false,
   });
 
-  String get otpCode => otp;
+  String get otpCode {
+    if (selectedPrinter != null && printerOtps != null) {
+      final pInfo = printerOtps![selectedPrinter];
+      if (pInfo is Map && pInfo['otp'] != null) {
+        return pInfo['otp'].toString();
+      }
+      final isUnit2 = selectedPrinter!.contains('E9A0F4') ||
+          selectedPrinter!.contains('Unit 2') ||
+          selectedPrinter!.contains('Printer_2');
+      if (isUnit2) {
+        final p2 = printerOtps!['HP_LaserJet_400_M401dn_E9A0F4'] ??
+            printerOtps!['Printer_2'];
+        if (p2 is Map && p2['otp'] != null) {
+          return p2['otp'].toString();
+        }
+      } else {
+        final p1 = printerOtps!['HP_LaserJet_400_M401dn_F36EC0'];
+        if (p1 is Map && p1['otp'] != null) {
+          return p1['otp'].toString();
+        }
+      }
+    }
+    return otp;
+  }
 
   factory OrderOtp.fromJson(Map<String, dynamic> json) {
     return OrderOtp(

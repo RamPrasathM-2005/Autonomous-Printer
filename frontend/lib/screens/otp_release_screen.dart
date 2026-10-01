@@ -195,9 +195,44 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  bool get _isUnit2 =>
+      _selectedPrinterName != null &&
+      (_selectedPrinterName!.contains('E9A0F4') ||
+          _selectedPrinterName!.contains('Unit 2') ||
+          _selectedPrinterName!.contains('Printer_2'));
+
+  String get _friendlyPrinterName =>
+      _isUnit2 ? 'HP LaserJet 400 M401dn (Unit 2)' : 'HP LaserJet 400 M401dn (Unit 1)';
+
+  String get _fullPrinterWithHardwareTag =>
+      _isUnit2 ? 'HP LaserJet 400 M401dn (Unit 2 - E9A0F4)' : 'HP LaserJet 400 M401dn (Unit 1 - F36EC0)';
+
+  String _getResolvedOtpCode() {
+    if (_otpData == null) return '------';
+    if (_otpData!.printerOtps != null && _selectedPrinterName != null) {
+      final pInfo = _otpData!.printerOtps![_selectedPrinterName!];
+      if (pInfo is Map && pInfo['otp'] != null) {
+        return pInfo['otp'].toString();
+      }
+      if (_isUnit2) {
+        final p2 = _otpData!.printerOtps!['HP_LaserJet_400_M401dn_E9A0F4'] ??
+            _otpData!.printerOtps!['Printer_2'];
+        if (p2 is Map && p2['otp'] != null) {
+          return p2['otp'].toString();
+        }
+      } else {
+        final p1 = _otpData!.printerOtps!['HP_LaserJet_400_M401dn_F36EC0'];
+        if (p1 is Map && p1['otp'] != null) {
+          return p1['otp'].toString();
+        }
+      }
+    }
+    return _otpData!.otpCode;
+  }
+
   void _copyToClipboard() {
-    final otpStr = _otpData?.otpCode ?? '';
-    if (otpStr.isEmpty) return;
+    final otpStr = _getResolvedOtpCode();
+    if (otpStr.isEmpty || otpStr == '------') return;
     Clipboard.setData(ClipboardData(text: otpStr));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -240,16 +275,13 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       });
 
       if (mounted) {
-        final friendly = _selectedPrinterName == _kPrinter1Id
-            ? 'HP LaserJet 400'
-            : 'Secondary Printer';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 const Icon(Icons.lock_rounded, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
-                Text('$friendly locked. OTP ready.'),
+                Text('$_friendlyPrinterName locked. OTP ready.'),
               ],
             ),
             duration: const Duration(seconds: 2),
@@ -331,8 +363,8 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     buffer.writeln('Order ID: ${order.id}');
     buffer.writeln('Station ID: ${order.printServerId}');
     buffer.writeln('Status: PAID (Verified)');
-    buffer.writeln('Assigned Printer: ${_selectedPrinterName == _kPrinter1Id ? 'HP LaserJet 400 M401dn' : 'Secondary Printer'}');
-    buffer.writeln('Release OTP: ${_otpData?.otpCode ?? '------'}');
+    buffer.writeln('Assigned Printer: $_fullPrinterWithHardwareTag');
+    buffer.writeln('Release OTP: ${_getResolvedOtpCode()}');
     buffer.writeln('Total Pages: ${order.totalPages}');
     buffer.writeln('Total Amount Paid: ${order.formattedAmount}');
     if (widget.paymentId != null) {
@@ -558,8 +590,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               Expanded(
                 child: _buildPrinterCard(
                   name: _kPrinter1Id,
-                  title: 'HP LaserJet (Unit 1)',
-                  subtitle: 'Duplex • B&W • Fast',
+                  title: 'HP LaserJet 400 M401dn',
+                  unitTag: 'Unit 1 • F36EC0',
+                  subtitle: 'Duplex B&W • Tray 1 • Unit 1',
                   trayLabel: 'Unit 1 • Ready',
                   icon: Icons.print_rounded,
                   accentColor: const Color(0xFF2563EB),
@@ -569,8 +602,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               Expanded(
                 child: _buildPrinterCard(
                   name: _kPrinter2Id,
-                  title: 'HP LaserJet (Unit 2)',
-                  subtitle: 'Duplex • B&W • Fast',
+                  title: 'HP LaserJet 400 M401dn',
+                  unitTag: 'Unit 2 • E9A0F4',
+                  subtitle: 'Duplex B&W • Tray 2 • Unit 2',
                   trayLabel: 'Unit 2 • Ready',
                   icon: Icons.print_rounded,
                   accentColor: const Color(0xFF059669),
@@ -602,7 +636,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                       ? 'Select Printer to View OTP'
                       : (_isPrinterLocked
                           ? 'View Release OTP'
-                          : 'View OTP (${_selectedPrinterName == _kPrinter1Id ? 'HP LaserJet 400' : 'Secondary Printer'})')),
+                          : 'View OTP ($_friendlyPrinterName)')),
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
             ),
             style: ElevatedButton.styleFrom(
@@ -623,6 +657,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   Widget _buildPrinterCard({
     required String name,
     required String title,
+    required String unitTag,
     required String subtitle,
     required String trayLabel,
     required IconData icon,
@@ -687,24 +722,42 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                     color: isSelected ? Colors.white : AppTheme.textSecondary,
                   ),
                 ),
-                if (isSelected)
-                  Icon(
-                    isLocked ? Icons.lock_rounded : Icons.check_circle_rounded,
-                    color: isLocked ? const Color(0xFF16A34A) : accentColor,
-                    size: 18,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (isLocked ? const Color(0xFFDCFCE7) : accentColor.withValues(alpha: 0.12))
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected
+                          ? (isLocked ? const Color(0xFF86EFAC) : accentColor.withValues(alpha: 0.25))
+                          : Colors.grey.shade300,
+                    ),
                   ),
+                  child: Text(
+                    unitTag,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected
+                          ? (isLocked ? const Color(0xFF166534) : accentColor)
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Text(
               title,
               style: TextStyle(
-                fontSize: 13.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               subtitle,
               style: const TextStyle(
@@ -724,10 +777,8 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       return const SizedBox.shrink();
     }
 
-    final otpStr = _otpData?.otpCode ?? '------';
-    final targetPrinterTitle = _selectedPrinterName == _kPrinter1Id
-        ? 'HP LaserJet 400 M401dn'
-        : 'Secondary Printer';
+    final otpStr = _getResolvedOtpCode();
+    final targetPrinterTitle = _fullPrinterWithHardwareTag;
 
     return Container(
       padding: const EdgeInsets.all(20),
