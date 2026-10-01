@@ -191,41 +191,6 @@ KIOSK_HTML = """<!DOCTYPE html>
       gap: 10px;
     }
 
-    /* Header Download APK Button */
-    .header-apk-btn {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: #ffffff;
-      padding: 7px 14px;
-      border-radius: 9999px;
-      font-size: 0.78rem;
-      font-weight: 700;
-      text-decoration: none;
-      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
-      transition: all 0.15s ease;
-      cursor: pointer;
-    }
-
-    .header-apk-btn:hover {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
-      transform: translateY(-1px);
-    }
-
-    .header-apk-btn svg {
-      width: 15px;
-      height: 15px;
-      fill: currentColor;
-    }
-
-    .apk-tag {
-      background: rgba(255, 255, 255, 0.25);
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 0.65rem;
-      font-weight: 800;
-    }
 
     .station-pills {
       display: flex;
@@ -388,35 +353,6 @@ KIOSK_HTML = """<!DOCTYPE html>
       align-items: center;
     }
 
-    .btn-download-kiosk {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      width: 100%;
-      max-width: 320px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: #ffffff;
-      padding: 11px 18px;
-      border-radius: 12px;
-      font-size: 0.88rem;
-      font-weight: 700;
-      text-decoration: none;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
-      transition: all 0.15s ease;
-    }
-
-    .btn-download-kiosk:hover {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
-    }
-
-    .btn-download-kiosk svg {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-    }
 
     /* 3 Simple Steps */
     .steps-list {
@@ -835,15 +771,6 @@ KIOSK_HTML = """<!DOCTYPE html>
     </div>
 
     <div class="station-actions">
-      <!-- Download APK in Header -->
-      <a href="{{ apk_url }}" download="autonomous-printer.apk" class="header-apk-btn" id="headerApkBtn" title="Download Android Mobile App (.apk)">
-        <svg viewBox="0 0 24 24">
-          <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9996.4482.9996.9993.0001.5511-.4485.9997-.9996.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.996-3.4572c.1147-.1994.0463-.4543-.1531-.569-.1998-.1147-.4547-.0463-.5694.1531l-2.0258 3.5088C15.426 8.1633 13.7667 7.76 12 7.76s-3.426.4033-5.1292 1.1971L4.845 5.4483c-.1147-.1994-.3696-.2678-.5694-.1531-.1994.1147-.2678.3696-.1531.569l1.996 3.4572C2.6889 11.1867 0 14.92 0 19.28h24c0-4.36-2.6889-8.0933-6.1185-9.9586"/>
-        </svg>
-        <span>Download App</span>
-        <span class="apk-tag">.APK</span>
-      </a>
-
       <div class="station-pills">
         <span class="printer-model-badge">{{ printer_name }}</span>
         <div class="status-badge" id="stationStatusBadge">
@@ -868,7 +795,7 @@ KIOSK_HTML = """<!DOCTYPE html>
             1. SCAN FROM PHONE
           </div>
           <h2>Print from your Phone</h2>
-          <p>Scan with your phone camera to open the Web App or Android App instantly.</p>
+          <p>Scan with your phone camera to open the Web App instantly.</p>
         </div>
 
         <!-- High-Contrast QR Code -->
@@ -885,13 +812,6 @@ KIOSK_HTML = """<!DOCTYPE html>
 
         <!-- Direct Actions -->
         <div class="action-group">
-          <a href="{{ apk_url }}" download="autonomous-printer.apk" class="btn-download-kiosk" id="kioskDownloadApkBtn">
-            <svg viewBox="0 0 24 24">
-              <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
-            </svg>
-            <span>Download Mobile App (.apk)</span>
-          </a>
-
           <div class="steps-list">
             <div class="step-micro">
               <span class="num">1</span>
@@ -1333,11 +1253,9 @@ KIOSK_HTML = """<!DOCTYPE html>
           const qrImg = document.getElementById('kioskQrImg');
           const qrUrl = document.getElementById('kioskQrUrlText');
           const tunnelBadge = document.getElementById('kioskTunnelBadge');
-          const dlBtn = document.getElementById('kioskDownloadApkBtn');
           if (qrImg && qrData.qr_data_uri) qrImg.src = qrData.qr_data_uri;
           if (qrUrl && qrData.target_url) qrUrl.textContent = qrData.target_url;
           if (tunnelBadge) tunnelBadge.style.display = qrData.is_tunneled ? 'inline-flex' : 'none';
-          if (dlBtn && qrData.apk_url) dlBtn.href = qrData.apk_url;
         }
       } catch (e) {}
     }

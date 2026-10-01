@@ -719,7 +719,7 @@ class _UploadScreenState extends State<UploadScreen>
                       const SizedBox(height: 24),
                       _buildHowItWorks(),
                       const SizedBox(height: 16),
-                      const SizedBox(height: 16),
+                      _buildTransparentPricing(),
                       const SizedBox(height: 16),
                     ],
                   ),

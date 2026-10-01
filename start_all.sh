@@ -104,16 +104,22 @@ sleep 2
 # 6. Launch Flutter Web Frontend (Port 3000)
 HOT_RELOAD=false
 FORCE_BUILD=false
+BUILD_APK=false
 WANT_TUNNEL=true
 
 for arg in "$@"; do
     case "$arg" in
         --hot|--hot-reload|--hotreload|--dev|-d) HOT_RELOAD=true ;;
         --build|-build|-Build|-b) FORCE_BUILD=true ;;
+        --build-apk|--apk) BUILD_APK=true ;;
         --no-tunnel|--notunnel|-nt) WANT_TUNNEL=false ;;
         --prod|--static) HOT_RELOAD=false ;;
     esac
 done
+
+if [ "$BUILD_APK" = true ]; then
+    "$SCRIPT_DIR/scripts/build_apk.sh"
+fi
 
 if [ "$HOT_RELOAD" = true ]; then
     echo -e "\033[1;36m[3/4] Starting Flutter Web in LIVE HOT-RELOAD mode on http://0.0.0.0:3000 ...\033[0m"
