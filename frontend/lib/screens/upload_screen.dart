@@ -6,12 +6,15 @@ import '../services/api_error.dart';
 
 import 'package:file_picker/file_picker.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
+import '../utils/download_helper.dart';
 import '../widgets/workflow_stepper.dart';
 import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
@@ -176,6 +179,35 @@ class _UploadScreenState extends State<UploadScreen>
       });
       await _loadStations();
     }
+  }
+
+  Future<void> _downloadApk() async {
+    final apkUrl = '${ApiConfig.baseUrl}/downloads/autonomous-printer.apk';
+    try {
+      final uri = Uri.parse(apkUrl);
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        triggerUrlDownload(apkUrl, filename: 'autonomous-printer.apk');
+      }
+    } catch (_) {
+      triggerUrlDownload(apkUrl, filename: 'autonomous-printer.apk');
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.download_rounded, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Text('Downloading APK...'),
+          ],
+        ),
+        duration: Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Color(0xFF1E293B),
+      ),
+    );
   }
 
   String _formatFileSize(int bytes) {
@@ -375,6 +407,15 @@ class _UploadScreenState extends State<UploadScreen>
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: _downloadApk,
+            icon: const Icon(
+              Icons.download_rounded,
+              color: AppTheme.textPrimary,
+              size: 22,
+            ),
+            tooltip: 'Download APK',
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
             child: ElevatedButton.icon(

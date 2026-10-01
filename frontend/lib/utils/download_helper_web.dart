@@ -14,3 +14,15 @@ Future<void> downloadFileUniversal(Uint8List bytes, String filename) async {
   html.document.body?.children.remove(anchor);
   html.Url.revokeObjectUrl(url);
 }
+
+void triggerUrlDownloadUniversal(String url, {String? filename}) {
+  final anchor = html.document.createElement('a') as html.AnchorElement
+    ..href = url
+    ..download = filename ?? ''
+    ..target = '_blank'
+    ..style.display = 'none';
+  html.document.body?.children.add(anchor);
+  anchor.click();
+  html.document.body?.children.remove(anchor);
+}
+

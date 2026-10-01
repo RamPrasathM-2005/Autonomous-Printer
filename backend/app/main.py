@@ -180,21 +180,10 @@ if downloads_dir.exists():
 
 # Frontends directory paths
 flutter_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "build" / "web"
-react_dist = Path(__file__).resolve().parent.parent.parent / "frontend-react" / "dist"
-
-# Mount React client at /react if built
-if react_dist.exists() and (react_dist / "index.html").exists():
-    from fastapi.responses import RedirectResponse
-    @app.get("/react", include_in_schema=False)
-    def redirect_react():
-        return RedirectResponse(url="/react/")
-    app.mount("/react", StaticFiles(directory=str(react_dist), html=True), name="react-web")
 
 # Mount Flutter Web customer client at root /
 if flutter_dist.exists() and (flutter_dist / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(flutter_dist), html=True), name="flutter-web")
-elif react_dist.exists() and (react_dist / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(react_dist), html=True), name="frontend-web")
 
 if __name__ == "__main__":
     import uvicorn

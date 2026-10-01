@@ -5,3 +5,7 @@ import 'download_helper_stub.dart'
 
 Future<void> downloadFile(Uint8List bytes, String filename) =>
     downloadFileUniversal(bytes, filename);
+
+void triggerUrlDownload(String url, {String? filename}) =>
+    triggerUrlDownloadUniversal(url, filename: filename);
+

@@ -50,15 +50,5 @@ gnome-terminal --geometry=80x20+50+500 --title="[3] Flutter Frontend (Port 3000)
   exec bash
 "
 
-# Window 4: React Web Application
-gnome-terminal --geometry=80x20+650+500 --title="[4] React Web App (Port 3100)" -- bash -c "
-  echo -e '\033[1;35m=====================================================\033[0m'
-  echo -e '\033[1;35m   [FRONTEND] React Web Interface (Port 3100)        \033[0m'
-  echo -e '\033[1;35m   URL: http://127.0.0.1:3100                         \033[0m'
-  echo -e '\033[1;35m=====================================================\033[0m'
-  echo ''
-  cd '$SCRIPT_DIR/frontend-react' && npm run dev
-  exec bash
-"
+echo "All 3 Terminals launched on your screen!"
 
-echo "All 4 Terminals launched on your screen!"

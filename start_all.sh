@@ -129,14 +129,6 @@ else
 fi
 sleep 1
 
-# 7. Launch React Web Frontend (Port 3100)
-if [ -d "$SCRIPT_DIR/frontend-react" ]; then
-    echo -e "\033[1;35m[4/4] Starting React Web App on http://127.0.0.1:3100 ...\033[0m"
-    (cd "$SCRIPT_DIR/frontend-react" && npm run dev) &
-    PIDS+=($!)
-    sleep 2
-fi
-
 # Optional: Cloudflare Quick Tunnel (--tunnel / -tunnel / -t / -Tunnel flag)
 WANT_TUNNEL=false
 for arg in "$@"; do
@@ -146,7 +138,7 @@ for arg in "$@"; do
 done
 
 if [ "$WANT_TUNNEL" = true ]; then
-    echo -e "\033[1;33m[5/5] Starting Cloudflare Quick Tunnel...\033[0m"
+    echo -e "\033[1;33m[4/4] Starting Cloudflare Quick Tunnel...\033[0m"
     "$SCRIPT_DIR/start_tunnel.sh" &
     PIDS+=($!)
     sleep 3
@@ -156,12 +148,11 @@ echo ""
 echo -e "\033[1;32m====================================================================\033[0m"
 echo -e "\033[1;32m   ✓ ALL PROJECT SERVICES ARE ACTIVE AND RUNNING!                  \033[0m"
 echo -e "\033[1;32m====================================================================\033[0m"
-echo -e "   \033[1m1. Customer React Web App:\033[0m     \033[1;35mhttp://127.0.0.1:3100\033[0m"
-echo -e "   \033[1m2. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m"
-echo -e "   \033[1m3. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
-echo -e "   \033[1m4. FastAPI Swagger Docs:\033[0m       \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
+echo -e "   \033[1m1. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m"
+echo -e "   \033[1m2. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
+echo -e "   \033[1m3. FastAPI Backend & Docs:\033[0m     \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
 if [[ "$*" == *"--tunnel"* ]] && [ -f "$SCRIPT_DIR/storage/tunnel_url.txt" ]; then
-    echo -e "   \033[1m5. Cloudflare Public URL:\033[0m      \033[1;33m$(cat "$SCRIPT_DIR/storage/tunnel_url.txt")\033[0m"
+    echo -e "   \033[1m4. Cloudflare Public URL:\033[0m      \033[1;33m$(cat "$SCRIPT_DIR/storage/tunnel_url.txt")\033[0m"
 fi
 echo -e "\033[1;32m====================================================================\033[0m"
 echo -e "   \033[2mPress Ctrl+C at any time to cleanly stop all running services.\033[0m"

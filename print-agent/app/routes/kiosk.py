@@ -1345,7 +1345,6 @@ def download_apk():
     candidates = [
         Path(os.getcwd()) / "downloads" / "autonomous-printer.apk",
         Path(__file__).parent.parent / "static" / "autonomous-printer.apk",
-        Path(os.getcwd()) / "frontend-react" / "public" / "downloads" / "autonomous-printer.apk"
     ]
     for p in candidates:
         if p.exists():
