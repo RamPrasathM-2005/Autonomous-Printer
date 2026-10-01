@@ -212,30 +212,31 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       appBar: AppBar(
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
-        titleSpacing: 20,
+        titleSpacing: 16,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.asset(
                 'assets/images/app_logo.jpg',
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 fit: BoxFit.cover,
                 errorBuilder: (ctx, err, stack) => Container(
-                  width: 36,
-                  height: 36,
+                  width: 34,
+                  height: 34,
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGradient,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.print_rounded, color: Colors.white, size: 20),
+                  child: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            const Expanded(
+            const SizedBox(width: 10),
+            const Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -245,14 +246,14 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                       color: AppTheme.textPrimary,
                     ),
                   ),
                   Text(
-                    'Self-Service Autonomous Kiosk',
+                    'Self-Service Kiosk',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -268,28 +269,28 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: OutlinedButton.icon(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+            child: ElevatedButton.icon(
               onPressed: _showServerConfigDialog,
-              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              icon: const Icon(Icons.dns_rounded, size: 15, color: Colors.white),
               label: const Text(
                 'Server',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+                  color: Colors.white,
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.textPrimary,
-                backgroundColor: AppTheme.surfaceSubtle,
-                side: const BorderSide(color: AppTheme.border, width: 1.2),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           _isLoadingStations
               ? const Center(
                   child: Padding(
@@ -321,6 +322,92 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Server Configuration & Connection Status Bar (Prominent in UI)
+                      InkWell(
+                        onTap: _showServerConfigDialog,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWhite,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primarySurface,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.dns_rounded, size: 16, color: AppTheme.primary),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'CONNECTED BACKEND SERVER',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.textMuted,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      ApiConfig.backendUrl,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
+                                        fontFamily: 'monospace',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primarySurface,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.tune_rounded, size: 13, color: AppTheme.primary),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Configure Server',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
                       // Section Title & File Count
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -551,6 +638,18 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showServerConfigDialog,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.dns_rounded, size: 20),
+        label: const Text(
+          'Server Config',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3),
+        ),
+        tooltip: 'Configure Backend Server / Tunnel URL',
       ),
     );
   }

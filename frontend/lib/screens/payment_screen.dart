@@ -167,23 +167,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
         backgroundColor: AppTheme.surfaceWhite,
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            child: OutlinedButton.icon(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+            child: ElevatedButton.icon(
               onPressed: () => showServerConfigModal(context),
-              icon: const Icon(Icons.dns_rounded, size: 15, color: AppTheme.primary),
+              icon: const Icon(Icons.dns_rounded, size: 15, color: Colors.white),
               label: const Text(
                 'Server',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+                  color: Colors.white,
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.textPrimary,
-                backgroundColor: AppTheme.surfaceSubtle,
-                side: const BorderSide(color: AppTheme.border, width: 1.2),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),

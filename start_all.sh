@@ -26,11 +26,13 @@ echo ""
 
 # 1. Kill any existing instances on all project ports
 echo -e "\033[1;33m[*] Clearing any stale processes on ports 8000, 5001, 5000, 3000, 3100...\033[0m"
-fuser -k 8000/tcp 2>/dev/null || true
-fuser -k 5001/tcp 2>/dev/null || true
-fuser -k 5000/tcp 2>/dev/null || true
-fuser -k 3000/tcp 2>/dev/null || true
-fuser -k 3100/tcp 2>/dev/null || true
+fuser -k -9 8000/tcp 2>/dev/null || true
+fuser -k -9 5001/tcp 2>/dev/null || true
+fuser -k -9 5000/tcp 2>/dev/null || true
+fuser -k -9 3000/tcp 2>/dev/null || true
+fuser -k -9 3100/tcp 2>/dev/null || true
+pkill -9 -f "run -d web-server" 2>/dev/null || true
+pkill -9 -f "frontend_server_aot" 2>/dev/null || true
 sleep 1
 
 # 2. Determine Python executable
@@ -88,6 +90,11 @@ PIDS+=($!)
 sleep 2
 
 # 6. Launch Flutter Web Frontend (Port 3000)
+if [ ! -d "$SCRIPT_DIR/frontend/build/web" ] && command -v flutter &> /dev/null; then
+    echo -e "\033[1;36m[*] Building Flutter Web production bundle...\033[0m"
+    (cd "$SCRIPT_DIR/frontend" && flutter build web --release)
+fi
+
 if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
     echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://0.0.0.0:3000 ...\033[0m"
     (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 0.0.0.0) &
