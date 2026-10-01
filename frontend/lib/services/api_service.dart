@@ -292,4 +292,26 @@ class ApiService {
       return false;
     }
   }
+
+  // 10. Assign / Select Target Printer for Order
+  Future<bool> selectOrderPrinter({
+    required String orderId,
+    required String cupsPrinterName,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/orders/$orderId/printer');
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'cups_printer_name': cupsPrinterName}),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[FRONTEND API] Error selecting printer: $e');
+      return false;
+    }
+  }
 }

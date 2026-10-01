@@ -88,7 +88,8 @@ class PrintService:
                 message=message
             )
 
-        cups_status = cups_service.monitor_job(cups_job_id, on_status_callback=status_callback)
+        target_printer = settings.get("cups_printer_name") or settings.get("printer_name")
+        cups_status = cups_service.monitor_job(cups_job_id, on_status_callback=status_callback, target_printer=target_printer)
         if cups_status == "COMPLETED":
             backend_client.update_job_status(
                 job_id=job_id,

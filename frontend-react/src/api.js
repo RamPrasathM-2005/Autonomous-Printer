@@ -159,5 +159,19 @@ export const api = {
       paper_state: 'AVAILABLE',
       active_jobs_count: 0
     };
+  },
+
+  // 10. Select destination printer for order
+  async selectOrderPrinter(orderId, cupsPrinterName) {
+    const res = await fetch(`${BASE_URL}/orders/${orderId}/printer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cups_printer_name: cupsPrinterName }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to select printer');
+    }
+    return await res.json();
   }
 };

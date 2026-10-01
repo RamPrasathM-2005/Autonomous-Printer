@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/api_config.dart';
 import '../config/theme.dart';
@@ -214,16 +215,20 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter the backend API server URL (e.g. Cloudflare / Ngrok tunnel or LAN IP):',
+              'Enter the backend API server URL (e.g. Cloudflare Quick Tunnel or LAN IP):',
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
               decoration: InputDecoration(
-                hintText: 'https://xxxx.trycloudflare.com or http://127.0.0.1:8000',
+                hintText: 'https://xxxx.trycloudflare.com',
                 labelText: 'Backend API URL',
                 labelStyle: const TextStyle(fontSize: 12),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 18),
+                  onPressed: () => controller.clear(),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -234,6 +239,54 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               ),
               style: const TextStyle(fontSize: 13),
               keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      if (data != null && data.text != null && data.text!.trim().isNotEmpty) {
+                        controller.text = data.text!.trim();
+                      }
+                    },
+                    icon: const Icon(Icons.paste_rounded, size: 16),
+                    label: const Text(
+                      'Paste Tunnel URL from Clipboard',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primary,
+                      side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primarySurface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.bolt_rounded, size: 16, color: AppTheme.primary),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Free Cloudflare Tunnel: Run ./start_tunnel.sh on the station machine, copy the generated trycloudflare.com URL, and paste it here.',
+                      style: TextStyle(fontSize: 11, color: AppTheme.primary, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             const Text(

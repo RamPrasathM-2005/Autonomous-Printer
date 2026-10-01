@@ -4,6 +4,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+from app.db.models.printer import Printer
 from app.db.session import get_db
 from app.db.models.order import Order, OrderStatus
 from app.db.models.otp import OTP
@@ -146,3 +148,43 @@ def get_order_otp(
         otp=plaintext,
         expires_at=expires_at
     )
+
+class SelectPrinterRequest(BaseModel):
+    cups_printer_name: Optional[str] = None
+    printer_name: Optional[str] = None
+    printer_id: Optional[str] = None
+
+@router.post("/{order_id}/printer")
+def select_order_printer(
+    order_id: str,
+    payload: SelectPrinterRequest,
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="NOT_FOUND",
+            message="Order not found."
+        )
+
+    chosen_printer = payload.cups_printer_name or payload.printer_name or payload.printer_id
+    if payload.printer_id and not payload.cups_printer_name:
+        p = db.query(Printer).filter(Printer.id == payload.printer_id).first()
+        if p:
+            chosen_printer = p.cups_printer_name
+
+    current_settings = dict(order.print_settings or {})
+    current_settings["printer_name"] = chosen_printer
+    current_settings["cups_printer_name"] = chosen_printer
+    order.print_settings = current_settings
+
+    # Also update any queued print job
+    job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "orderId": order_id,
+        "selectedPrinter": chosen_printer
+    }

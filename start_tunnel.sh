@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Autonomous Self-Service Printing Platform - Cloudflare Quick Tunnel Launcher
+# Exposes the local backend API (port 8000) over a secure public HTTPS URL
+# without needing a Cloudflare account or static domain.
+# ==============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+CLOUDFLARED_BIN="$SCRIPT_DIR/bin/cloudflared"
+STORAGE_DIR="$SCRIPT_DIR/storage"
+TUNNEL_URL_FILE="$STORAGE_DIR/tunnel_url.txt"
+TUNNEL_LOG="/tmp/cloudflared_quick_tunnel.log"
+
+mkdir -p "$STORAGE_DIR"
+
+# 1. Check binary existence or auto-download
+if [ ! -f "$CLOUDFLARED_BIN" ]; then
+    echo -e "\033[1;33m[Notice] cloudflared not found. Downloading latest Linux amd64 binary...\033[0m"
+    mkdir -p "$SCRIPT_DIR/bin"
+    curl -sLo "$CLOUDFLARED_BIN" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+fi
+chmod +x "$CLOUDFLARED_BIN"
+
+# 2. Check if backend port 8000 is running
+if ! nc -z 127.0.0.1 8000 2>/dev/null && ! curl -s http://127.0.0.1:8000/health >/dev/null 2>&1; then
+    echo -e "\033[1;33m[Notice] Backend on port 8000 is not active yet.\033[0m"
+    echo -e "Starting backend in background..."
+    if [ -f "$SCRIPT_DIR/venv/bin/uvicorn" ]; then
+        "$SCRIPT_DIR/venv/bin/uvicorn" app.main:app --app-dir "$SCRIPT_DIR/backend" --host 0.0.0.0 --port 8000 &
+        sleep 2
+    fi
+fi
+
+# Clean up any old tunnel log and process
+rm -f "$TUNNEL_LOG"
+pkill -f "cloudflared tunnel --url" 2>/dev/null || true
+sleep 1
+
+echo ""
+echo -e "\033[1;36m====================================================================\033[0m"
+echo -e "\033[1;36m        REQUESTING FREE CLOUDFLARE QUICK TUNNEL (HTTPS)            \033[0m"
+echo -e "\033[1;36m====================================================================\033[0m"
+echo -e "\033[2mConnecting to Cloudflare global edge network for port 8000...\033[0m"
+
+# 3. Start cloudflared in the background
+"$CLOUDFLARED_BIN" tunnel --url http://127.0.0.1:8000 > "$TUNNEL_LOG" 2>&1 &
+TUNNEL_PID=$!
+
+cleanup() {
+    echo ""
+    echo -e "\033[1;33m[!] Stopping Cloudflare Quick Tunnel...\033[0m"
+    kill "$TUNNEL_PID" 2>/dev/null || true
+    pkill -f "cloudflared tunnel --url" 2>/dev/null || true
+    echo -e "\033[1;32m[✓] Tunnel stopped.\033[0m"
+}
+trap cleanup SIGINT SIGTERM EXIT
+
+# 4. Wait for the trycloudflare.com URL to appear in logs (up to 30s)
+TUNNEL_URL=""
+for i in {1..30}; do
+    if grep -q "trycloudflare.com" "$TUNNEL_LOG" 2>/dev/null; then
+        TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -n 1)
+        if [ -n "$TUNNEL_URL" ]; then
+            break
+        fi
+    fi
+    sleep 1
+done
+
+if [ -z "$TUNNEL_URL" ]; then
+    echo -e "\033[1;31m[Error] Failed to obtain quick tunnel URL within 30 seconds.\033[0m"
+    echo "Check log output:"
+    cat "$TUNNEL_LOG"
+    exit 1
+fi
+
+# 5. Save URL to persistent storage
+echo "$TUNNEL_URL" > "$TUNNEL_URL_FILE"
+
+# Try copying to clipboard if desktop clipboard tool is available
+if command -v xclip &>/dev/null; then
+    echo -n "$TUNNEL_URL" | xclip -selection clipboard 2>/dev/null || true
+elif command -v wl-copy &>/dev/null; then
+    echo -n "$TUNNEL_URL" | wl-copy 2>/dev/null || true
+fi
+
+echo ""
+echo -e "\033[1;32m====================================================================\033[0m"
+echo -e "\033[1;32m  ✓ CLOUDFLARE QUICK TUNNEL IS LIVE & REACHABLE WORLDWIDE!          \033[0m"
+echo -e "\033[1;32m====================================================================\033[0m"
+echo ""
+echo -e "   \033[1mPUBLIC BACKEND URL:\033[0m  \033[1;33m$TUNNEL_URL\033[0m"
+echo -e "   \033[1mSWAGGER API DOCS:\033[0m    \033[1;36m$TUNNEL_URL/docs\033[0m"
+echo -e "   \033[1mSAVED TO FILE:\033[0m       \033[2m$TUNNEL_URL_FILE\033[0m"
+echo ""
+echo -e "\033[1;35m--- HOW TO CONNECT YOUR MOBILE FLUTTER APP ---\033[0m"
+echo -e "  1. Open the Autonomous Printer Mobile App on your phone."
+echo -e "  2. Tap the \033[1mServer Settings\033[0m icon (top right corner of the Upload screen)."
+echo -e "  3. Tap '\033[1mPaste Tunnel URL from Clipboard\033[0m' or enter: \033[1;33m$TUNNEL_URL\033[0m"
+echo -e "  4. Tap '\033[1mSave & Connect\033[0m'. The mobile app is now connected over the internet!"
+echo ""
+echo -e "\033[1;32m====================================================================\033[0m"
+echo -e "\033[2mKeep this terminal running. Press Ctrl+C to stop the tunnel.\033[0m"
+echo ""
+
+# Wait on cloudflared process
+wait "$TUNNEL_PID"

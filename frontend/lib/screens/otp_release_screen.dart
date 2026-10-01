@@ -24,9 +24,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _pollingTimer;
-
-  int _secondsLeft = 900; // 15 mins
   Timer? _countdownTimer;
+  int _secondsLeft = 86400;
+  String? _selectedPrinterName;
 
   @override
   void initState() {
@@ -66,9 +66,15 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       }
       final diff = expiry != null ? expiry.difference(DateTime.now()).inSeconds : 86400;
 
+      final existingPrinter = order.printSettings.toJson()['printer_name'] ??
+          order.printSettings.toJson()['cups_printer_name'];
+
       setState(() {
         _order = order;
         _otpData = otp;
+        if (existingPrinter != null && existingPrinter.toString().isNotEmpty) {
+          _selectedPrinterName = existingPrinter.toString();
+        }
         _secondsLeft = diff > 0 ? diff : 86400;
         _isLoading = false;
       });
@@ -81,6 +87,153 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Widget _buildPrinterSelector() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.print_outlined, color: AppTheme.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Select Destination Printer',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Two printers are connected to this station. Choose which printer will print your pages:',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'HP_LaserJet_400_M401dn_F36EC0',
+                  title: 'HP LaserJet 400',
+                  subtitle: 'Duplex • B&W • Fast',
+                  icon: Icons.print_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'Printer_2',
+                  title: 'Secondary Printer',
+                  subtitle: 'Color / Tray 2 • High Res',
+                  icon: Icons.color_lens_outlined,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinterCard({
+    required String name,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedPrinterName == name;
+    return InkWell(
+      onTap: () async {
+        setState(() {
+          _selectedPrinterName = name;
+        });
+        await _apiService.selectOrderPrinter(
+          orderId: widget.orderId,
+          cupsPrinterName: name,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Target printer assigned to $title'),
+              duration: const Duration(seconds: 1),
+              backgroundColor: AppTheme.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                ),
+                if (isSelected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 18,
+                    color: AppTheme.primary,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: isSelected ? AppTheme.primary.withOpacity(0.8) : AppTheme.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _startCountdown() {
@@ -160,6 +313,17 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
   Future<void> _simulateRelease() async {
     if (_otpData == null || _order == null) return;
+    if (_selectedPrinterName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please select a destination printer first!'),
+          backgroundColor: AppTheme.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
     try {
       final agentService = PrintAgentService();
       await agentService.releasePrintJob(
@@ -225,61 +389,144 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         ),
                       ],
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Large OTP Digits Display Card
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceWhite,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
-                          boxShadow: AppTheme.cardShadow,
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              '6-DIGIT RELEASE CODE',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textMuted,
-                                letterSpacing: 1.2,
+                      // Two-Printer Selection Card
+                      _buildPrinterSelector(),
+
+                      const SizedBox(height: 16),
+
+                      // Large OTP Digits Display Card - Revealed after printer selection
+                      if (_selectedPrinterName == null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWhite,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 1.5),
+                            boxShadow: AppTheme.cardShadow,
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primarySurface,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.touch_app_rounded, size: 28, color: AppTheme.primary),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            _isLoading
-                                ? const SizedBox(
-                                    height: 50,
-                                    child: Center(child: CircularProgressIndicator()),
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: List.generate(6, (i) {
-                                      final digit = i < otpStr.length ? otpStr[i] : '-';
-                                      return Container(
-                                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                                        width: 44,
-                                        height: 54,
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primarySurface,
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: AppTheme.primary, width: 1.5),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            digit,
-                                            style: const TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.w900,
-                                              color: AppTheme.primary,
-                                            ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Select a Printer Above',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Tap either HP LaserJet 400 or Secondary Printer above to route your print job and reveal your 6-digit release OTP code.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textSecondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceWhite,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppTheme.primary.withOpacity(0.4), width: 2),
+                            boxShadow: AppTheme.cardShadow,
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.successSurface,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.success),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          _selectedPrinterName == 'Printer_2'
+                                              ? 'Routed to: Secondary Printer'
+                                              : 'Routed to: HP LaserJet 400',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.success,
                                           ),
                                         ),
-                                      );
-                                    }),
+                                      ],
+                                    ),
                                   ),
-                            const SizedBox(height: 20),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                '6-DIGIT RELEASE CODE',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textMuted,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _isLoading
+                                  ? const SizedBox(
+                                      height: 50,
+                                      child: Center(child: CircularProgressIndicator()),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: List.generate(6, (i) {
+                                        final digit = i < otpStr.length ? otpStr[i] : '-';
+                                        return Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                                          width: 44,
+                                          height: 54,
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primarySurface,
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: AppTheme.primary, width: 1.5),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              digit,
+                                              style: const TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w900,
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                              const SizedBox(height: 20),
 
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -321,6 +568,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                           ],
                         ),
                       ),
+                    ],
 
                       const SizedBox(height: 24),
 

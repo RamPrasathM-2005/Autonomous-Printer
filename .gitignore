@@ -53,5 +53,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-*.node_modules
-*.md
+
+# Local Binaries
+bin/

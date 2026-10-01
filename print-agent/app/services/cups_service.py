@@ -247,17 +247,30 @@ class CupsService:
     def submit_job(self, file_path: Path, settings: Dict[str, Any]) -> str:
         """
         Submits file to CUPS printer with formatted options.
+        Supports dynamic selection between multiple printers connected to the station.
         Returns the CUPS Job ID.
         """
         printable_file = self.prepare_printable_file(file_path, settings)
         options = self.build_cups_options(settings)
+
+        # Dynamic printer selection
+        target_printer = settings.get("cups_printer_name") or settings.get("printer_name") or self.printer_name
+        if self.has_pycups:
+            try:
+                conn = self.cups.Connection(host=config.CUPS_SERVER)
+                available = conn.getPrinters()
+                if target_printer not in available:
+                    agent_logger.warning(f"Selected printer '{target_printer}' not found in CUPS. Available: {list(available.keys())}. Falling back to '{self.printer_name}'.")
+                    target_printer = self.printer_name
+            except Exception:
+                pass
 
         # If printable_file was already sliced with custom/odd/even ranges, remove page-ranges / page-set from CUPS options
         if printable_file != file_path:
             options.pop("page-ranges", None)
             options.pop("page-set", None)
 
-        agent_logger.info(f"Submitting {printable_file.name} to printer '{self.printer_name}' with options: {options}")
+        agent_logger.info(f"Submitting {printable_file.name} to target printer '{target_printer}' with options: {options}")
 
         # Store a verified copy in system storage so the user can inspect printed files
         try:
@@ -275,7 +288,7 @@ class CupsService:
         # If in Mock mode or Windows without native CUPS
         if self.mock_mode or (os.name == 'nt' and not self.has_pycups):
             mock_id = f"cups-{uuid.uuid4().hex[:8]}"
-            agent_logger.info(f"[MOCK_CUPS] Successfully submitted simulated print job ID: {mock_id}")
+            agent_logger.info(f"[MOCK_CUPS] Successfully submitted simulated print job ID: {mock_id} to '{target_printer}'")
             return mock_id
 
         # 1. Native pycups submission if installed
@@ -283,18 +296,18 @@ class CupsService:
             try:
                 conn = self.cups.Connection(host=config.CUPS_SERVER)
                 job_id = conn.printFile(
-                    self.printer_name,
+                    target_printer,
                     str(printable_file),
                     f"Job_{printable_file.name}",
                     options
                 )
-                agent_logger.info(f"pycups successfully submitted job ID: {job_id}")
+                agent_logger.info(f"pycups successfully submitted job ID: {job_id} to '{target_printer}'")
                 return str(job_id)
             except Exception as e:
                 agent_logger.warning(f"pycups printFile failed ({e}). Attempting CLI lp fallback...")
 
         # 2. CLI 'lp' command fallback
-        cmd = ["lp", "-d", self.printer_name]
+        cmd = ["lp", "-d", target_printer]
         for opt_k, opt_v in options.items():
             cmd.extend(["-o", f"{opt_k}={opt_v}"])
         cmd.append(str(printable_file))
@@ -304,25 +317,27 @@ class CupsService:
             if result.returncode != 0:
                 err_msg = result.stderr.strip() or f"lp exited with code {result.returncode}"
                 agent_logger.error(f"CUPS lp command failed ({err_msg}): {' '.join(cmd)}")
-                raise CupsException(f"Failed to print to physical printer '{self.printer_name}': {err_msg}")
+                raise CupsException(f"Failed to print to physical printer '{target_printer}': {err_msg}")
 
             output = result.stdout.strip()
             cups_id = output.split()[3] if len(output.split()) >= 4 else f"{uuid.uuid4().hex[:6]}"
-            agent_logger.info(f"CLI lp successfully submitted job ID: {cups_id}")
+            agent_logger.info(f"CLI lp successfully submitted job ID: {cups_id} to '{target_printer}'")
             return cups_id
         except CupsException:
             raise
         except Exception as e:
-            agent_logger.error(f"CUPS submission failed on physical printer '{self.printer_name}': {e}")
-            raise CupsException(f"Failed to print to physical printer '{self.printer_name}': {e}")
+            agent_logger.error(f"CUPS submission failed on physical printer '{target_printer}': {e}")
+            raise CupsException(f"Failed to print to physical printer '{target_printer}': {e}")
 
-    def monitor_job(self, cups_job_id: str, on_status_callback=None) -> str:
+    def monitor_job(self, cups_job_id: str, on_status_callback=None, target_printer: str = None) -> str:
         """
         Checks status of CUPS job until completion, failure, or out-of-paper.
         Calls on_status_callback(status, error_code, message) when paper is empty.
         Returns: COMPLETED, OUT_OF_PAPER, or FAILED
         """
         import time
+
+        printer_name = target_printer or self.printer_name
 
         if self.mock_mode or cups_job_id.startswith("cups-"):
             time.sleep(2)
@@ -343,7 +358,7 @@ class CupsService:
                     pass
             else:
                 try:
-                    res = subprocess.run(["lpstat", "-o", self.printer_name], capture_output=True, text=True)
+                    res = subprocess.run(["lpstat", "-o", printer_name], capture_output=True, text=True)
                     if cups_job_id in res.stdout:
                         job_in_queue = True
                 except Exception:
@@ -357,12 +372,12 @@ class CupsService:
                 return "FAILED"
 
             if self.is_printer_out_of_paper():
-                agent_logger.warning(f"Printer '{self.printer_name}' is OUT OF PAPER for job {cups_job_id}!")
+                agent_logger.warning(f"Printer '{printer_name}' is OUT OF PAPER for job {cups_job_id}!")
                 if on_status_callback:
                     on_status_callback(
                         status="PRINTING",
                         error_code="OUT_OF_PAPER",
-                        message="Printer is out of paper. Please load paper into the tray to continue printing."
+                        message=f"Printer '{printer_name}' is out of paper. Please load paper into the tray to continue printing."
                     )
             time.sleep(2)
 

@@ -8,6 +8,25 @@ export default function OtpStep({ finalData, onReset }) {
   const [orderStatus, setOrderStatus] = useState(order?.status || 'WAITING_FOR_OTP');
   const [isOutOfPaper, setIsOutOfPaper] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [selectedPrinter, setSelectedPrinter] = useState(
+    order?.print_settings?.cups_printer_name || order?.print_settings?.printer_name || null
+  );
+  const [printerUpdating, setPrinterUpdating] = useState(false);
+
+  const handleSelectPrinter = async (printerName) => {
+    setSelectedPrinter(printerName);
+    const orderId = order?.id || order?.order_id;
+    if (orderId) {
+      setPrinterUpdating(true);
+      try {
+        await api.selectOrderPrinter(orderId, printerName);
+      } catch (err) {
+        console.error('Failed to update printer:', err);
+      } finally {
+        setPrinterUpdating(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const orderId = order?.id || order?.order_id;
@@ -215,23 +234,157 @@ export default function OtpStep({ finalData, onReset }) {
         Your Kiosk Release Code
       </h2>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
-        Enter this 6-digit code on the kiosk touchscreen terminal at the printer machine to release your document.
+        Select your physical printer below to display your 6-digit release OTP code.
       </p>
 
-      {/* Large 6-Digit Display Card - Matches Flutter OtpReleaseScreen exactly */}
-      <div className="otp-display-card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 800 }}>
-          6-DIGIT RELEASE CODE
+      {/* Two-Printer Selection Card */}
+      <div style={{
+        background: 'var(--surface-card, #ffffff)',
+        border: '1.5px solid var(--border-color, #e2e8f0)',
+        borderRadius: '20px',
+        padding: '1.25rem',
+        marginBottom: '1.5rem',
+        textAlign: 'left',
+        boxShadow: 'var(--card-shadow, 0 4px 14px rgba(0,0,0,0.04))'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+            <Printer size={18} color="var(--primary, #2563eb)" />
+            <span>Select Destination Printer</span>
+          </div>
+          {printerUpdating && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--primary, #2563eb)', fontWeight: 600 }}>Updating...</span>
+          )}
         </div>
+        <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+          Two printers are connected to this station. Choose which printer will print your pages:
+        </p>
 
-        {/* 6 Digit Boxes */}
-        <div className="otp-box-row">
-          {otpDigits.map((digit, idx) => (
-            <div key={idx} className="otp-digit-box">
-              {digit}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+          {/* Printer 1 */}
+          <div
+            onClick={() => handleSelectPrinter('HP_LaserJet_400_M401dn_F36EC0')}
+            style={{
+              padding: '1rem',
+              borderRadius: '14px',
+              cursor: 'pointer',
+              border: selectedPrinter === 'HP_LaserJet_400_M401dn_F36EC0'
+                ? '2px solid #2563eb'
+                : '1.5px solid #e2e8f0',
+              background: selectedPrinter === 'HP_LaserJet_400_M401dn_F36EC0'
+                ? '#eff6ff'
+                : '#ffffff',
+              transition: 'all 0.18s ease'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <Printer size={20} color={selectedPrinter === 'HP_LaserJet_400_M401dn_F36EC0' ? '#2563eb' : '#64748b'} />
+              {selectedPrinter === 'HP_LaserJet_400_M401dn_F36EC0' && (
+                <CheckCircle2 size={18} color="#2563eb" />
+              )}
             </div>
-          ))}
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: selectedPrinter === 'HP_LaserJet_400_M401dn_F36EC0' ? '#1e40af' : '#1e293b' }}>
+              HP LaserJet 400
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+              Duplex • B&W • Fast Output
+            </div>
+          </div>
+
+          {/* Printer 2 */}
+          <div
+            onClick={() => handleSelectPrinter('Printer_2')}
+            style={{
+              padding: '1rem',
+              borderRadius: '14px',
+              cursor: 'pointer',
+              border: selectedPrinter === 'Printer_2'
+                ? '2px solid #2563eb'
+                : '1.5px solid #e2e8f0',
+              background: selectedPrinter === 'Printer_2'
+                ? '#eff6ff'
+                : '#ffffff',
+              transition: 'all 0.18s ease'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <Printer size={20} color={selectedPrinter === 'Printer_2' ? '#2563eb' : '#64748b'} />
+              {selectedPrinter === 'Printer_2' && (
+                <CheckCircle2 size={18} color="#2563eb" />
+              )}
+            </div>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: selectedPrinter === 'Printer_2' ? '#1e40af' : '#1e293b' }}>
+              Secondary Printer
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+              Color / Tray 2 • High Res
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Large 6-Digit Display Card - Revealed after printer selection */}
+      {!selectedPrinter ? (
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '20px',
+          border: '1.5px solid #e2e8f0',
+          padding: '2rem 1.5rem',
+          marginBottom: '1.5rem',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: '#eff6ff',
+            color: '#2563eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 0.75rem'
+          }}>
+            <Printer size={24} />
+          </div>
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#1e293b' }}>
+            Select a Destination Printer Above
+          </div>
+          <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.25rem' }}>
+            Please click one of the 2 printers above to route your print job and reveal your 6-digit release OTP code.
+          </div>
+        </div>
+      ) : (
+        <div className="otp-display-card" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            <span style={{
+              background: '#ecfdf5',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#065f46',
+              padding: '0.25rem 0.75rem',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}>
+              <CheckCircle2 size={13} color="#10b981" />
+              Routed to: {selectedPrinter === 'Printer_2' ? 'Secondary Printer' : 'HP LaserJet 400'}
+            </span>
+          </div>
+
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.2px', fontWeight: 800 }}>
+            6-DIGIT RELEASE CODE
+          </div>
+
+          {/* 6 Digit Boxes */}
+          <div className="otp-box-row">
+            {otpDigits.map((digit, idx) => (
+              <div key={idx} className="otp-digit-box">
+                {digit}
+              </div>
+            ))}
+          </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
