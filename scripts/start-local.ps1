@@ -13,8 +13,11 @@ if ($Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))
     $flutter = Get-Command flutter -ErrorAction Stop
     Push-Location (Join-Path $projectRoot 'frontend')
     try {
-        # Dependencies are already resolved; skip desktop plugin symlinks on Windows.
-        & $flutter.Source build web --release --no-pub --no-web-resources-cdn
+        # Resolve in Flutter's SDK context without generating desktop symlinks.
+        # The web build below generates its own platform-specific plugin registry.
+        & $flutter.Source packages pub get
+        if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency installation failed. See the output above.' }
+        & $flutter.Source build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
         if ($LASTEXITCODE -ne 0) { throw 'Flutter build failed.' }
     } finally { Pop-Location }
 }

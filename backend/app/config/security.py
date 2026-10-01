@@ -2,7 +2,8 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 from app.config.settings import settings
 
@@ -45,7 +46,7 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 def verify_razorpay_signature(body: bytes, signature: str, secret: str) -> bool:
