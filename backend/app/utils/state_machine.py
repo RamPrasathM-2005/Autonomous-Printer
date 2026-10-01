@@ -11,7 +11,7 @@ ORDER_STATE_TRANSITIONS: Dict[OrderStatus, Set[OrderStatus]] = {
     OrderStatus.PAID: {OrderStatus.JOB_QUEUED, OrderStatus.WAITING_FOR_OTP, OrderStatus.FAILED},
     OrderStatus.JOB_QUEUED: {OrderStatus.WAITING_FOR_OTP, OrderStatus.FAILED},
     OrderStatus.WAITING_FOR_OTP: {OrderStatus.RELEASED, OrderStatus.EXPIRED, OrderStatus.FAILED},
-    OrderStatus.RELEASED: {OrderStatus.PRINTING, OrderStatus.FAILED},
+    OrderStatus.RELEASED: {OrderStatus.PRINTING, OrderStatus.COMPLETED, OrderStatus.FAILED},
     OrderStatus.PRINTING: {OrderStatus.COMPLETED, OrderStatus.FAILED},
     OrderStatus.COMPLETED: set(),
     OrderStatus.FAILED: {OrderStatus.REFUNDED},
@@ -22,7 +22,7 @@ ORDER_STATE_TRANSITIONS: Dict[OrderStatus, Set[OrderStatus]] = {
 # Print Job state allowed transitions
 JOB_STATE_TRANSITIONS: Dict[PrintJobStatus, Set[PrintJobStatus]] = {
     PrintJobStatus.QUEUED: {PrintJobStatus.RELEASED, PrintJobStatus.FAILED, PrintJobStatus.FINAL_FAILED},
-    PrintJobStatus.RELEASED: {PrintJobStatus.PRINTING, PrintJobStatus.FAILED, PrintJobStatus.FINAL_FAILED},
+    PrintJobStatus.RELEASED: {PrintJobStatus.PRINTING, PrintJobStatus.COMPLETED, PrintJobStatus.FAILED, PrintJobStatus.FINAL_FAILED},
     PrintJobStatus.PRINTING: {PrintJobStatus.COMPLETED, PrintJobStatus.FAILED, PrintJobStatus.FINAL_FAILED},
     PrintJobStatus.FAILED: {PrintJobStatus.QUEUED, PrintJobStatus.FINAL_FAILED},
     PrintJobStatus.COMPLETED: set(),

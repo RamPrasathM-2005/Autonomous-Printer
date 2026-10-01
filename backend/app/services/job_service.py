@@ -89,7 +89,7 @@ class JobService:
             job.status = PrintJobStatus.COMPLETED
             job.error_code = None
             job.error_message = None
-            if order.status == OrderStatus.PRINTING:
+            if order.status in [OrderStatus.PRINTING, OrderStatus.RELEASED, OrderStatus.WAITING_FOR_OTP]:
                 validate_order_transition(order.status, OrderStatus.COMPLETED)
                 order.status = OrderStatus.COMPLETED
                 order.updated_at = now

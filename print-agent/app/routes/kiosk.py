@@ -1156,7 +1156,7 @@ KIOSK_HTML = """<!DOCTYPE html>
             modalMessage.textContent = 'Please collect your printed document from ' + printer + '.';
             modalCountdown.style.display = 'inline-block';
 
-            let secondsLeft = 5;
+            let secondsLeft = 3;
             modalCountdown.textContent = `Reloading kiosk in ${secondsLeft}s...`;
             const countdownInterval = setInterval(() => {
               secondsLeft -= 1;

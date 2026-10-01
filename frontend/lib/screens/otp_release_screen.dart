@@ -72,9 +72,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     super.dispose();
   }
 
-  void _startPolling() {
+  void _startPolling({int intervalMs = 700}) {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+    _pollingTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
       _pollOrderStatus();
     });
   }
@@ -163,12 +163,13 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       final updated = await _apiService.getOrder(widget.orderId);
       final status = updated.status.toUpperCase();
 
-      if (status == 'PRINTING') {
+      if (status == 'PRINTING' || status == 'RELEASED') {
         if (_printStatus != 'PRINTING') {
           setState(() {
             _printStatus = 'PRINTING';
-            _printProgress = 0.75;
+            _printProgress = status == 'RELEASED' ? 0.40 : 0.75;
           });
+          _startPolling(intervalMs: 400);
         }
       } else if (status == 'COMPLETED' || status == 'SUCCESS') {
         if (_printStatus != 'COMPLETED') {
