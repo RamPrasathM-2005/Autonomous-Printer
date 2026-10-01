@@ -7,7 +7,7 @@ CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razor
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
        "font-src 'self' data: https://fonts.gstatic.com; "
        "img-src 'self' data: blob: https://*.razorpay.com https://*.razorpay.in; "
-       "connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:5000 https://*.razorpay.com https://*.razorpay.in; "
+       "connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:5000 http://127.0.0.1:5001 https://*.razorpay.com https://*.razorpay.in; "
        "frame-src https://*.razorpay.com https://*.razorpay.in; "
        "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 

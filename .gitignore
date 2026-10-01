@@ -55,4 +55,12 @@ Thumbs.db
 *.swo
 
 # Local Binaries
-bin/
+bin/
+
+# Runtime and logs
+.runtime/
+print-agent/state/
+
+# Markdown documentation
+*.md
+
