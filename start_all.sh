@@ -71,6 +71,8 @@ cleanup() {
     fuser -k 3000/tcp 2>/dev/null || true
     fuser -k 3100/tcp 2>/dev/null || true
     pkill -f "cloudflared.*tunnel" 2>/dev/null || true
+    pkill -f "flutter_hot_watcher" 2>/dev/null || true
+    rm -f /tmp/flutter_web.pid 2>/dev/null || true
     rm -f "$SCRIPT_DIR/storage/tunnel_url.txt" 2>/dev/null || true
     rm -f "$SCRIPT_DIR/print-agent/storage/tunnel_url.txt" 2>/dev/null || true
     wait 2>/dev/null || true
@@ -100,27 +102,48 @@ PIDS+=($!)
 sleep 2
 
 # 6. Launch Flutter Web Frontend (Port 3000)
+HOT_RELOAD=false
 FORCE_BUILD=false
+WANT_TUNNEL=true
+
 for arg in "$@"; do
     case "$arg" in
+        --hot|--hot-reload|--hotreload|--dev|-d) HOT_RELOAD=true ;;
         --build|-build|-Build|-b) FORCE_BUILD=true ;;
+        --no-tunnel|--notunnel|-nt) WANT_TUNNEL=false ;;
+        --prod|--static) HOT_RELOAD=false ;;
     esac
 done
 
-if [ "$FORCE_BUILD" = true ] || [ ! -d "$SCRIPT_DIR/frontend/build/web" ]; then
+if [ "$HOT_RELOAD" = true ]; then
+    echo -e "\033[1;36m[3/4] Starting Flutter Web in LIVE HOT-RELOAD mode on http://0.0.0.0:3000 ...\033[0m"
+    echo -e "\033[2m      (Auto-watches frontend/lib/*.dart; press 'r' for manual reload, 'R' for restart)\033[0m"
+    rm -f /tmp/flutter_web.pid
+    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0 --pid-file /tmp/flutter_web.pid) &
+    PIDS+=($!)
+    # Start auto-watcher daemon for instant automatic hot reloads on save
+    "$PYTHON_EXE" "$SCRIPT_DIR/scripts/flutter_hot_watcher.py" &
+    PIDS+=($!)
+elif [ "$FORCE_BUILD" = true ] || [ ! -d "$SCRIPT_DIR/frontend/build/web" ]; then
     if command -v flutter &> /dev/null; then
         echo -e "\033[1;36m[*] Building Flutter Web production bundle...\033[0m"
-        (cd "$SCRIPT_DIR/frontend" && flutter build web --release)
+        (cd "$SCRIPT_DIR/frontend" && flutter build web --release --no-wasm-dry-run)
     fi
-fi
-
-if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
-    echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://0.0.0.0:3000 ...\033[0m"
+    if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
+        echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://0.0.0.0:3000 ...\033[0m"
+        (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 0.0.0.0) &
+        PIDS+=($!)
+    fi
+elif [ -d "$SCRIPT_DIR/frontend/build/web" ]; then
+    echo -e "\033[1;36m[3/4] Starting Flutter Web App on http://0.0.0.0:3000 (Pass --hot for Live Reload) ...\033[0m"
     (cd "$SCRIPT_DIR/frontend/build/web" && "$PYTHON_EXE" -m http.server 3000 --bind 0.0.0.0) &
     PIDS+=($!)
 elif command -v flutter &> /dev/null; then
-    echo -e "\033[1;36m[3/4] Starting Flutter Web Server on http://0.0.0.0:3000 ...\033[0m"
-    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0) &
+    echo -e "\033[1;36m[3/4] Starting Flutter Web in Live Hot-Reload mode on http://0.0.0.0:3000 ...\033[0m"
+    rm -f /tmp/flutter_web.pid
+    (cd "$SCRIPT_DIR/frontend" && flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0 --pid-file /tmp/flutter_web.pid) &
+    PIDS+=($!)
+    "$PYTHON_EXE" "$SCRIPT_DIR/scripts/flutter_hot_watcher.py" &
     PIDS+=($!)
 else
     echo -e "\033[1;33m[3/4] Flutter build not found. Skipping Port 3000.\033[0m"
@@ -128,13 +151,6 @@ fi
 sleep 1
 
 # Cloudflare Quick Tunnel (Runs always by default; pass --no-tunnel to disable)
-WANT_TUNNEL=true
-for arg in "$@"; do
-    case "$arg" in
-        --no-tunnel|--notunnel|-nt) WANT_TUNNEL=false ;;
-    esac
-done
-
 if [ "$WANT_TUNNEL" = true ]; then
     echo -e "\033[1;33m[4/4] Starting Cloudflare Quick Tunnel...\033[0m"
     "$SCRIPT_DIR/start_tunnel.sh" &
@@ -146,7 +162,11 @@ echo ""
 echo -e "\033[1;32m====================================================================\033[0m"
 echo -e "\033[1;32m   ✓ ALL PROJECT SERVICES ARE ACTIVE AND RUNNING!                  \033[0m"
 echo -e "\033[1;32m====================================================================\033[0m"
-echo -e "   \033[1m1. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m"
+if [ "$HOT_RELOAD" = true ]; then
+    echo -e "   \033[1m1. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m \033[1;32m[🔥 LIVE HOT-RELOAD ACTIVE]\033[0m"
+else
+    echo -e "   \033[1m1. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m \033[2m(Pass --hot for live reload)\033[0m"
+fi
 echo -e "   \033[1m2. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
 echo -e "   \033[1m3. FastAPI Backend & Docs:\033[0m     \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
 if [ -f "$SCRIPT_DIR/storage/tunnel_url.txt" ]; then

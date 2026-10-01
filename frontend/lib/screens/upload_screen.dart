@@ -719,9 +719,7 @@ class _UploadScreenState extends State<UploadScreen>
                       const SizedBox(height: 24),
                       _buildHowItWorks(),
                       const SizedBox(height: 16),
-                      _buildFeatureHighlights(),
                       const SizedBox(height: 16),
-                      _buildTransparentPricing(),
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -1072,7 +1070,6 @@ class _UploadScreenState extends State<UploadScreen>
                   _buildFormatPill('PDF', Icons.picture_as_pdf_outlined),
                   _buildFormatPill('PNG', Icons.image_outlined),
                   _buildFormatPill('JPG', Icons.photo_outlined),
-                  _buildFormatPill('Max 50MB', Icons.speed_rounded),
                 ],
               ),
               const SizedBox(height: 14),
@@ -1220,100 +1217,6 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  Widget _buildFeatureHighlights() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 500;
-
-        final items = [
-          _buildFeatureCard(
-            icon: Icons.pin_rounded,
-            title: 'Zero-Wait OTP Release',
-            desc: 'Secure 6-digit code release at physical touchscreen terminal.',
-            color: const Color(0xFF2563EB),
-          ),
-          _buildFeatureCard(
-            icon: Icons.tune_rounded,
-            title: 'Custom Print Control',
-            desc: 'Multi-page ranges, copies, monochrome or full vibrant color.',
-            color: const Color(0xFF0284C7),
-          ),
-          _buildFeatureCard(
-            icon: Icons.verified_user_outlined,
-            title: 'Privacy Protected',
-            desc: 'Queues isolate documents. Files wiped automatically after print.',
-            color: const Color(0xFF16A34A),
-          ),
-        ];
-
-        if (isNarrow) {
-          return Column(
-            children: items.map((w) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: w,
-            )).toList(),
-          );
-        }
-
-        return Row(
-          children: items.map((w) => Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: w,
-            ),
-          )).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildFeatureCard({
-    required IconData icon,
-    required String title,
-    required String desc,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            desc,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppTheme.textSecondary,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTransparentPricing() {
     return Container(

@@ -47,52 +47,6 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
     super.dispose();
   }
 
-  Widget _buildPresetChip(String label, String url, {bool isTunnel = false}) {
-    final isSelected = _controller.text.trim() == url;
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _controller.text = url;
-        });
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isTunnel ? const Color(0xFFEFF6FF) : AppTheme.primarySurface)
-              : AppTheme.surfaceSubtle,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? (isTunnel ? const Color(0xFF2563EB) : AppTheme.primary)
-                : (isTunnel ? const Color(0xFF93C5FD) : AppTheme.border),
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isTunnel) ...[
-              const Icon(Icons.cloud_done_rounded, size: 13, color: Color(0xFF2563EB)),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                color: isSelected
-                    ? (isTunnel ? const Color(0xFF2563EB) : AppTheme.primary)
-                    : AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -265,23 +219,6 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Quick Presets:',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                if (_detectedTunnelUrl != null)
-                  _buildPresetChip('Cloudflare Tunnel (Live)', _detectedTunnelUrl!, isTunnel: true),
-                _buildPresetChip('USB Cable (127.0.0.1)', 'http://127.0.0.1:8000'),
-                _buildPresetChip('PC Wi-Fi (10.11.14.85)', 'http://10.11.14.85:8000'),
-                _buildPresetChip('PC LAN (172.17.3.5)', 'http://172.17.3.5:8000'),
-                _buildPresetChip('Android Emulator (10.0.2.2)', 'http://10.0.2.2:8000'),
-              ],
-            ),
           ],
         ),
       ),
