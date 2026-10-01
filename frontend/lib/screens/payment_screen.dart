@@ -70,7 +70,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => OtpReleaseScreen(orderId: order.id),
+          builder: (_) => OtpReleaseScreen(
+            orderId: order.id,
+            order: order,
+            documents: widget.documents,
+            configs: widget.configs,
+            paymentId: paymentId,
+          ),
         ),
       );
     } else {

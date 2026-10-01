@@ -129,11 +129,11 @@ else
 fi
 sleep 1
 
-# Optional: Cloudflare Quick Tunnel (--tunnel / -tunnel / -t / -Tunnel flag)
-WANT_TUNNEL=false
+# Cloudflare Quick Tunnel (Runs always by default; pass --no-tunnel to disable)
+WANT_TUNNEL=true
 for arg in "$@"; do
     case "$arg" in
-        --tunnel|-tunnel|-Tunnel|-t) WANT_TUNNEL=true ;;
+        --no-tunnel|--notunnel|-nt) WANT_TUNNEL=false ;;
     esac
 done
 
@@ -151,7 +151,7 @@ echo -e "\033[1;32m=============================================================
 echo -e "   \033[1m1. Customer Flutter Web App:\033[0m   \033[1;36mhttp://127.0.0.1:3000\033[0m"
 echo -e "   \033[1m2. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
 echo -e "   \033[1m3. FastAPI Backend & Docs:\033[0m     \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
-if [[ "$*" == *"--tunnel"* ]] && [ -f "$SCRIPT_DIR/storage/tunnel_url.txt" ]; then
+if [ -f "$SCRIPT_DIR/storage/tunnel_url.txt" ]; then
     echo -e "   \033[1m4. Cloudflare Public URL:\033[0m      \033[1;33m$(cat "$SCRIPT_DIR/storage/tunnel_url.txt")\033[0m"
 fi
 echo -e "\033[1;32m====================================================================\033[0m"
