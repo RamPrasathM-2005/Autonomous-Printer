@@ -9,7 +9,7 @@ import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
 import '../widgets/workflow_stepper.dart';
-import 'payment_success_screen.dart';
+import 'otp_release_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -70,12 +70,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => PaymentSuccessScreen(
-            order: order,
-            configs: widget.configs,
-            documents: widget.documents,
-            paymentId: paymentId,
-          ),
+          builder: (_) => OtpReleaseScreen(orderId: order.id),
         ),
       );
     } else {

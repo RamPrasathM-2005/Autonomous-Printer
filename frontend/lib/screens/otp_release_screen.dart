@@ -7,6 +7,7 @@ import '../config/theme.dart';
 import '../models/order.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
+import '../services/print_agent_service.dart';
 import '../widgets/workflow_stepper.dart';
 import 'print_progress_screen.dart';
 
@@ -26,14 +27,17 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _pollingTimer;
-
-  int _secondsLeft = 900; // 15 mins
   Timer? _countdownTimer;
 
-  String _selectedPrinterName = 'HP_LaserJet_400_M401dn_F36EC0';
+  int _secondsLeft = 900; // 15 mins
+
+  String? _selectedPrinterName;
   bool _isPrinterLocked = false;
-  bool _isSwitching = false;
+  bool _isSubmittingPrinter = false;
   bool _isReleasing = false;
+
+  static const String _kPrinter1Id = 'HP_LaserJet_400_M401dn_F36EC0';
+  static const String _kPrinter2Id = 'Printer_2';
 
   @override
   void initState() {
@@ -77,13 +81,21 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           ? expiry.difference(DateTime.now()).inSeconds
           : 900;
 
+      final existingPrinter = order.printSettings.toJson()['printer_name'] ??
+          order.printSettings.toJson()['cups_printer_name'] ??
+          otp.selectedPrinter;
+
+      final isLocked = otp.printerSelectionLocked ||
+          (order.printSettings.toJson()['printer_selection_locked'] == true);
+
       setState(() {
         _order = order;
         _otpData = otp;
         _secondsLeft = diff > 0 ? diff : 0;
-        _selectedPrinterName = otp.selectedPrinter ??
-            'HP_LaserJet_400_M401dn_F36EC0';
-        _isPrinterLocked = otp.printerSelectionLocked;
+        if (existingPrinter != null && existingPrinter.toString().isNotEmpty) {
+          _selectedPrinterName = existingPrinter.toString();
+        }
+        _isPrinterLocked = isLocked && _selectedPrinterName != null;
         _isLoading = false;
       });
 
@@ -131,7 +143,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     _pollingTimer?.cancel();
     _countdownTimer?.cancel();
 
-    final activeOtp = _getOtpForPrinter(_selectedPrinterName);
+    final activeOtp = _otpData?.otpCode ?? '------';
 
     Navigator.pushReplacement(
       context,
@@ -151,26 +163,17 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  String _getOtpForPrinter(String cupsPrinterName) {
-    if (_otpData?.printerOtps != null &&
-        _otpData!.printerOtps!.containsKey(cupsPrinterName)) {
-      final entry = _otpData!.printerOtps![cupsPrinterName];
-      if (entry is Map && entry['otp'] != null) {
-        return entry['otp'].toString();
-      }
-    }
-    return _otpData?.otpCode ?? '------';
-  }
-
-  void _copyToClipboard(String otpCode, String printerTitle) {
-    Clipboard.setData(ClipboardData(text: otpCode));
+  void _copyToClipboard() {
+    final otpStr = _otpData?.otpCode ?? '';
+    if (otpStr.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: otpStr));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 10),
-            Text('OTP for $printerTitle copied to clipboard'),
+            Text('OTP Code $otpStr copied to clipboard!'),
           ],
         ),
         backgroundColor: AppTheme.success,
@@ -181,100 +184,622 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     );
   }
 
-  Future<void> _switchPrinter(String targetPrinterName, String printerTitle) async {
-    if (_isPrinterLocked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Printer switching was already used. Switching is allowed only once.'),
-          backgroundColor: AppTheme.danger,
-        ),
-      );
-      return;
-    }
+  Future<void> _selectAndLockPrinter(String printerName) async {
+    if (_isPrinterLocked) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Switch Printer?'),
-        content: Text(
-          'Switch target printer to $printerTitle? Switching is allowed only once and will lock printer selection for this print job.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: const Text('Confirm Switch', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    setState(() {
+      _selectedPrinterName = printerName;
+      _isSubmittingPrinter = true;
+    });
 
-    if (confirmed != true) return;
-
-    setState(() => _isSwitching = true);
     try {
       final success = await _apiService.selectOrderPrinter(
         orderId: widget.orderId,
-        cupsPrinterName: targetPrinterName,
+        cupsPrinterName: printerName,
       );
+
       if (success) {
         setState(() {
-          _selectedPrinterName = targetPrinterName;
           _isPrinterLocked = true;
+          _isSubmittingPrinter = false;
         });
+
+        final printerTitle = printerName == _kPrinter1Id
+            ? 'HP LaserJet 400'
+            : 'Secondary Station Printer';
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Printer switched to $printerTitle and locked.'),
+              content: Text('Target printer locked to $printerTitle! Release OTP is ready.'),
               backgroundColor: AppTheme.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Printer switching is already locked on server.'),
-              backgroundColor: AppTheme.danger,
-            ),
-          );
-        }
+        setState(() {
+          _isSubmittingPrinter = false;
+          _isPrinterLocked = true;
+        });
       }
     } catch (e) {
+      setState(() => _isSubmittingPrinter = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isSwitching = false);
     }
   }
 
   Future<void> _releaseOrder() async {
     if (_otpData == null || _order == null || _isReleasing) return;
+    if (!_isPrinterLocked || _selectedPrinterName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select and confirm a printer first.'),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isReleasing = true);
 
     try {
-      final releaseOtp = _getOtpForPrinter(_selectedPrinterName);
-      await _apiService.releaseOrder(widget.orderId, releaseOtp);
+      final agentService = PrintAgentService();
+      await agentService.releasePrintJob(
+        stationId: _order!.printServerId,
+        otp: _otpData!.otpCode,
+      );
       if (mounted) _goToProgressScreen();
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = userError(e));
+    } catch (_) {
+      try {
+        await _apiService.releaseOrder(widget.orderId, _otpData!.otpCode);
+      } catch (_) {}
+      if (mounted) _goToProgressScreen();
     } finally {
       if (mounted) setState(() => _isReleasing = false);
     }
   }
 
+  Widget _buildPrinterSelector() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _isPrinterLocked ? const Color(0xFF86EFAC) : AppTheme.border,
+          width: _isPrinterLocked ? 1.5 : 1,
+        ),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.print_rounded, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select Destination Printer',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      _isPrinterLocked
+                          ? 'Printer assigned and locked for this job'
+                          : 'Step 1: Choose which printer will output your pages',
+                      style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isPrinterLocked)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 12, color: Color(0xFF166534)),
+                      SizedBox(width: 4),
+                      Text(
+                        'LOCKED',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Two Printer Cards Side-by-Side
+          Row(
+            children: [
+              Expanded(
+                child: _buildPrinterCard(
+                  name: _kPrinter1Id,
+                  title: 'HP LaserJet 400',
+                  subtitle: 'Duplex • B&W • Fast',
+                  trayLabel: 'Tray 1 • Standard',
+                  icon: Icons.print_rounded,
+                  accentColor: const Color(0xFF2563EB),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildPrinterCard(
+                  name: _kPrinter2Id,
+                  title: 'Secondary Printer',
+                  subtitle: 'Color / Media • High Res',
+                  trayLabel: 'Tray 2 • Special',
+                  icon: Icons.color_lens_outlined,
+                  accentColor: const Color(0xFF059669),
+                ),
+              ),
+            ],
+          ),
+
+          // Confirm & Lock Button if selected but not yet locked
+          if (!_isPrinterLocked && _selectedPrinterName != null) ...[
+            const SizedBox(height: 14),
+            ElevatedButton.icon(
+              onPressed: _isSubmittingPrinter
+                  ? null
+                  : () => _selectAndLockPrinter(_selectedPrinterName!),
+              icon: _isSubmittingPrinter
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.lock_outline_rounded, size: 16),
+              label: Text(
+                _isSubmittingPrinter
+                    ? 'Locking Selection...'
+                    : 'Confirm & Lock ${_selectedPrinterName == _kPrinter1Id ? 'HP LaserJet 400' : 'Secondary Printer'}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Center(
+              child: Text(
+                'Selection locks permanently. Switching is not allowed after confirmation.',
+                style: TextStyle(fontSize: 10.5, color: AppTheme.textMuted),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinterCard({
+    required String name,
+    required String title,
+    required String subtitle,
+    required String trayLabel,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    final isSelected = _selectedPrinterName == name;
+    final isLocked = _isPrinterLocked;
+
+    return InkWell(
+      onTap: isLocked
+          ? null
+          : () {
+              setState(() {
+                _selectedPrinterName = name;
+              });
+            },
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isLocked ? const Color(0xFFF0FDF4) : accentColor.withValues(alpha: 0.06))
+              : (isLocked ? const Color(0xFFF8FAFC) : AppTheme.surfaceSubtle),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? (isLocked ? const Color(0xFF16A34A) : accentColor)
+                : (isLocked ? const Color(0xFFE2E8F0) : AppTheme.border),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
+                  color: isSelected ? accentColor : (isLocked ? const Color(0xFF94A3B8) : AppTheme.textSecondary),
+                ),
+                if (isSelected && isLocked)
+                  const Icon(Icons.check_circle_rounded, size: 20, color: Color(0xFF16A34A))
+                else if (isSelected)
+                  Icon(Icons.radio_button_checked_rounded, size: 20, color: accentColor)
+                else if (!isLocked)
+                  const Icon(Icons.radio_button_off_rounded, size: 20, color: Color(0xFFCBD5E1))
+                else
+                  const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFFCBD5E1)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: isSelected
+                    ? (isLocked ? const Color(0xFF166534) : AppTheme.textPrimary)
+                    : (isLocked ? const Color(0xFF94A3B8) : AppTheme.textPrimary),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: isSelected
+                    ? AppTheme.textSecondary
+                    : (isLocked ? const Color(0xFF94A3B8) : AppTheme.textMuted),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isLocked ? const Color(0xFFDCFCE7) : accentColor.withValues(alpha: 0.12))
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                trayLabel,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? (isLocked ? const Color(0xFF166534) : accentColor)
+                      : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOtpSection() {
+    if (!_isPrinterLocked) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.border),
+          boxShadow: AppTheme.cardShadow,
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primarySurface,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.touch_app_rounded, size: 28, color: AppTheme.primary),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Select Destination Printer First',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose either HP LaserJet 400 or Secondary Printer above to lock your destination and generate your 6-digit release OTP.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final otpStr = _otpData?.otpCode ?? '------';
+    final targetPrinterTitle = _selectedPrinterName == _kPrinter1Id
+        ? 'HP LaserJet 400 M401dn'
+        : 'Secondary Station Printer';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF16A34A)),
+                const SizedBox(width: 6),
+                Text(
+                  'Assigned to $targetPrinterTitle (Locked)',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF166534),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          const Text(
+            'YOUR 6-DIGIT RELEASE OTP',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Stylized individual digit boxes
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              6,
+              (i) {
+                final char = i < otpStr.length ? otpStr[i] : '-';
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: 44,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      char,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Action Buttons: Copy Code & Timer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _copyToClipboard,
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                label: const Text('Copy Code', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningSurface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 15, color: AppTheme.warning),
+                    const SizedBox(width: 6),
+                    Text(
+                      _secondsLeft <= 0 ? 'Expired' : 'Expires in ${_formatTimer(_secondsLeft)}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructions() {
+    final targetPrinterTitle = _selectedPrinterName == _kPrinter1Id
+        ? 'HP LaserJet 400'
+        : 'Secondary Printer';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'How to Release Your Print Job',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildInstructionStep(
+            step: '1',
+            title: 'Walk to the Kiosk Terminal',
+            subtitle: 'Locate Station 1 touchscreen terminal.',
+          ),
+          const SizedBox(height: 10),
+          _buildInstructionStep(
+            step: '2',
+            title: 'Enter 6-Digit OTP',
+            subtitle: 'Type the code on the screen and tap Release Document.',
+          ),
+          const SizedBox(height: 10),
+          _buildInstructionStep(
+            step: '3',
+            title: 'Collect Pages from $targetPrinterTitle',
+            subtitle: 'Your physical pages output immediately from the locked printer tray.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionStep({
+    required String step,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppTheme.primarySurface,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+          ),
+          child: Center(
+            child: Text(
+              step,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.primary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final p1Otp = _getOtpForPrinter('HP_LaserJet_400_M401dn_F36EC0');
-    final p2Otp = _getOtpForPrinter('Printer_2');
-
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
@@ -286,166 +811,59 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         children: [
           const WorkflowStepper(currentStep: 4),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Error banner
-                      if (_errorMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.dangerSurface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppTheme.danger.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(
-                              color: AppTheme.danger,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      // Top Instructions & Security Info
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceWhite,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.border),
-                        ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.shield_outlined,
-                                    size: 18,
-                                    color: AppTheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Expanded(
-                                  child: Text(
-                                    'Dual-Printer Authentication',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.warningSurface,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: AppTheme.warning.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.timer_outlined, size: 14, color: AppTheme.warning),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _secondsLeft <= 0 ? 'Expired' : _formatTimer(_secondsLeft),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFB45309),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Enter the OTP of your chosen printer at the station touchscreen. '
-                              'Using one OTP immediately invalidates both codes to block duplicate printing.',
-                              style: TextStyle(fontSize: 11.5, color: AppTheme.textSecondary, height: 1.4),
-                            ),
-                            if (_isPrinterLocked) ...[
-                              const SizedBox(height: 8),
+                            if (_errorMessage != null) ...[
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF3C7),
-                                  borderRadius: BorderRadius.circular(6),
+                                  color: AppTheme.dangerSurface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppTheme.danger.withValues(alpha: 0.3),
+                                  ),
                                 ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.lock_rounded, size: 13, color: Color(0xFF92400E)),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Printer switching locked (1-time switch used)',
-                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
-                                    ),
-                                  ],
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppTheme.danger,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(height: 12),
                             ],
+
+                            // Step 1: Printer Selector First!
+                            _buildPrinterSelector(),
+
+                            const SizedBox(height: 16),
+
+                            // Step 2: OTP Section (Displayed once printer is confirmed/locked)
+                            _buildOtpSection(),
+
+                            const SizedBox(height: 16),
+
+                            // Instructions Step Guide
+                            _buildInstructions(),
+
+                            const SizedBox(height: 20),
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 16),
-
-                      // PRINTER 1 CARD
-                      _buildDualPrinterCard(
-                        printerCupsName: 'HP_LaserJet_400_M401dn_F36EC0',
-                        printerTitle: 'HP LaserJet 400 M401dn',
-                        printerBadge: 'Primary Printer · Tray 1',
-                        printerSpecs: 'Duplex B&W · High-Speed Laser',
-                        printerIcon: Icons.print_rounded,
-                        accentColor: const Color(0xFF2563EB),
-                        otpCode: p1Otp,
-                        isSelected: _selectedPrinterName == 'HP_LaserJet_400_M401dn_F36EC0',
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // PRINTER 2 CARD
-                      _buildDualPrinterCard(
-                        printerCupsName: 'Printer_2',
-                        printerTitle: 'Secondary Station Printer',
-                        printerBadge: 'Color Printer · Tray 2',
-                        printerSpecs: 'High-Resolution · Color Supported',
-                        printerIcon: Icons.color_lens_outlined,
-                        accentColor: const Color(0xFF059669),
-                        otpCode: p2Otp,
-                        isSelected: _selectedPrinterName == 'Printer_2',
-                      ),
-
-                      const SizedBox(height: 16),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
 
-          // Bottom Action Bar: Single Release Button
+          // Bottom Action Bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
@@ -464,7 +882,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: ElevatedButton.icon(
-                    onPressed: (_isLoading || _secondsLeft <= 0 || _isReleasing)
+                    onPressed: (!_isPrinterLocked || _secondsLeft <= 0 || _isReleasing)
                         ? null
                         : _releaseOrder,
                     icon: _isReleasing
@@ -475,9 +893,11 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                           )
                         : const Icon(Icons.print_rounded, size: 20),
                     label: Text(
-                      _isReleasing
-                          ? 'Starting Print...'
-                          : 'Release Print on ${_selectedPrinterName == 'HP_LaserJet_400_M401dn_F36EC0' ? 'HP LaserJet 400' : 'Secondary Printer'}',
+                      !_isPrinterLocked
+                          ? 'Select & Confirm Printer Above'
+                          : (_isReleasing
+                              ? 'Starting Print...'
+                              : 'Auto-Release Print Job Now'),
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -492,230 +912,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDualPrinterCard({
-    required String printerCupsName,
-    required String printerTitle,
-    required String printerBadge,
-    required String printerSpecs,
-    required IconData printerIcon,
-    required Color accentColor,
-    required String otpCode,
-    required bool isSelected,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? accentColor : AppTheme.border,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: accentColor.withValues(alpha: 0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header Row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? accentColor.withValues(alpha: 0.07)
-                  : AppTheme.surfaceSubtle,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            ),
-            child: Row(
-              children: [
-                Icon(printerIcon, size: 20, color: accentColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        printerTitle,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        printerSpecs,
-                        style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isSelected ? accentColor : Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isSelected ? accentColor : AppTheme.border,
-                    ),
-                  ),
-                  child: Text(
-                    isSelected ? 'SELECTED' : 'AVAILABLE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              children: [
-                // OTP Code Display Block
-                Text(
-                  'DEDICATED RELEASE CODE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                    color: accentColor,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Monospace Digits
-                _isLoading
-                    ? const SizedBox(
-                        height: 44,
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          6,
-                          (i) {
-                            final char = i < otpCode.length ? otpCode[i] : '-';
-                            return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              width: 38,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? accentColor.withValues(alpha: 0.08)
-                                    : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? accentColor.withValues(alpha: 0.6)
-                                      : const Color(0xFFCBD5E1),
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  char,
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
-                                    color: isSelected ? accentColor : AppTheme.textPrimary,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-
-                const SizedBox(height: 12),
-
-                // Action Row: Copy OTP & Switch Printer
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : () => _copyToClipboard(otpCode, printerTitle),
-                        icon: const Icon(Icons.copy_rounded, size: 14),
-                        label: const Text('Copy OTP', style: TextStyle(fontSize: 11)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: isSelected
-                          ? Container(
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: accentColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: accentColor.withValues(alpha: 0.3)),
-                              ),
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.check_circle_rounded, size: 14, color: accentColor),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Active Printer',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: accentColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : ElevatedButton.icon(
-                              onPressed: (_isPrinterLocked || _isSwitching)
-                                  ? null
-                                  : () => _switchPrinter(printerCupsName, printerTitle),
-                              icon: const Icon(Icons.swap_horiz_rounded, size: 14),
-                              label: Text(
-                                _isPrinterLocked ? 'Switch Locked' : 'Select Printer',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accentColor,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
         ],

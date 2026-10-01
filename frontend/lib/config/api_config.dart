@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'active_tunnel.dart';
 
 class ApiConfig {
   static const String _keyBackendUrl = 'backend_base_url';
   static const String _keyAgentUrl = 'agent_base_url';
   static const String _keySelectedStationId = 'selected_station_id';
 
-  // Smart defaults: 127.0.0.1 for Web, Desktop, and physical Android devices (via adb reverse).
-  // 10.0.2.2 is only an Android emulator fallback.
+  // Smart defaults: Cloudflare Tunnel for remote/mobile, 127.0.0.1 for Web/Desktop/ADB
   static String get defaultBackendUrl {
     const configured = String.fromEnvironment('API_BASE_URL');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb && !['localhost', '127.0.0.1'].contains(Uri.base.host)) {
       return Uri.base.origin;
+    }
+    // On physical mobile devices, if active Cloudflare tunnel is known, prefer it so remote/cellular works!
+    if (!kIsWeb && kActiveTunnelUrl.isNotEmpty && kActiveTunnelUrl.startsWith('http')) {
+      return kActiveTunnelUrl;
     }
     return 'http://127.0.0.1:8000';
   }
@@ -28,10 +32,13 @@ class ApiConfig {
   static String? selectedStationId = 'PRINT-SERVER-001';
   static String get baseUrl => backendUrl;
 
-  static const List<String> fallbackCandidates = [
+  static List<String> get fallbackCandidates => [
+    if (kActiveTunnelUrl.isNotEmpty && kActiveTunnelUrl.startsWith('http'))
+      kActiveTunnelUrl,
     'http://127.0.0.1:8000',
     'http://10.11.14.85:8000',
     'http://172.17.3.5:8000',
+    'http://10.1.100.250:8000',
     'http://10.0.2.2:8000',
   ];
 
