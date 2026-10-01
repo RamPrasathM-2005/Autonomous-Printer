@@ -749,6 +749,64 @@ KIOSK_HTML = """<!DOCTYPE html>
       color: var(--text-muted);
     }
 
+    .kiosk-printer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 14px 0 16px;
+      padding: 8px 16px;
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .kiosk-printer-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+      animation: pulseDot 1.5s infinite;
+    }
+
+    .kiosk-progress-container {
+      margin: 16px 0 10px;
+      text-align: left;
+    }
+
+    .kiosk-progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+
+    .kiosk-progress-track {
+      width: 100%;
+      height: 10px;
+      background: #f1f5f9;
+      border-radius: 9999px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+
+    .kiosk-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #2563eb, #3b82f6);
+      border-radius: 9999px;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+
+    .kiosk-progress-fill.completed {
+      background: linear-gradient(90deg, #059669, #10b981);
+    }
+
     footer {
       width: 100%;
       text-align: center;
@@ -923,9 +981,27 @@ KIOSK_HTML = """<!DOCTYPE html>
       </div>
       <div class="modal-content">
         <h3 id="modalTitle">OTP Verified</h3>
-        <p id="modalMessage">Sending document to physical printer...</p>
+        <p id="modalMessage">Connecting to physical printer...</p>
+
+        <!-- Active Running Printer Badge -->
+        <div class="kiosk-printer-badge" id="modalPrinterBadge" style="display:none;">
+          <span class="kiosk-printer-dot"></span>
+          <span id="modalPrinterName">HP LaserJet 400 M401dn</span>
+        </div>
+
+        <!-- Live Printing Progress Bar -->
+        <div class="kiosk-progress-container" id="modalProgressContainer" style="display:none;">
+          <div class="kiosk-progress-header">
+            <span id="modalProgressStep">Preparing print job...</span>
+            <span id="modalProgressPercent">0%</span>
+          </div>
+          <div class="kiosk-progress-track">
+            <div class="kiosk-progress-fill" id="modalProgressFill"></div>
+          </div>
+        </div>
+
         <div class="countdown-pill" id="modalCountdown" style="display:none;">
-          Resetting screen in 8s...
+          Reloading screen in 5s...
         </div>
       </div>
     </div>
@@ -1065,11 +1141,24 @@ KIOSK_HTML = """<!DOCTYPE html>
       printBtn.disabled = true;
       hideAlert();
 
+      const modalPrinterBadge = document.getElementById('modalPrinterBadge');
+      const modalPrinterName = document.getElementById('modalPrinterName');
+      const modalProgressContainer = document.getElementById('modalProgressContainer');
+      const modalProgressStep = document.getElementById('modalProgressStep');
+      const modalProgressPercent = document.getElementById('modalProgressPercent');
+      const modalProgressFill = document.getElementById('modalProgressFill');
+
       modalIconWrap.className = 'modal-icon-wrap loading';
       modalSpinner.style.display = 'block';
       modalCheckIcon.style.display = 'none';
-      modalTitle.textContent = 'OTP Verified';
-      modalMessage.textContent = 'Printing...';
+      modalTitle.textContent = 'Verifying Code';
+      modalMessage.textContent = 'Validating release OTP...';
+      modalPrinterBadge.style.display = 'none';
+      modalProgressContainer.style.display = 'block';
+      modalProgressFill.className = 'kiosk-progress-fill';
+      modalProgressFill.style.width = '15%';
+      modalProgressPercent.textContent = '15%';
+      modalProgressStep.textContent = 'Verifying OTP...';
       modalCountdown.style.display = 'none';
       statusModal.style.display = 'flex';
 
@@ -1083,24 +1172,82 @@ KIOSK_HTML = """<!DOCTYPE html>
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.status === 'RELEASED') {
-          modalIconWrap.className = 'modal-icon-wrap success';
-          modalSpinner.style.display = 'none';
-          modalCheckIcon.style.display = 'block';
-          modalTitle.textContent = 'Printing Started';
-          modalMessage.textContent = 'Please collect your document from the printer.';
-          modalCountdown.style.display = 'inline-block';
+          const targetPrinter = data.friendlyPrinter || data.printerName || 'HP LaserJet 400 M401dn';
+          modalPrinterName.textContent = targetPrinter;
+          modalPrinterBadge.style.display = 'inline-flex';
+          modalTitle.textContent = 'Printing In Progress';
+          modalMessage.textContent = 'Printing job on ' + targetPrinter + '...';
+          modalProgressFill.style.width = '40%';
+          modalProgressPercent.textContent = '40%';
+          modalProgressStep.textContent = 'Connecting to ' + targetPrinter + '...';
 
-          let secondsLeft = 8;
-          modalCountdown.textContent = `Resetting screen in ${secondsLeft}s...`;
-          const countdownInterval = setInterval(() => {
-            secondsLeft -= 1;
-            if (secondsLeft > 0) {
-              modalCountdown.textContent = `Resetting screen in ${secondsLeft}s...`;
-            } else {
-              clearInterval(countdownInterval);
-              resetTerminal();
+          const jobId = data.jobId;
+          let currentPct = 40;
+          let pollAttempts = 0;
+          const maxPollAttempts = 18;
+
+          const progressInterval = setInterval(async () => {
+            pollAttempts += 1;
+            try {
+              if (jobId) {
+                const statusRes = await fetch(`/local/job-status/${jobId}`);
+                if (statusRes.ok) {
+                  const jobData = await statusRes.json();
+                  if (jobData.friendly_printer) {
+                    modalPrinterName.textContent = jobData.friendly_printer;
+                  }
+                  if (jobData.status === 'COMPLETED' || jobData.progress >= 100) {
+                    finishJob(targetPrinter);
+                    return;
+                  } else if (jobData.progress && jobData.progress > currentPct) {
+                    currentPct = jobData.progress;
+                    modalProgressFill.style.width = currentPct + '%';
+                    modalProgressPercent.textContent = currentPct + '%';
+                    modalProgressStep.textContent = jobData.message || ('Printing on ' + targetPrinter + '...');
+                    return;
+                  }
+                }
+              }
+            } catch (_) {}
+
+            if (currentPct < 90) {
+              currentPct += Math.min(14, 90 - currentPct);
+              modalProgressFill.style.width = currentPct + '%';
+              modalProgressPercent.textContent = currentPct + '%';
+              modalProgressStep.textContent = 'Printing pages on ' + targetPrinter + '...';
             }
-          }, 1000);
+
+            if (pollAttempts >= maxPollAttempts) {
+              finishJob(targetPrinter);
+            }
+          }, 700);
+
+          function finishJob(printer) {
+            clearInterval(progressInterval);
+            modalProgressFill.className = 'kiosk-progress-fill completed';
+            modalProgressFill.style.width = '100%';
+            modalProgressPercent.textContent = '100%';
+            modalProgressStep.textContent = 'Print Job Finished';
+
+            modalIconWrap.className = 'modal-icon-wrap success';
+            modalSpinner.style.display = 'none';
+            modalCheckIcon.style.display = 'block';
+            modalTitle.textContent = 'Printing Completed!';
+            modalMessage.textContent = 'Please collect your printed document from ' + printer + '.';
+            modalCountdown.style.display = 'inline-block';
+
+            let secondsLeft = 5;
+            modalCountdown.textContent = `Reloading kiosk in ${secondsLeft}s...`;
+            const countdownInterval = setInterval(() => {
+              secondsLeft -= 1;
+              if (secondsLeft > 0) {
+                modalCountdown.textContent = `Reloading kiosk in ${secondsLeft}s...`;
+              } else {
+                clearInterval(countdownInterval);
+                window.location.reload();
+              }
+            }, 1000);
+          }
 
         } else {
           statusModal.style.display = 'none';

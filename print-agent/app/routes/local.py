@@ -105,7 +105,20 @@ def local_station_otp_release():
     # Start printing immediately if not already active or completed
     job_id = release_data.get("jobId") or release_data.get("job_id")
     order_id = release_data.get("orderId") or release_data.get("order_id")
+    settings = release_data.get("settings") or {}
+    raw_printer = settings.get("cups_printer_name") or settings.get("printer_name") or settings.get("selected_printer") or config.PRINTER_NAME
+    friendly_printer = "HP LaserJet 400 M401dn" if ("HP" in raw_printer or "M401" in raw_printer) else ("Printer 2" if "2" in raw_printer else raw_printer.replace("_", " "))
+
     if job_id and not print_service.is_job_active_or_done(job_id):
+        print_service.set_job_state(job_id, {
+            "job_id": job_id,
+            "order_id": order_id,
+            "status": "PREPARING",
+            "progress": 25,
+            "printer_name": raw_printer,
+            "friendly_printer": friendly_printer,
+            "message": f"Preparing document for {friendly_printer}..."
+        })
         job_poller.processing_jobs.add(job_id)
         import threading
         threading.Thread(
@@ -116,10 +129,19 @@ def local_station_otp_release():
 
     return jsonify({
         "status": "RELEASED",
-        "message": "OTP Verified. Printing Started. Please collect your document.",
+        "message": f"OTP Verified. Printing Started. Please collect your document from {friendly_printer}.",
         "jobId": job_id,
-        "orderId": order_id
+        "orderId": order_id,
+        "printerName": raw_printer,
+        "friendlyPrinter": friendly_printer
     }), 200
+
+@local_bp.route("/job-status/<job_id>", methods=["GET", "OPTIONS"])
+def get_job_progress(job_id: str):
+    if request.method == "OPTIONS":
+        return "", 200
+    state = print_service.get_job_state(job_id)
+    return jsonify(state), 200
 
 @local_bp.route("/print-job", methods=["POST", "OPTIONS"])
 def direct_print_job():

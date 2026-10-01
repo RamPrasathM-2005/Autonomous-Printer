@@ -171,6 +171,20 @@ async def proxy_local_release(request: Request):
             pass
     return JSONResponse(content={"error": "AGENT_UNAVAILABLE", "message": "Hardware agent not reached."}, status_code=503)
 
+@app.get("/local/job-status/{job_id}", tags=["Hardware Proxy"])
+async def proxy_local_job_status(job_id: str):
+    """Proxy print job status for kiosk and remote monitoring."""
+    for agent_url in [f"http://127.0.0.1:5001/local/job-status/{job_id}", f"http://127.0.0.1:5000/local/job-status/{job_id}"]:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                res = await client.get(agent_url)
+                if res.status_code == 200:
+                    return JSONResponse(content=res.json(), status_code=200)
+        except Exception:
+            pass
+    return JSONResponse(content={"job_id": job_id, "status": "UNKNOWN", "progress": 0, "message": "Job status unavailable."}, status_code=200)
+
+
 from fastapi.staticfiles import StaticFiles
 
 # Mount downloads directory for mobile APK package
