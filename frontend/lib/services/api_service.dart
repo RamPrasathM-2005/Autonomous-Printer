@@ -91,12 +91,29 @@ class ApiService {
     try {
       return (await http
                   .get(Uri.parse('$_baseUrl/health'))
-                  .timeout(const Duration(seconds: 5)))
+                  .timeout(const Duration(seconds: 4)))
               .statusCode ==
           200;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> probeAndSwitchWorkingBackend() async {
+    if (await checkHealth()) return true;
+    for (final candidate in ApiConfig.fallbackCandidates) {
+      if (candidate == _baseUrl) continue;
+      try {
+        final res = await http
+            .get(Uri.parse('$candidate/health'))
+            .timeout(const Duration(seconds: 2));
+        if (res.statusCode == 200) {
+          await ApiConfig.updateBackendUrl(candidate);
+          return true;
+        }
+      } catch (_) {}
+    }
+    return false;
   }
 
   Future<List<PrintServer>> fetchPrintServers() async {

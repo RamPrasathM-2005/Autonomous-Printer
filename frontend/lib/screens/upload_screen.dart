@@ -185,8 +185,29 @@ class _UploadScreenState extends State<UploadScreen>
           );
         }
         _isLoadingStations = false;
+        _uploadError = null;
       });
     } catch (e) {
+      // Auto-fallback: attempt to find reachable backend URL among known candidates
+      final recovered = await _apiService.probeAndSwitchWorkingBackend();
+      if (recovered) {
+        try {
+          final stations = await _apiService.fetchPrintServers();
+          if (!mounted) return;
+          setState(() {
+            if (stations.isNotEmpty) {
+              _selectedStation = stations.firstWhere(
+                (s) => s.status.toLowerCase() == 'online',
+                orElse: () => stations.first,
+              );
+            }
+            _isLoadingStations = false;
+            _uploadError = null;
+          });
+          return;
+        } catch (_) {}
+      }
+
       if (!mounted) return;
       setState(() {
         _isLoadingStations = false;
@@ -222,7 +243,7 @@ class _UploadScreenState extends State<UploadScreen>
             TextField(
               controller: controller,
               decoration: InputDecoration(
-                hintText: 'http://10.11.6.148:8000',
+                hintText: 'http://127.0.0.1:8000',
                 labelText: 'Backend URL',
                 labelStyle: const TextStyle(fontSize: 12),
                 border: OutlineInputBorder(
@@ -246,8 +267,9 @@ class _UploadScreenState extends State<UploadScreen>
               spacing: 6,
               runSpacing: 6,
               children: [
-                _buildPresetChip('PC Wi-Fi (10.11.6.148)', 'http://10.11.6.148:8000', controller),
-                _buildPresetChip('Localhost (127.0.0.1)', 'http://127.0.0.1:8000', controller),
+                _buildPresetChip('USB Cable (127.0.0.1)', 'http://127.0.0.1:8000', controller),
+                _buildPresetChip('PC Wi-Fi (10.11.14.85)', 'http://10.11.14.85:8000', controller),
+                _buildPresetChip('PC LAN (172.17.3.5)', 'http://172.17.3.5:8000', controller),
                 _buildPresetChip('Emulator (10.0.2.2)', 'http://10.0.2.2:8000', controller),
               ],
             ),

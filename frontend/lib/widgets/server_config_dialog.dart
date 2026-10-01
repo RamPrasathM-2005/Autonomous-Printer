@@ -180,8 +180,9 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                _buildPresetChip('Localhost (127.0.0.1)', 'http://127.0.0.1:8000'),
-                _buildPresetChip('Station Wi-Fi (10.11.6.148)', 'http://10.11.6.148:8000'),
+                _buildPresetChip('USB Cable (127.0.0.1)', 'http://127.0.0.1:8000'),
+                _buildPresetChip('PC Wi-Fi (10.11.14.85)', 'http://10.11.14.85:8000'),
+                _buildPresetChip('PC LAN (172.17.3.5)', 'http://172.17.3.5:8000'),
                 _buildPresetChip('Android Emulator (10.0.2.2)', 'http://10.0.2.2:8000'),
               ],
             ),

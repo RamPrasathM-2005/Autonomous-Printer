@@ -83,6 +83,15 @@ echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://0.0.0.0:8000 ...\033
 PIDS+=($!)
 sleep 2
 
+# Auto-configure ADB reverse proxy for connected Android devices (for mobile app USB connection)
+if command -v adb &> /dev/null; then
+    if adb get-state 2>/dev/null | grep -q "device"; then
+        echo -e "\033[1;32m[*] Configuring USB reverse proxy (adb reverse) for Android device...\033[0m"
+        adb reverse tcp:8000 tcp:8000 2>/dev/null || true
+        adb reverse tcp:5001 tcp:5001 2>/dev/null || true
+    fi
+fi
+
 # 5. Launch Flask Print Agent & Kiosk Terminal (Port 5001)
 echo -e "\033[1;34m[2/4] Starting Flask Print Agent & Kiosk Terminal on http://127.0.0.1:5001 ...\033[0m"
 (cd "$SCRIPT_DIR/print-agent" && "$PYTHON_EXE" app/main.py) &
