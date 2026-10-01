@@ -184,9 +184,14 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   }
 
   String _formatTimer(int totalSecs) {
-    final m = totalSecs ~/ 60;
-    final s = totalSecs % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    if (totalSecs <= 0) return '00:00';
+    final hours = totalSecs ~/ 3600;
+    final minutes = (totalSecs % 3600) ~/ 60;
+    final seconds = totalSecs % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes.toString().padLeft(2, '0')}m';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   void _copyToClipboard() {
@@ -813,20 +818,22 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
           const SizedBox(height: 16),
 
-          // Copy Code & Timer
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // Copy Code & Timer (Wrapped for responsive mobile alignment)
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               OutlinedButton.icon(
                 onPressed: _copyToClipboard,
                 icon: const Icon(Icons.copy_rounded, size: 15),
                 label: const Text('Copy Code', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -835,6 +842,8 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                   border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Icon(Icons.timer_outlined, size: 15, color: AppTheme.warning),
                     const SizedBox(width: 6),
