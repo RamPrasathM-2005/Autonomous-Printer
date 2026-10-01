@@ -1,108 +1,140 @@
 import 'package:flutter/material.dart';
 
+// ---------------------------------------------------------------------------
+// AppTheme — Precision Utility aesthetic
+// Ink-blue on white. No gradient backgrounds. Controlled density. Surgical.
+// ---------------------------------------------------------------------------
+
 class AppTheme {
-  // Core Brand Colors (Modern High-End Royal Blue & White Palette)
-  static const Color primary = Color(0xFF2563EB); // Vibrant Blue
-  static const Color primaryDark = Color(0xFF1D4ED8); // Royal Blue
-  static const Color primaryLight = Color(0xFF3B82F6); // Electric Blue
-  static const Color primarySurface = Color(0xFFEFF6FF); // Soft Ice Blue Tint
+  // ── Core Palette ──────────────────────────────────────────────────────────
+  static const Color primary      = Color(0xFF1A56DB); // True ink blue
+  static const Color primaryDark  = Color(0xFF1447AE);
+  static const Color primaryLight = Color(0xFF4A80E8);
 
-  static const Color secondary = Color(0xFF0F172A); // Deep Slate
-  static const Color accent = Color(0xFF0284C7); // Sky Blue Accent
-  static const Color accentSurface = Color(0xFFE0F2FE); // Light Sky Tint
+  // Ink-blue surfaces (thin tints, not gradients)
+  static const Color primarySurface = Color(0xFFF0F5FF);
+  static const Color primaryBorder  = Color(0xFFBFCFEF);
 
-  // Surface & Background Colors
-  static const Color bgLight = Color(0xFFF8FAFC); // Slate 50
+  // ── Neutral Surfaces ──────────────────────────────────────────────────────
+  static const Color bgCanvas     = Color(0xFFF7F8FA); // page canvas
   static const Color surfaceWhite = Color(0xFFFFFFFF);
-  static const Color surfaceSubtle = Color(0xFFF1F5F9); // Slate 100
-  static const Color surfaceLight = Color(0xFFF1F5F9); // Slate 100 (alias)
-  static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color cardDark = Color(0xFF1E293B); // Slate 800 (alias)
+  static const Color surfaceSubtle = Color(0xFFF2F4F7);
+  static const Color surfaceLight  = Color(0xFFEAECF0);
 
-  // Border & Dividers
-  static const Color border = Color(0xFFE2E8F0); // Slate 200
-  static const Color borderSubtle = Color(0xFFF1F5F9);
-  static const Color borderFocused = Color(0xFF2563EB);
+  // ── Borders ───────────────────────────────────────────────────────────────
+  static const Color border        = Color(0xFFDDE1E7);
+  static const Color borderFocus   = Color(0xFF1A56DB);
 
-  // Text Colors
-  static const Color textPrimary = Color(0xFF0F172A); // Slate 900
-  static const Color textSecondary = Color(0xFF475569); // Slate 600
-  static const Color textMuted = Color(0xFF94A3B8); // Slate 400
+  // ── Text ──────────────────────────────────────────────────────────────────
+  static const Color textPrimary   = Color(0xFF0D1117); // near-black
+  static const Color textSecondary = Color(0xFF4B5563);
+  static const Color textMuted     = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Colors.white;
 
-  // Status Colors
-  static const Color success = Color(0xFF10B981); // Emerald
-  static const Color successSurface = Color(0xFFECFDF5);
-  static const Color warning = Color(0xFFF59E0B); // Amber
+  // ── Semantic Colors ───────────────────────────────────────────────────────
+  static const Color success        = Color(0xFF059669);
+  static const Color successSurface = Color(0xFFF0FDF4);
+  static const Color successBorder  = Color(0xFFA7F3D0);
+
+  static const Color warning        = Color(0xFFD97706);
   static const Color warningSurface = Color(0xFFFFFBEB);
-  static const Color danger = Color(0xFFEF4444); // Red
-  static const Color dangerSurface = Color(0xFFFEF2F2);
-  static const Color info = Color(0xFF2563EB); // Blue
-  static const Color infoSurface = Color(0xFFEFF6FF);
+  static const Color warningBorder  = Color(0xFFFCD34D);
 
-  // Custom Gradients (Pure Blue & White Palette)
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static const Color danger         = Color(0xFFDC2626);
+  static const Color dangerSurface  = Color(0xFFFEF2F2);
+  static const Color dangerBorder   = Color(0xFFFCA5A5);
 
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [Color(0xFF38BDF8), Color(0xFF0284C7)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // Legacy aliases for backward compat
+  static const Color accent         = primary;
+  static const Color accentSurface  = primarySurface;
+  static const Color secondary      = Color(0xFF0D1117);
+  static const Color infoBorder     = primaryBorder;
+  static const Color infoBg         = primarySurface;
+  static const Color infoSurface    = primarySurface;
+  static const Color info           = primary;
+  static const Color successBg      = successSurface;
+  static const Color warningBg      = warningSurface;
+  static const Color dangerBg       = dangerSurface;
+  static const Color borderSubtle   = surfaceLight;
+  static const Color borderFocused  = borderFocus;
+  static const Color bgLight        = bgCanvas;
+  static const Color surfaceDark    = Color(0xFF111827);
+  static const Color cardDark       = Color(0xFF0D1117);
 
-  static const LinearGradient darkCardGradient = LinearGradient(
-    colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  // Box Shadows
+  // ── Shadows ───────────────────────────────────────────────────────────────
+  // Hair-thin shadow — suggests depth without theatrics
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-      blurRadius: 16,
+      color: const Color(0xFF0D1117).withValues(alpha: 0.06),
+      blurRadius: 8,
       spreadRadius: 0,
-      offset: const Offset(0, 6),
+      offset: const Offset(0, 1),
     ),
     BoxShadow(
-      color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+      color: const Color(0xFF0D1117).withValues(alpha: 0.03),
+      blurRadius: 2,
+      spreadRadius: 0,
+      offset: const Offset(0, 0),
+    ),
+  ];
+
+  static final List<BoxShadow> hoverShadow = [
+    BoxShadow(
+      color: const Color(0xFF1A56DB).withValues(alpha: 0.10),
+      blurRadius: 12,
+      spreadRadius: 0,
+      offset: const Offset(0, 4),
+    ),
+    BoxShadow(
+      color: const Color(0xFF0D1117).withValues(alpha: 0.04),
       blurRadius: 4,
       spreadRadius: 0,
-      offset: const Offset(0, 2),
+      offset: const Offset(0, 1),
     ),
   ];
 
   static final List<BoxShadow> buttonShadow = [
     BoxShadow(
-      color: primary.withValues(alpha: 0.3),
-      blurRadius: 12,
+      color: primary.withValues(alpha: 0.20),
+      blurRadius: 8,
       spreadRadius: 0,
-      offset: const Offset(0, 4),
+      offset: const Offset(0, 3),
     ),
   ];
 
-  static final List<BoxShadow> accentShadow = [
-    BoxShadow(
-      color: accent.withValues(alpha: 0.3),
-      blurRadius: 12,
-      spreadRadius: 0,
-      offset: const Offset(0, 4),
-    ),
-  ];
+  static final List<BoxShadow> accentShadow = buttonShadow;
 
+  // ── Gradients (use sparingly — buttons only) ──────────────────────────────
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF1A56DB), Color(0xFF1447AE)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Legacy aliases
+  static const LinearGradient heroGradient = LinearGradient(
+    colors: [Color(0xFF111827), Color(0xFF0D1117)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient accentGradient = primaryGradient;
+  static const LinearGradient subtleGradient = LinearGradient(
+    colors: [Color(0xFFFFFFFF), Color(0xFFF7F8FA)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  // ── Material ThemeData ────────────────────────────────────────────────────
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: bgLight,
+      scaffoldBackgroundColor: bgCanvas,
       primaryColor: primary,
-      fontFamily: 'Roboto', // Clean sans font fallback
       colorScheme: const ColorScheme.light(
         primary: primary,
-        secondary: secondary,
+        secondary: Color(0xFF0D1117),
         surface: surfaceWhite,
         error: danger,
         onPrimary: Colors.white,
@@ -114,7 +146,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: border, width: 1),
         ),
       ),
@@ -123,26 +155,27 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
+        surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
           color: textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
         ),
-        iconTheme: IconThemeData(color: textPrimary),
+        iconTheme: IconThemeData(color: textPrimary, size: 20),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
           ),
           textStyle: const TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
+            letterSpacing: 0,
           ),
           elevation: 0,
         ),
@@ -150,40 +183,37 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
-          side: const BorderSide(color: border, width: 1.5),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          side: const BorderSide(color: border, width: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceWhite,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: primary, width: 2),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: primary, width: 1.5),
         ),
         hintStyle: const TextStyle(color: textMuted, fontSize: 14),
-        labelStyle: const TextStyle(color: textSecondary, fontSize: 14),
+        labelStyle: const TextStyle(color: textSecondary, fontSize: 13),
       ),
       dividerTheme: const DividerThemeData(
         color: border,
         thickness: 1,
-        space: 24,
+        space: 1,
       ),
     );
   }

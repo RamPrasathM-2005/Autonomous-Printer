@@ -1,4 +1,4 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_interop';
@@ -52,7 +52,8 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
   @override
   void didUpdateWidget(covariant RealDocumentPreviewWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.document.id != widget.document.id) {
+    if (oldWidget.document.id != widget.document.id ||
+        oldWidget.isLandscape != widget.isLandscape) {
       _setupView();
       _triggerRender();
     }

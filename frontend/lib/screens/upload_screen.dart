@@ -6,7 +6,6 @@ import '../services/api_error.dart';
 
 import 'package:file_picker/file_picker.dart';
 
-import 'package:url_launcher/url_launcher.dart';
 
 import '../config/api_config.dart';
 import '../config/theme.dart';
@@ -14,8 +13,6 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
-import '../utils/download_helper.dart';
-import '../widgets/workflow_stepper.dart';
 import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
 
@@ -30,16 +27,11 @@ const _kDangerousExtensions = [
 ];
 
 /// Returns a non-null error string if the file fails security checks.
-/// Checks:
-///  1. Extension allowlist (pdf, jpg, jpeg, png)
-///  2. Dangerous-extension blocklist
-///  3. Magic-byte validation (PDF, JPEG, PNG)
 String? _validateFileBytes(String filename, List<int> bytes) {
   final ext = filename.contains('.')
       ? filename.split('.').last.toLowerCase()
       : '';
 
-  // 1 – Allowlist check
   const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
   if (!allowed.contains(ext)) {
     if (_kDangerousExtensions.contains(ext)) {
@@ -48,31 +40,27 @@ String? _validateFileBytes(String filename, List<int> bytes) {
     return '"$filename" must be a PDF, JPG, or PNG file.';
   }
 
-  // 2 – Magic-byte validation
   if (bytes.length < 4) {
     return '"$filename" appears to be empty or corrupted.';
   }
 
   if (ext == 'pdf') {
-    // PDF magic: %PDF  (0x25 0x50 0x44 0x46)
     if (bytes[0] != 0x25 || bytes[1] != 0x50 ||
         bytes[2] != 0x44 || bytes[3] != 0x46) {
       return '"$filename" does not appear to be a valid PDF — content mismatch.';
     }
   } else if (ext == 'jpg' || ext == 'jpeg') {
-    // JPEG magic: FF D8 FF
     if (bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF) {
       return '"$filename" does not appear to be a valid JPEG image.';
     }
   } else if (ext == 'png') {
-    // PNG magic: 89 50 4E 47 0D 0A 1A 0A
     if (bytes[0] != 0x89 || bytes[1] != 0x50 ||
         bytes[2] != 0x4E || bytes[3] != 0x47) {
       return '"$filename" does not appear to be a valid PNG image.';
     }
   }
 
-  return null; // Passed all checks
+  return null;
 }
 
 class SelectedDocItem {
@@ -114,7 +102,6 @@ class _UploadScreenState extends State<UploadScreen>
   bool _isUploading = false;
   String _uploadStatusText = '';
   String? _uploadError;
-  // Track per-upload progress: 0.0 → 1.0 across all files
   double _uploadProgress = 0.0;
 
   PrintServer? _selectedStation;
@@ -143,7 +130,6 @@ class _UploadScreenState extends State<UploadScreen>
         _uploadError = null;
       });
     } catch (e) {
-      // Auto-fallback: attempt to find reachable backend URL among known candidates
       final recovered = await _apiService.probeAndSwitchWorkingBackend();
       if (recovered) {
         try {
@@ -181,34 +167,6 @@ class _UploadScreenState extends State<UploadScreen>
     }
   }
 
-  Future<void> _downloadApk() async {
-    final apkUrl = '${ApiConfig.baseUrl}/downloads/autonomous-printer.apk';
-    try {
-      final uri = Uri.parse(apkUrl);
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) {
-        triggerUrlDownload(apkUrl, filename: 'autonomous-printer.apk');
-      }
-    } catch (_) {
-      triggerUrlDownload(apkUrl, filename: 'autonomous-printer.apk');
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.download_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 10),
-            Text('Downloading APK...'),
-          ],
-        ),
-        duration: Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFF1E293B),
-      ),
-    );
-  }
 
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -224,9 +182,6 @@ class _UploadScreenState extends State<UploadScreen>
     });
 
     try {
-      // file_picker v13: static FilePicker.pickFiles() returns List<PlatformFile>
-      // No allowMultiple param — the method inherently allows multi-select.
-      // We use webOptions to pre-load bytes for the security check.
       final List<PlatformFile> files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -234,7 +189,6 @@ class _UploadScreenState extends State<UploadScreen>
 
       if (files.isNotEmpty) {
         for (final file in files) {
-          // file_picker v13: PlatformFile has readAsBytes() method, not .bytes property
           final Uint8List rawBytes = await file.readAsBytes();
 
           if (rawBytes.isEmpty) {
@@ -247,14 +201,12 @@ class _UploadScreenState extends State<UploadScreen>
 
           final List<int> fileBytes = rawBytes;
 
-          // ── Security gate: validate before queuing ──────────────────────
           final secError = _validateFileBytes(file.name, fileBytes);
           if (secError != null) {
             setState(() => _uploadError = secError);
-            continue; // Skip this file, process others
+            continue;
           }
 
-          // Avoid exact duplicates (same name + same byte count)
           if (!_selectedFiles.any(
             (f) => f.name == file.name && f.size == fileBytes.length,
           )) {
@@ -284,6 +236,14 @@ class _UploadScreenState extends State<UploadScreen>
     });
   }
 
+  void _clearAllFiles() {
+    if (_isUploading) return;
+    setState(() {
+      _selectedFiles.clear();
+      _uploadError = null;
+    });
+  }
+
   Future<void> _handleNext() async {
     if (_selectedFiles.isEmpty) {
       setState(() {
@@ -310,7 +270,6 @@ class _UploadScreenState extends State<UploadScreen>
         setState(() {
           _uploadStatusText =
               'Uploading ${i + 1} of $total: ${item.name}';
-          // Progress reflects completed files; current one counts as 50% done
           _uploadProgress = (i + 0.5) / total;
         });
 
@@ -335,7 +294,6 @@ class _UploadScreenState extends State<UploadScreen>
 
       if (!mounted) return;
 
-      // Navigate to Step 2: Print Settings with all uploaded documents
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -356,320 +314,44 @@ class _UploadScreenState extends State<UploadScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: AppTheme.surfaceWhite,
-        titleSpacing: 20,
-        title: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                'assets/images/logo.jpg',
-                width: 36,
-                height: 36,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.print_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Autonomous Printer',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: _downloadApk,
-            icon: const Icon(
-              Icons.download_rounded,
-              color: AppTheme.textPrimary,
-              size: 22,
-            ),
-            tooltip: 'Download APK',
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
-            child: ElevatedButton.icon(
-              onPressed: _showServerConfigDialog,
-              icon: Icon(
-                ApiConfig.isTunneled ? Icons.cloud_done_rounded : Icons.dns_rounded,
-                size: 14,
-                color: Colors.white,
-              ),
-              label: Text(
-                ApiConfig.isTunneled ? 'Cloudflare' : 'Server',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ApiConfig.isTunneled ? const Color(0xFF16A34A) : AppTheme.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ),
-          _isLoadingStations
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                )
-              : IconButton(
-                  onPressed: _loadStations,
-                  icon: const Icon(
-                    Icons.refresh_rounded,
-                    color: AppTheme.textSecondary,
-                  ),
-                  tooltip: 'Refresh station',
-                ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      backgroundColor: AppTheme.bgCanvas,
+      appBar: _buildAppBar(),
       body: Column(
         children: [
-          const WorkflowStepper(currentStep: 1),
+          // Station status bar
+          _buildStatusBar(),
+          // Scrollable body
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
+                  constraints: const BoxConstraints(maxWidth: 560),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Section Title & File Count (always visible)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Documents',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          // File count badge — always visible
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _selectedFiles.isEmpty
-                                  ? AppTheme.surfaceSubtle
-                                  : AppTheme.primarySurface,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _selectedFiles.isEmpty
-                                    ? AppTheme.border
-                                    : AppTheme.primary.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.insert_drive_file_rounded,
-                                  size: 13,
-                                  color: _selectedFiles.isEmpty
-                                      ? AppTheme.textMuted
-                                      : AppTheme.primary,
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  '${_selectedFiles.length} file${_selectedFiles.length == 1 ? '' : 's'}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: _selectedFiles.isEmpty
-                                        ? AppTheme.textMuted
-                                        : AppTheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Error message banner
+                      // Error banner
                       if (_uploadError != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppTheme.dangerSurface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppTheme.danger.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.cloud_off_rounded,
-                                    color: AppTheme.danger,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _uploadError!,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.danger,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 18,
-                                      color: AppTheme.danger,
-                                    ),
-                                    onPressed: () =>
-                                        setState(() => _uploadError = null),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: () async {
-                                        setState(() => _uploadError = null);
-                                        await _loadStations();
-                                      },
-                                      icon: const Icon(Icons.refresh_rounded, size: 14),
-                                      label: const Text('Retry Connection', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppTheme.danger,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: _showServerConfigDialog,
-                                      icon: const Icon(Icons.settings_ethernet_rounded, size: 14),
-                                      label: const Text('Server Settings', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppTheme.danger,
-                                        side: BorderSide(color: AppTheme.danger.withValues(alpha: 0.5)),
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildErrorBanner(),
                         const SizedBox(height: 16),
                       ],
 
-                      // Station Live Hardware Status
-                      // Dropzone Card
-                      _buildDropzoneCard(),
+                      // Upload zone
+                      _buildDropzone(),
+                      const SizedBox(height: 20),
 
-                      // Upload progress — visible when uploading
-                      
-                      const SizedBox(height: 24),
-
-                      // Uploaded Files Progress Listing (Inspired by Image 1 & Image 2)
+                      // File list
                       if (_selectedFiles.isNotEmpty) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Selected files',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'Total: ${_formatFileSize(_totalSizeBytes)}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _selectedFiles.length,
-                          separatorBuilder: (ctx, i) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (ctx, index) {
-                            final file = _selectedFiles[index];
-                            return _buildFileItemCard(file, index);
-                          },
-                        ),
+                        _buildFileList(),
                       ],
 
-                      const SizedBox(height:12),
-                      _buildHowItWorks(),
+                      // Upload progress
+                      if (_isUploading) ...[
+                        const SizedBox(height: 16),
+                        _buildUploadProgress(),
+                      ],
+
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
@@ -677,213 +359,192 @@ class _UploadScreenState extends State<UploadScreen>
             ),
           ),
 
-          // Bottom Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceWhite,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final summary = Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedFiles.isEmpty
-                                ? 'No documents selected'
-                                : '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'file' : 'files'} ready',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          
-                        ],
-                      );
-                      final action = ElevatedButton(
-                        onPressed: (_selectedFiles.isEmpty || _isUploading)
-                            ? null
-                            : _handleNext,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 28,
-                            vertical: 16,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                          shadowColor: AppTheme.primary.withValues(alpha: 0.4),
-                        ),
-                        child: _isUploading
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    'Uploading...',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Continue',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward_rounded, size: 18),
-                                ],
-                              ),
-                      );
-                      if (constraints.maxWidth < 440) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            summary,
-                            const SizedBox(height: 12),
-                            SizedBox(width: double.infinity, child: action),
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: summary),
-                          const SizedBox(width: 12),
-                          action,
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Bottom bar
+          _buildBottomBar(),
         ],
       ),
     );
   }
 
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: AppTheme.surfaceWhite,
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(height: 1, color: AppTheme.border),
+      ),
+      titleSpacing: 16,
+      title: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/logo.jpg',
+              width: 28,
+              height: 28,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.print_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Autonomous Printer',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        // Server connection button
+        GestureDetector(
+          onTap: _showServerConfigDialog,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: ApiConfig.isTunneled
+                    ? AppTheme.successBorder
+                    : AppTheme.border,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              color: ApiConfig.isTunneled
+                  ? AppTheme.successSurface
+                  : AppTheme.surfaceSubtle,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: ApiConfig.isTunneled
+                        ? AppTheme.success
+                        : AppTheme.textMuted,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  ApiConfig.isTunneled ? 'Cloud' : 'Local',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: ApiConfig.isTunneled
+                        ? AppTheme.success
+                        : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Refresh
+        _isLoadingStations
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+              )
+            : IconButton(
+                onPressed: _loadStations,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: AppTheme.textMuted,
+                  size: 18,
+                ),
+                tooltip: 'Refresh',
+              ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
 
-  Widget _buildStationStatusCard() {
+  Widget _buildStatusBar() {
     final station = _selectedStation;
-    final isOnline = station == null || station.status.toLowerCase() == 'online';
+    final isOnline = station != null && station.status.toLowerCase() == 'online';
+
+    if (_isLoadingStations) {
+      return Container(
+        height: 36,
+        color: AppTheme.surfaceSubtle,
+        alignment: Alignment.center,
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.textMuted),
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Connecting to station...',
+              style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (station == null) return const SizedBox.shrink();
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      height: 36,
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOnline ? const Color(0xFF86EFAC) : AppTheme.border,
-          width: 1.2,
+        color: isOnline ? AppTheme.successSurface : AppTheme.surfaceSubtle,
+        border: Border(
+          bottom: BorderSide(
+            color: isOnline ? AppTheme.successBorder : AppTheme.border,
+          ),
         ),
-        boxShadow: AppTheme.cardShadow,
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(
-              color: isOnline ? const Color(0xFFDCFCE7) : AppTheme.surfaceSubtle,
+              color: isOnline ? AppTheme.success : AppTheme.textMuted,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.print_rounded,
-              size: 18,
-              color: isOnline ? const Color(0xFF16A34A) : AppTheme.textMuted,
-            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      station?.name ?? 'Station 1 · Autonomous Kiosk',
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isOnline ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: isOnline ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isOnline ? 'Online' : 'Offline',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: isOnline ? const Color(0xFF166534) : const Color(0xFF991B1B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'HP LaserJet 400 (B&W) & Color Ready · A4 Paper Loaded',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
+          const SizedBox(width: 7),
+          Text(
+            isOnline
+                ? '${station.name} · Ready'
+                : '${station.name} · Offline',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isOnline ? AppTheme.success : AppTheme.textMuted,
             ),
           ),
         ],
@@ -891,367 +552,242 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  Widget _buildDropzoneCard() {
+  Widget _buildErrorBanner() {
     return Container(
-      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.25),
-          width: 2,
-        ),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: InkWell(
-        onTap: _isUploading ? null : _pickFiles,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-          child: Column(
-            children: [
-              // Custom Upload Icon Container
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 86,
-                    height: 86,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primarySurface,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppTheme.primary.withValues(alpha: 0.15),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.cloud_upload_rounded,
-                      size: 30,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Drop your files here, or browse',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.3,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Supports multi-page documents and image files',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: AppTheme.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 18),
-              // Browse Files Button
-              ElevatedButton(
-                onPressed: _isUploading ? null : _pickFiles,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 13,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                  shadowColor: AppTheme.primary.withValues(alpha: 0.35),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.folder_open_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'Browse Files',
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              // Format Chips & Size Limit
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _buildFormatPill('PDF', Icons.picture_as_pdf_outlined),
-                  _buildFormatPill('PNG', Icons.image_outlined),
-                  _buildFormatPill('JPG', Icons.photo_outlined),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFormatPill(String label, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceSubtle,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.border),
+        color: AppTheme.dangerSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.dangerBorder),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: AppTheme.primary),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textSecondary,
+          const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _uploadError!,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.danger,
+              ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHowItWorks() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'How It Works',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(width: 8),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildStepPill('1', 'Upload', 'Select Files'),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
-              ),
-              _buildStepPill('2', 'Pay', 'Pay online'),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.textMuted),
-              ),
-              _buildStepPill('3', 'Print', 'Enter OTP'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepPill(String num, String title, String subtitle) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: AppTheme.primarySurface,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                ),
-                child: Center(
-                  child: Text(
-                    num,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.primary,
+              GestureDetector(
+                onTap: () async {
+                  setState(() => _uploadError = null);
+                  await _loadStations();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.dangerBorder),
+                  ),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.danger,
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  title,
+              GestureDetector(
+                onTap: () => setState(() => _uploadError = null),
+                child: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropzone() {
+    return GestureDetector(
+      onTap: _isUploading ? null : _pickFiles,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppTheme.border,
+            width: 1.5,
+            style: BorderStyle.solid,
+          ),
+          boxShadow: AppTheme.cardShadow,
+        ),
+        child: Column(
+          children: [
+            // Icon area — restrained, not theatrical
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppTheme.primarySurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.primaryBorder),
+              ),
+              child: const Icon(
+                Icons.upload_file_rounded,
+                color: AppTheme.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Select files to print',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'PDF, JPG, or PNG',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textMuted,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+              decoration: BoxDecoration(
+                color: AppTheme.primary,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Text(
+                'Browse Files',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '${_selectedFiles.length} file${_selectedFiles.length == 1 ? '' : 's'} selected',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _formatFileSize(_totalSizeBytes),
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.textMuted,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Padding(
-            padding: const EdgeInsets.only(left: 26),
-            child: Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 10.5,
-                color: AppTheme.textSecondary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+                if (!_isUploading) ...[
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: _clearAllFiles,
+                    behavior: HitTestBehavior.opaque,
+                    child: const Text(
+                      'Clear all',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.danger,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _selectedFiles.length,
+          separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+          itemBuilder: (ctx, index) {
+            return _buildFileRow(_selectedFiles[index], index);
+          },
+        ),
+      ],
     );
   }
 
-
-  Widget _buildTransparentPricing() {
+  Widget _buildFileRow(SelectedDocItem file, int index) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.sell_outlined, size: 16, color: AppTheme.primary),
-              SizedBox(width: 8),
-              Text(
-                'Transparent Self-Service Rates',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              _buildPriceChip('Black & White', '₹2.00 / page', Icons.format_color_reset_rounded),
-              _buildPriceChip('Full Color', '₹5.00 / page', Icons.color_lens_rounded),
-              _buildPriceChip('Auto-Duplex', 'Available', Icons.flip_rounded),
-              _buildPriceChip('Instant Payment', 'UPI / Card', Icons.bolt_rounded),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPriceChip(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceSubtle,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppTheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildFileItemCard(SelectedDocItem file, int index) {
-    // All file types use blue shades for consistent blue/white theme
-    final badgeColor = file.isPdf ? AppTheme.primary : AppTheme.primaryLight;
-    final badgeIcon = file.isPdf
-        ? Icons.picture_as_pdf_rounded
-        : Icons.image_rounded;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(
+          color: file.isCompleted ? AppTheme.successBorder : AppTheme.border,
+        ),
         boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         children: [
           Row(
             children: [
-              // File Type Badge Icon (Reference Image 1 & 2)
+              // File type indicator
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                  color: file.isPdf
+                      ? AppTheme.primarySurface
+                      : AppTheme.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: file.isPdf
+                        ? AppTheme.primaryBorder
+                        : AppTheme.border,
+                  ),
                 ),
-                child: Icon(badgeIcon, color: badgeColor, size: 24),
+                child: Center(
+                  child: Text(
+                    file.fileExtension,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: file.isPdf
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1259,8 +795,8 @@ class _UploadScreenState extends State<UploadScreen>
                     Text(
                       file.name,
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
                         color: AppTheme.textPrimary,
                       ),
                       maxLines: 1,
@@ -1268,56 +804,228 @@ class _UploadScreenState extends State<UploadScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_formatFileSize(file.size)} \u2022 ${file.fileExtension}',
+                      _formatFileSize(file.size),
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                        color: AppTheme.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              // Percentage indicator text (Reference Image 1)
-              Text(
-                file.isCompleted ? 'Uploaded' : 'Selected',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: file.isCompleted
-                      ? AppTheme.accent
-                      : AppTheme.textSecondary,
-                ),
-              ),
               const SizedBox(width: 8),
-              IconButton(
-                onPressed: _isUploading ? null : () => _removeFile(index),
-                icon: const Icon(
-                  Icons.cancel_rounded,
-                  color: AppTheme.textMuted,
-                  size: 20,
+              if (file.isCompleted) ...[
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 16,
+                  color: AppTheme.success,
                 ),
-                tooltip: 'Remove file',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                const SizedBox(width: 8),
+              ],
+              GestureDetector(
+                onTap: _isUploading ? null : () => _removeFile(index),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: _isUploading ? AppTheme.border : AppTheme.textMuted,
+                  ),
+                ),
               ),
             ],
           ),
           if (_isUploading) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
-                value: file.isCompleted ? 1 : null,
-                minHeight: 6,
-                backgroundColor: AppTheme.surfaceSubtle,
+                value: file.isCompleted ? 1.0 : null,
+                minHeight: 3,
+                backgroundColor: AppTheme.surfaceLight,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  file.isCompleted ? AppTheme.accent : AppTheme.primary,
+                  file.isCompleted ? AppTheme.success : AppTheme.primary,
                 ),
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildUploadProgress() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primarySurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primaryBorder),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _uploadStatusText,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            '${(_uploadProgress * 100).toInt()}%',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    final hasFiles = _selectedFiles.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        border: const Border(top: BorderSide(color: AppTheme.border)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          hasFiles
+                              ? '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'file' : 'files'} ready'
+                              : 'No files selected',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: hasFiles
+                                ? AppTheme.textPrimary
+                                : AppTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasFiles && !_isUploading) ...[
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      onPressed: _clearAllFiles,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.textSecondary,
+                        side: const BorderSide(color: AppTheme.border),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 13,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: (_selectedFiles.isEmpty || _isUploading)
+                        ? null
+                        : _handleNext,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 13,
+                      ),
+                      decoration: BoxDecoration(
+                        color: hasFiles && !_isUploading
+                            ? AppTheme.primary
+                            : AppTheme.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: hasFiles && !_isUploading
+                              ? AppTheme.primary
+                              : AppTheme.border,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isUploading) ...[
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            _isUploading ? 'Uploading' : 'Continue',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: hasFiles && !_isUploading
+                                  ? Colors.white
+                                  : AppTheme.textMuted,
+                            ),
+                          ),
+                          if (!_isUploading) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 16,
+                              color: hasFiles
+                                  ? Colors.white
+                                  : AppTheme.textMuted,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

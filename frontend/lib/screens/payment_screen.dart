@@ -8,7 +8,6 @@ import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'otp_release_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -95,8 +94,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _message = null;
     });
     try {
-      final payment =
-          _payment ?? await _api.createPaymentOrder(widget.order.id);
+      final payment = _payment ?? await _api.createPaymentOrder(widget.order.id);
       _payment = payment;
       if (!mounted) return;
       final result = await RazorpayWebService.openCheckout(
@@ -124,8 +122,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _message =
-              'Payment unconfirmed. Check status before paying again.',
+          () => _message = 'Payment unconfirmed. Check status before paying again.',
         );
       }
     } finally {
@@ -155,281 +152,433 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  Widget _detail(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 13),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _panel(List<Widget> children) => Container(
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      color: AppTheme.surfaceWhite,
-      border: Border.all(color: AppTheme.border),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    ),
-  );
-
-  Widget _heading(String text) => Text(
-    text,
-    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-  );
-
-
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
     final settings = order.printSettings;
     final amount = '${order.currency} ${order.amount.toStringAsFixed(2)}';
     final items = settings.items;
-    final details = _panel([
-      _heading('Documents'),
-      const SizedBox(height: 20),
-      if (items.isNotEmpty)
-        for (final item in items)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.description_outlined,
-                    size: 20,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+
+    return Scaffold(
+      backgroundColor: AppTheme.bgCanvas,
+      appBar: AppBar(
+        title: const Text('Payment'),
+        backgroundColor: AppTheme.surfaceWhite,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppTheme.border),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 700;
+
+                final detailsCard = _buildDetailsCard(order, settings, items);
+                final summaryCard = _buildSummaryCard(order, amount, items);
+
+                if (isWide) {
+                  return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item.filename,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${item.pages} ${item.pages == 1 ? 'page' : 'pages'} \u00b7 ${item.copies} ${item.copies == 1 ? 'copy' : 'copies'} \u00b7 ${item.colour ? 'Color' : 'B&W'}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
+                      Expanded(flex: 3, child: detailsCard),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: summaryCard),
                     ],
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    detailsCard,
+                    const SizedBox(height: 14),
+                    summaryCard,
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard(PrintOrder order, PrintSettings settings, List items) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Text(
+              'Documents',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: AppTheme.border),
+
+          // Items
+          if (items.isNotEmpty)
+            ...List.generate(items.length, (i) {
+              final item = items[i];
+              final isLast = i == items.length - 1;
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(color: AppTheme.border),
+                          ),
+                          child: const Icon(
+                            Icons.description_outlined,
+                            size: 16,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.filename,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${item.pages} ${item.pages == 1 ? 'page' : 'pages'} · ${item.copies} ${item.copies == 1 ? 'copy' : 'copies'} · ${item.colour ? 'Color' : 'B&W'}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (item.amount.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Text(
+                            item.amount,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (!isLast) const Divider(height: 1, color: AppTheme.border),
+                ],
+              );
+            })
+          else if (widget.documents?.isNotEmpty == true)
+            ...widget.documents!.map(
+              (doc) => Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+                child: Text(
+                  doc.filename,
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                ),
+              ),
+            ),
+
+          const Divider(height: 1, color: AppTheme.border),
+
+          // Print settings
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Text(
+              'Print Settings',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              children: [
+                _detailRow('Paper', settings.paperSize),
+                _detailRow(
+                  'Orientation',
+                  settings.orientation == 'landscape' ? 'Landscape' : 'Portrait',
+                ),
+                _detailRow(
+                  'Sides',
+                  settings.sides == 'one-sided'
+                      ? 'Single-sided'
+                      : 'Double-sided',
+                ),
+                _detailRow('Station', order.printServerId),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(PrintOrder order, String amount, List items) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Order Summary',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
-                if (item.amount.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    item.amount,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                if (_testPaymentMode)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningSurface,
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: AppTheme.warningBorder),
+                    ),
+                    child: const Text(
+                      'Test Mode',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.warning,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppTheme.border),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (items.isNotEmpty) _summaryLine('Documents', '${items.length}'),
+                _summaryLine('Printed pages', '${order.totalPages}'),
+
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppTheme.border),
+                const SizedBox(height: 12),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      amount,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (_testPaymentMode)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'No charge in test mode',
+                      style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+
+                if (_message != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.dangerSurface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.dangerBorder),
+                    ),
+                    child: Text(
+                      _message!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.danger,
+                      ),
                     ),
                   ),
                 ],
-              ],
-            ),
-          )
-      else if (widget.documents?.isNotEmpty == true)
-        for (final document in widget.documents!)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              document.filename,
-              style: const TextStyle(fontSize: 14),
-            ),
-          ),
-      const Divider(height: 24),
-      _heading('Print settings'),
-      const SizedBox(height: 12),
-      _detail('Paper', settings.paperSize),
-      _detail(
-        'Orientation',
-        settings.orientation == 'landscape' ? 'Landscape' : 'Portrait',
-      ),
-      _detail(
-        'Sides',
-        settings.sides == 'one-sided' ? 'Single-sided' : 'Double-sided',
-      ),
-      _detail('Station', order.printServerId),
-    ]);
-    final summary = _panel([
-      Row(
-        children: [
-          Expanded(child: _heading('Order summary')),
-          if (_testPaymentMode)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceSubtle,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'Test mode',
-                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-              ),
-            ),
-        ],
-      ),
-      const SizedBox(height: 20),
-      if (items.isNotEmpty) _detail('Documents', '${items.length}'),
-      _detail('Printed pages', '${order.totalPages}'),
-      const Divider(height: 28),
-      Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Total',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              amount,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-      if (_testPaymentMode)
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text(
-            'No charge in test mode',
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-          ),
-        ),
-      if (_message != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 20),
-          child: Semantics(
-            liveRegion: true,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceSubtle,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                _message!,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ),
-      const SizedBox(height: 24),
-      if (_busy)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12),
-          child: LinearProgressIndicator(minHeight: 2),
-        ),
-      ElevatedButton(
-        onPressed: _busy ? null : _pay,
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size.fromHeight(46),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Text(
-          'Pay with Razorpay',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
-      const SizedBox(height: 4),
-      TextButton(
-        onPressed: _busy ? null : _check,
-        child: const Text(
-          'Check payment status',
-          style: TextStyle(fontSize: 13),
-        ),
-      ),
-      const Divider(height: 24),
-      const Text(
-        'Order reference',
-        style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-      ),
-      const SizedBox(height: 4),
-      SelectableText(
-        order.id,
-        style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-      ),
-    ]);
-    return Scaffold(
-      backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(title: const Text('Payment')),
-      body: Column(
-        children: [
-          const WorkflowStepper(currentStep: 3),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1000),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (constraints.maxWidth < 760) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                details,
-                                const SizedBox(height: 16),
-                                summary,
-                              ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 3, child: details),
-                              const SizedBox(width: 24),
-                              Expanded(flex: 2, child: summary),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
+
+                const SizedBox(height: 18),
+
+                if (_busy)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      color: AppTheme.primary,
+                      backgroundColor: AppTheme.surfaceLight,
+                    ),
+                  ),
+
+                // Pay button
+                GestureDetector(
+                  onTap: _busy ? null : _pay,
+                  child: Container(
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _busy ? AppTheme.surfaceSubtle : AppTheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 16,
+                          color: _busy ? AppTheme.textMuted : Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Pay with Razorpay',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _busy ? AppTheme.textMuted : Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+
+                const SizedBox(height: 6),
+
+                TextButton(
+                  onPressed: _busy ? null : _check,
+                  child: const Text(
+                    'Check payment status',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                ),
+
+                const Divider(height: 24, color: AppTheme.border),
+
+                const Text(
+                  'Order reference',
+                  style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  order.id,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textMuted,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
             ),
           ),
         ],

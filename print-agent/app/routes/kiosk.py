@@ -92,7 +92,7 @@ def generate_qr_base64(url: str) -> str:
     qr.make(fit=True)
     img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 KIOSK_HTML = """<!DOCTYPE html>
@@ -1300,98 +1300,194 @@ SMART_GATEWAY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Autonomous Printer - Connecting...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Autonomous Print Station</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0b0f19;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: #090d16;
       color: #f8fafc;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 24px;
+      padding: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 440px;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 32px 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
       text-align: center;
     }
-    .card {
-      background: #111827;
-      border: 1px solid #1f2d44;
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
       border-radius: 20px;
-      padding: 32px 24px;
-      max-width: 420px;
-      width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      margin-bottom: 20px;
     }
-    .spinner {
-      width: 44px;
-      height: 44px;
-      border: 4px solid rgba(255,255,255,0.2);
-      border-top-color: #3b82f6;
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: #10b981;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 20px;
+      box-shadow: 0 0 8px #10b981;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    h2 { font-size: 1.35rem; margin-bottom: 8px; }
-    p { font-size: 0.88rem; color: #94a3b8; line-height: 1.5; margin-bottom: 24px; }
-    .btn-group { display: flex; flex-direction: column; gap: 12px; }
-    .btn {
-      padding: 13px 20px;
-      border-radius: 12px;
-      font-size: 0.95rem;
+    .icon-wrapper {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4);
+    }
+    .icon-wrapper svg {
+      width: 32px;
+      height: 32px;
+      fill: #ffffff;
+    }
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      margin-bottom: 8px;
+      color: #ffffff;
+    }
+    p.subtitle {
+      font-size: 0.88rem;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .specs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .spec-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .spec-label {
+      font-size: 0.72rem;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .spec-val {
+      font-size: 0.85rem;
+      color: #f1f5f9;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-primary {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      font-size: 1rem;
       font-weight: 700;
       text-decoration: none;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      transition: all 0.15s ease;
+      gap: 8px;
+      box-shadow: 0 10px 20px -3px rgba(37, 99, 235, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
     }
-    .btn-web { background: #2563eb; color: #ffffff; }
-    .btn-apk { background: #10b981; color: #ffffff; }
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+    .footer-note {
+      margin-top: 18px;
+      font-size: 0.75rem;
+      color: #475569;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="spinner"></div>
-    <h2>Connecting to Autonomous Printer</h2>
-    <p>Opening Mobile App or Web App for seamless printing...</p>
+  <div class="container">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      <span>Station Online & Ready</span>
+    </div>
 
-    <div class="btn-group">
-      <a href="{{ web_url }}/?scan=1" class="btn btn-web" id="webBtn">
-        <span>Open Web App</span>
-      </a>
-      <a href="/downloads/autonomous-printer.apk" class="btn btn-apk" id="apkBtn">
-        <span>Download Mobile App (.apk)</span>
-      </a>
+    <div class="icon-wrapper">
+      <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+    </div>
+
+    <h1>Autonomous Print Hub</h1>
+    <p class="subtitle">Upload documents from your phone, complete checkout, and collect printed pages with your 6-digit PIN.</p>
+
+    <div class="specs-grid">
+      <div class="spec-item">
+        <div class="spec-label">Print Station</div>
+        <div class="spec-val">Kiosk Unit 1 & 2</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Supported Files</div>
+        <div class="spec-val">PDF · PNG · JPG</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Speed</div>
+        <div class="spec-val">~2.5s / Page</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Security</div>
+        <div class="spec-val">256-Bit SSL PIN</div>
+      </div>
+    </div>
+
+    <a href="{{ web_url }}/" class="btn-primary" id="openWebBtn">
+      <span>Upload Documents</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+    </a>
+
+    <div class="footer-note">
+      Secure Self-Service Kiosk Network · Instant Release
     </div>
   </div>
 
   <script>
-    // Try launching the installed app via intent/scheme
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = 'autonomousprinter://open';
-      document.body.appendChild(iframe);
-      setTimeout(() => {
-        try { document.body.removeChild(iframe); } catch (_) {}
-        // Fallback to web app after 600ms
-        window.location.href = "{{ web_url }}/?scan=1";
-      }, 700);
-    } else {
-      setTimeout(() => {
-        window.location.href = "{{ web_url }}/?scan=1";
-      }, 500);
-    }
+    // Automatically transition to web upload workflow
+    setTimeout(() => {
+      window.location.href = "{{ web_url }}/";
+    }, 400);
   </script>
 </body>
 </html>
 """
+
 
 @kiosk_bp.route("/kiosk", methods=["GET"])
 def render_kiosk():
@@ -1432,23 +1528,6 @@ def smart_gateway():
     web_url = get_web_url()
     return render_template_string(SMART_GATEWAY_HTML, web_url=web_url)
 
-@kiosk_bp.route("/downloads/autonomous-printer.apk", methods=["GET"])
-@kiosk_bp.route("/kiosk/download-apk", methods=["GET"])
-def download_apk():
-    """Serves the autonomous-printer.apk package."""
-    candidates = [
-        Path(os.getcwd()) / "downloads" / "autonomous-printer.apk",
-        Path(__file__).parent.parent / "static" / "autonomous-printer.apk",
-    ]
-    for p in candidates:
-        if p.exists():
-            return send_file(
-                str(p),
-                mimetype="application/vnd.android.package-archive",
-                as_attachment=True,
-                download_name="autonomous-printer.apk"
-            )
-    return jsonify({"error": "APK not yet generated"}), 404
 
 @kiosk_bp.route("/", methods=["GET"])
 def index():

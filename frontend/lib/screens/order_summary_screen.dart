@@ -7,7 +7,6 @@ import '../models/payment.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'otp_release_screen.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
@@ -228,134 +227,135 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         : '₹${_totalEstimatedTotal.toStringAsFixed(2)}';
 
     return Scaffold(
-      backgroundColor: AppTheme.bgLight,
+      backgroundColor: AppTheme.bgCanvas,
       appBar: AppBar(
         title: const Text('Order Summary'),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppTheme.border),
+        ),
       ),
-      body: Column(
-        children: [
-          const WorkflowStepper(currentStep: 3),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 960),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = constraints.maxWidth >= 780;
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 600;
+                final itemsWidget = _buildDocumentItemsList();
+                final summaryWidget = _buildSummaryPanel(finalAmount);
 
-                      final itemsWidget = _buildDocumentItemsList();
-                      final summaryWidget = _buildSummaryCard(finalAmount);
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: itemsWidget),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: summaryWidget),
+                    ],
+                  );
+                }
 
-                      if (isWide) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 3, child: itemsWidget),
-                            const SizedBox(width: 24),
-                            Expanded(flex: 2, child: summaryWidget),
-                          ],
-                        );
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          itemsWidget,
-                          const SizedBox(height: 16),
-                          summaryWidget,
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    itemsWidget,
+                    const SizedBox(height: 14),
+                    summaryWidget,
+                  ],
+                );
+              },
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildDocumentItemsList() {
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Documents for Printing',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Documents',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
-              ),
-              Text(
-                '${widget.configs.length} ${widget.configs.length == 1 ? 'file' : 'files'}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.w500,
+                Text(
+                  '${widget.configs.length} ${widget.configs.length == 1 ? 'file' : 'files'}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textMuted,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-
-          for (int i = 0; i < widget.configs.length; i++)
-            _buildDocumentItemRow(widget.configs[i], i + 1),
-
-          const SizedBox(height: 6),
-          const Divider(height: 14),
-          const SizedBox(height: 4),
-
+          const Divider(height: 1, color: AppTheme.border),
+          // Document rows
+          ...List.generate(widget.configs.length, (i) {
+            final c = widget.configs[i];
+            final isLast = i == widget.configs.length - 1;
+            return Column(
+              children: [
+                _buildDocumentRow(c),
+                if (!isLast) const Divider(height: 1, color: AppTheme.border),
+              ],
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildDocumentItemRow(DocumentPrintConfig c, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceSubtle,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppTheme.border),
-      ),
+  Widget _buildDocumentRow(DocumentPrintConfig c) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // File type badge
           Container(
-            padding: const EdgeInsets.all(5),
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: c.isColor ? const Color(0xFFEFF6FF) : Colors.white,
-              borderRadius: BorderRadius.circular(4),
+              color: c.isColor ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
+              borderRadius: BorderRadius.circular(7),
               border: Border.all(
-                color: c.isColor ? const Color(0xFFBFDBFE) : AppTheme.border,
+                color: c.isColor ? AppTheme.primaryBorder : AppTheme.border,
               ),
             ),
-            child: Icon(
-              c.document.isPdf
-                  ? Icons.picture_as_pdf_outlined
-                  : Icons.image_outlined,
-              size: 15,
-              color: c.isColor ? AppTheme.primary : AppTheme.textSecondary,
+            child: Center(
+              child: Text(
+                c.document.isPdf ? 'PDF' : 'IMG',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: c.isColor ? AppTheme.primary : AppTheme.textSecondary,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,19 +363,19 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                 Text(
                   c.document.filename,
                   style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
                     color: AppTheme.textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
-                  '${c.pageRangeDescription} · ${c.isColor ? 'Color' : 'B&W'} · ${c.copies}c · ${c.sides == 'one-sided' ? '1-Sided' : '2-Sided'} · ${c.calculatedPages * c.copies} pgs',
+                  '${c.pageRangeDescription} · ${c.isColor ? 'Color' : 'B&W'} · ${c.copies}x · ${c.calculatedPages * c.copies} pgs',
                   style: const TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    color: AppTheme.textMuted,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -383,12 +383,12 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Text(
             '₹${c.estimatedCost.toStringAsFixed(2)}',
             style: const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
             ),
           ),
@@ -397,157 +397,171 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String amount) {
+  Widget _buildSummaryPanel(String amount) {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Price Summary',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Summary',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
-              ),
-              if (_testPaymentMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: const Text(
-                    'Test Gateway',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF92400E),
+                if (_testPaymentMode)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningSurface,
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: AppTheme.warningBorder),
+                    ),
+                    child: const Text(
+                      'Test Mode',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.warning,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          _buildSummaryLine('Total Documents', '${widget.configs.length}'),
-          _buildSummaryLine('Total Copies', '$_totalCopies'),
-          _buildSummaryLine('Total Billable Pages', '$_totalCalculatedPages'),
-
-          const Divider(height: 18),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Final Payable',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              Text(
-                amount,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ],
-          ),
-
-          if (_testPaymentMode)
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text(
-                'Test mode active: no live charges will occur.',
-                style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
-              ),
-            ),
-
-          if (_message != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFECACA)),
-              ),
-              child: Text(
-                _message!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFB91C1C),
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 22),
-
-          if (_busy)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
-
-          ElevatedButton(
-            onPressed: _busy ? null : _proceedToPayment,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.lock_outline, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'Proceed to Payment',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
               ],
             ),
           ),
+          const Divider(height: 1, color: AppTheme.border),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _summaryLine('Documents', '${widget.configs.length}'),
+                _summaryLine('Copies', '$_totalCopies'),
+                _summaryLine('Billable pages', '$_totalCalculatedPages'),
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppTheme.border),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      amount,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
 
-          if (_currentOrder != null) ...[
-            const SizedBox(height: 6),
-            TextButton(
-              onPressed: _busy ? null : _checkPaymentStatus,
-              child: const Text(
-                'Check Payment Status',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
+                if (_message != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.dangerSurface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.dangerBorder),
+                    ),
+                    child: Text(
+                      _message!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.danger,
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 18),
+
+                if (_busy)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      color: AppTheme.primary,
+                      backgroundColor: AppTheme.surfaceLight,
+                    ),
+                  ),
+
+                // Pay button
+                GestureDetector(
+                  onTap: _busy ? null : _proceedToPayment,
+                  child: Container(
+                    height: 50,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _busy ? AppTheme.surfaceSubtle : AppTheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 16,
+                          color: _busy ? AppTheme.textMuted : Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Pay Now',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: _busy ? AppTheme.textMuted : Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                if (_currentOrder != null) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _busy ? null : _checkPaymentStatus,
+                    child: const Text(
+                      'Check payment status',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-          
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryLine(String label, String value) {
+  Widget _summaryLine(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(

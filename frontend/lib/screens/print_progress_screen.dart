@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
 import '../services/api_service.dart';
-import '../widgets/workflow_stepper.dart';
 import 'upload_screen.dart';
 
 class PrintProgressScreen extends StatefulWidget {
@@ -106,17 +105,13 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
         backgroundColor: AppTheme.surfaceWhite,
         automaticallyImplyLeading: _isCompleted,
       ),
-      body: Column(
-        children: [
-          const WorkflowStepper(currentStep: 5),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              children: [
                       // Progress Animation Card
                       Container(
                         width: double.infinity,
@@ -305,9 +300,6 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                 ),
               ),
             ),
-          ),
-        ],
-      ),
     );
   }
 

@@ -191,10 +191,6 @@ async def proxy_local_job_status(job_id: str):
 
 from fastapi.staticfiles import StaticFiles
 
-# Mount downloads directory for mobile APK package
-downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
-if downloads_dir.exists():
-    app.mount("/downloads", StaticFiles(directory=str(downloads_dir)), name="downloads")
 
 # Frontends directory paths
 flutter_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "build" / "web"
