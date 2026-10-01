@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../widgets/workflow_stepper.dart';
 import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
+import 'stations_screen.dart';
 
 class SelectedDocItem {
   final String name;
@@ -269,10 +270,10 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 3),
             child: ElevatedButton.icon(
               onPressed: _showServerConfigDialog,
-              icon: const Icon(Icons.dns_rounded, size: 15, color: Colors.white),
+              icon: const Icon(Icons.dns_rounded, size: 14, color: Colors.white),
               label: const Text(
                 'Server',
                 style: TextStyle(
@@ -285,7 +286,40 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 3),
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (ctx) => StationsScreen(
+                      onStationSelected: (stationId) {
+                        _loadStations();
+                      },
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.print_rounded, size: 14, color: AppTheme.primary),
+              label: const Text(
+                'Printers',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.textPrimary,
+                backgroundColor: AppTheme.surfaceSubtle,
+                side: const BorderSide(color: AppTheme.border, width: 1.2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),

@@ -117,7 +117,30 @@ class _StationsScreenState extends State<StationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Print Stations'),
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/images/app_logo.jpg',
+                width: 28,
+                height: 28,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => const Icon(Icons.print_rounded, size: 22, color: AppTheme.primary),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text(
+                'Print Stations',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded),

@@ -344,9 +344,32 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Release OTP Code'),
+        titleSpacing: 16,
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/images/app_logo.jpg',
+                width: 28,
+                height: 28,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => const Icon(Icons.pin_rounded, size: 22, color: AppTheme.primary),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text(
+                'Release OTP Code',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),

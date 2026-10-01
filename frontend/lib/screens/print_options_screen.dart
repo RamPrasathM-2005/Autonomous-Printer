@@ -43,6 +43,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   bool _isValidating = false;
   String? _validationError;
   bool _showCostBreakdown = false;
+  String _selectedPrinter = 'HP_LaserJet_400_M401dn_F36EC0';
 
   @override
   void initState() {
@@ -140,6 +141,14 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         items: itemsPayload,
       );
 
+      // Explicitly set printer on order if endpoint available
+      try {
+        await _apiService.selectOrderPrinter(
+          orderId: order.id,
+          cupsPrinterName: _selectedPrinter,
+        );
+      } catch (_) {}
+
       setState(() {
         _isValidating = false;
       });
@@ -170,9 +179,36 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text('Fast Print Mode'),
+        titleSpacing: 16,
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/images/app_logo.jpg',
+                width: 30,
+                height: 30,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => const Icon(Icons.print_rounded, size: 24, color: AppTheme.primary),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text(
+                'Print Options',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
@@ -294,6 +330,34 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                       _buildDocumentPreviewCard(),
 
                       const SizedBox(height: 20),
+
+                      // Destination Printer Selector
+                      _buildSectionContainer(
+                        title: 'Destination Printer',
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildPrinterOptionCard(
+                                id: 'HP_LaserJet_400_M401dn_F36EC0',
+                                name: 'HP LaserJet 400',
+                                desc: 'Duplex • B&W • Fast',
+                                icon: Icons.print_rounded,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildPrinterOptionCard(
+                                id: 'Printer_2',
+                                name: 'Secondary Printer',
+                                desc: 'Color / Tray 2 • High Res',
+                                icon: Icons.color_lens_outlined,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
 
                       // Segment 1: Color Mode Selector (Color or Grayscale)
                       _buildSectionContainer(
@@ -1177,6 +1241,71 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrinterOptionCard({
+    required String id,
+    required String name,
+    required String desc,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedPrinter == id;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedPrinter = id;
+        });
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected ? AppTheme.buttonShadow : AppTheme.cardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, size: 22, color: isSelected ? AppTheme.primary : AppTheme.textSecondary),
+                if (isSelected)
+                  const Icon(Icons.check_circle_rounded, size: 18, color: AppTheme.primary),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              desc,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? AppTheme.primary.withOpacity(0.8) : AppTheme.textMuted,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
