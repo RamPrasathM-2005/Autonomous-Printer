@@ -47,6 +47,8 @@ class PrintOrder {
   final double amount;
   final String currency;
   final String status;
+  final String? errorCode;
+  final String? errorMessage;
   final String createdAt;
 
   PrintOrder({
@@ -60,6 +62,8 @@ class PrintOrder {
     required this.amount,
     required this.currency,
     required this.status,
+    this.errorCode,
+    this.errorMessage,
     required this.createdAt,
   });
 
@@ -69,6 +73,9 @@ class PrintOrder {
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
   bool get isPrinting => status.toUpperCase() == 'PRINTING';
   bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
+  bool get isOutOfPaper =>
+      (errorCode?.toUpperCase() == 'OUT_OF_PAPER') ||
+      (errorMessage?.toLowerCase().contains('paper') == true);
 
   bool get isColor => printSettings.colour;
   bool get duplex => printSettings.sides != 'one-sided';
@@ -89,6 +96,8 @@ class PrintOrder {
       amount: (json['amount'] is num) ? (json['amount'] as num).toDouble() : 0.0,
       currency: json['currency'] ?? 'INR',
       status: json['status'] ?? 'WAITING_FOR_PAYMENT',
+      errorCode: json['errorCode'] ?? json['error_code'],
+      errorMessage: json['errorMessage'] ?? json['error_message'],
       createdAt: json['created_at'] ?? '',
     );
   }

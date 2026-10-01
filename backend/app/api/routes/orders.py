@@ -72,6 +72,7 @@ def get_order(
             message="Order not found."
         )
 
+    job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
     return OrderResponse(
         id=order.id,
         user_id=order.user_id,
@@ -83,6 +84,8 @@ def get_order(
         amount=float(order.amount),
         currency=order.currency,
         status=order.status,
+        error_code=job.error_code if job else None,
+        error_message=job.error_message if job else None,
         created_at=order.created_at
     )
 

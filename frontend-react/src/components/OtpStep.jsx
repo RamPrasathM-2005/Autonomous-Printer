@@ -1,9 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Clock, RotateCcw, MapPin, Printer, CheckCircle2 } from 'lucide-react';
+import { Copy, Check, Clock, RotateCcw, MapPin, Printer, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { api } from '../api';
 
 export default function OtpStep({ finalData, onReset }) {
   const { order, otp } = finalData;
   const [copied, setCopied] = useState(false);
+  const [orderStatus, setOrderStatus] = useState(order?.status || 'WAITING_FOR_OTP');
+  const [isOutOfPaper, setIsOutOfPaper] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
+
+  useEffect(() => {
+    const orderId = order?.id || order?.order_id;
+    if (!orderId) return;
+
+    const poll = async () => {
+      try {
+        const liveOrder = await api.getOrder(orderId);
+        if (liveOrder) {
+          setOrderStatus(liveOrder.status);
+          const outOfPaper = (liveOrder.error_code === 'OUT_OF_PAPER') ||
+            (liveOrder.error_message && liveOrder.error_message.toLowerCase().includes('paper'));
+          setIsOutOfPaper(outOfPaper);
+          if (liveOrder.error_message) {
+            setStatusMessage(liveOrder.error_message);
+          }
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(poll, 2500);
+    return () => clearInterval(interval);
+  }, [order]);
 
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const rawExp = order?.expires_at || order?.expiresAt;
@@ -43,40 +70,146 @@ export default function OtpStep({ finalData, onReset }) {
   return (
     <div style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center' }}>
       
-      {/* Top Success Celebration Banner */}
-      <div style={{
-        background: 'var(--success-surface)',
-        border: '1.5px solid rgba(16, 185, 129, 0.35)',
-        borderRadius: '20px',
-        padding: '1.15rem 1.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0.75rem',
-        marginBottom: '1.5rem',
-        animation: 'slideDown 0.25s ease-out'
-      }}>
+      {/* Top Banner based on status */}
+      {isOutOfPaper ? (
         <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: '50%',
-          background: 'var(--success)',
-          color: 'white',
+          background: 'var(--warning-surface)',
+          border: '1.5px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '20px',
+          padding: '1.15rem 1.5rem',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          gap: '0.85rem',
+          marginBottom: '1.5rem',
+          animation: 'slideDown 0.25s ease-out',
+          textAlign: 'left'
         }}>
-          <Check size={20} strokeWidth={3} />
-        </div>
-        <div style={{ textAlign: 'left' }}>
-          <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#065f46' }}>
-            Payment Confirmed!
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            background: 'var(--warning)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <AlertTriangle size={20} strokeWidth={2.5} />
           </div>
-          <div style={{ fontSize: '0.8rem', color: '#047857' }}>
-            Your print release code has been generated successfully.
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#92400e' }}>
+              Printer Out of Paper!
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#b45309' }}>
+              Your document is stored in the printer queue. Please insert sheets into the printer paper tray to begin printing.
+            </div>
           </div>
         </div>
-      </div>
+      ) : orderStatus === 'COMPLETED' ? (
+        <div style={{
+          background: 'var(--success-surface)',
+          border: '1.5px solid rgba(16, 185, 129, 0.35)',
+          borderRadius: '20px',
+          padding: '1.15rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.75rem',
+          marginBottom: '1.5rem',
+          animation: 'slideDown 0.25s ease-out'
+        }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: 'var(--success)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <CheckCircle2 size={22} strokeWidth={2.5} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#065f46' }}>
+              Printing Completed Successfully!
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#047857' }}>
+              Please collect your printed pages from the HP LaserJet tray.
+            </div>
+          </div>
+        </div>
+      ) : orderStatus === 'PRINTING' ? (
+        <div style={{
+          background: 'var(--primary-surface)',
+          border: '1.5px solid rgba(37, 99, 235, 0.35)',
+          borderRadius: '20px',
+          padding: '1.15rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.75rem',
+          marginBottom: '1.5rem',
+          animation: 'slideDown 0.25s ease-out'
+        }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Printer size={20} strokeWidth={2.5} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1e40af' }}>
+              Printing in Progress...
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#2563eb' }}>
+              HP LaserJet 400 M401dn is actively printing your document.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          background: 'var(--success-surface)',
+          border: '1.5px solid rgba(16, 185, 129, 0.35)',
+          borderRadius: '20px',
+          padding: '1.15rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.75rem',
+          marginBottom: '1.5rem',
+          animation: 'slideDown 0.25s ease-out'
+        }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: 'var(--success)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Check size={20} strokeWidth={3} />
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#065f46' }}>
+              Payment Confirmed!
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#047857' }}>
+              Your print release code has been generated successfully.
+            </div>
+          </div>
+        </div>
+      )}
 
       <h2 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px', marginBottom: '0.35rem' }}>
         Your Kiosk Release Code

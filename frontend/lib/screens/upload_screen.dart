@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/print_server.dart';
@@ -192,6 +193,115 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _showServerConfigDialog() async {
+    final controller = TextEditingController(text: ApiConfig.backendUrl);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.dns_outlined, color: AppTheme.primary, size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Server Configuration',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the backend API server URL (e.g. Cloudflare / Ngrok tunnel or LAN IP):',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'https://xxxx.trycloudflare.com or http://127.0.0.1:8000',
+                labelText: 'Backend API URL',
+                labelStyle: const TextStyle(fontSize: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              style: const TextStyle(fontSize: 13),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Quick Presets:',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildPresetChip('Localhost (127.0.0.1)', 'http://127.0.0.1:8000', controller),
+                _buildPresetChip('Station Wi-Fi (10.11.6.148)', 'http://10.11.6.148:8000', controller),
+                _buildPresetChip('Android Emulator (10.0.2.2)', 'http://10.0.2.2:8000', controller),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: const Text('Save & Connect'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && controller.text.trim().isNotEmpty) {
+      final newUrl = controller.text.trim();
+      await ApiConfig.updateBackendUrl(newUrl);
+      if (mounted) {
+        setState(() {
+          _uploadError = null;
+        });
+        await _loadStations();
+      }
+    }
+  }
+
+  Widget _buildPresetChip(String label, String url, TextEditingController controller) {
+    return InkWell(
+      onTap: () => controller.text = url,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,20 +312,24 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
         titleSpacing: 20,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/images/app_logo.jpg',
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => Container(
+                  width: 36,
+                  height: 36,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ],
+                  child: const Icon(Icons.print_rounded, color: Colors.white, size: 20),
+                ),
               ),
-              child: const Icon(Icons.print_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 12),
             const Expanded(
@@ -250,6 +364,11 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: _showServerConfigDialog,
+            icon: const Icon(Icons.dns_outlined, color: AppTheme.textSecondary),
+            tooltip: 'Configure Backend Server / Tunnel URL',
+          ),
           _isLoadingStations
               ? const Center(
                   child: Padding(

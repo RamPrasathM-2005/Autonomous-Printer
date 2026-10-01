@@ -20,8 +20,30 @@ class PrinterMonitor:
             if self.printer_name in printers:
                 info = printers[self.printer_name]
                 state = info.get("printer-state", 3) # 3: IDLE, 4: PROCESSING, 5: STOPPED
-                printer_state = "READY" if state == 3 else ("BUSY" if state == 4 else "ERROR")
-                return printer_state, "AVAILABLE"
+
+                # Query detailed attributes including reasons and messages
+                attrs = conn.getPrinterAttributes(self.printer_name)
+                reasons = [str(r).lower() for r in attrs.get("printer-state-reasons", [])]
+                msg = str(attrs.get("printer-state-message") or "").lower()
+
+                is_media_empty = any(
+                    r in reasons for r in ["media-empty", "media-needed", "media-empty-warning", "media-empty-error", "input-tray-missing"]
+                ) or ("out of paper" in msg or "tray empty" in msg or "load paper" in msg)
+
+                paper_state = "OUT_OF_PAPER" if is_media_empty else "AVAILABLE"
+
+                if is_media_empty:
+                    printer_state = "OUT_OF_PAPER"
+                elif any(r in reasons for r in ["media-jam", "door-open", "offline"]):
+                    printer_state = "ERROR"
+                elif state == 5:
+                    printer_state = "STOPPED"
+                elif state == 4:
+                    printer_state = "BUSY"
+                else:
+                    printer_state = "READY"
+
+                return printer_state, paper_state
         except Exception:
             pass
 

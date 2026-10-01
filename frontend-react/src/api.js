@@ -137,6 +137,16 @@ export const api = {
     return await res.json();
   },
 
+  // 9. Get Live Order Status
+  async getOrder(orderId) {
+    const res = await fetch(`${BASE_URL}/orders/${orderId}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch order');
+    }
+    return await res.json();
+  },
+
   // 9. Local Agent Telemetry
   async getLocalStationStatus() {
     try {

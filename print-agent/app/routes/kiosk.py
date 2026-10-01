@@ -57,26 +57,26 @@ KIOSK_HTML = """<!DOCTYPE html>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b0f19;
-      --surface: #111827;
-      --surface-card: #162032;
-      --border: #1f2d44;
-      --border-focus: #3b82f6;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-card: #f1f5f9;
+      --border: #e2e8f0;
+      --border-focus: #2563eb;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
-      --primary-glow: rgba(37, 99, 235, 0.4);
-      --accent: #06b6d4;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
+      --primary-glow: rgba(37, 99, 235, 0.2);
+      --accent: #0284c7;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
       --success: #10b981;
-      --success-bg: rgba(16, 185, 129, 0.12);
+      --success-bg: rgba(16, 185, 129, 0.1);
       --danger: #ef4444;
-      --danger-bg: rgba(239, 68, 68, 0.12);
+      --danger-bg: rgba(239, 68, 68, 0.08);
       --warning: #f59e0b;
-      --key-bg: #1a2538;
-      --key-hover: #22324b;
-      --key-active: #2e4363;
+      --key-bg: #ffffff;
+      --key-hover: #f1f5f9;
+      --key-active: #e2e8f0;
     }
 
     * {
@@ -90,7 +90,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg) 65%);
+      background: radial-gradient(circle at 50% 0%, #f0f7ff 0%, var(--bg) 75%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
@@ -104,7 +104,7 @@ KIOSK_HTML = """<!DOCTYPE html>
     /* Top Kiosk Header */
     header {
       width: 100%;
-      background: rgba(15, 23, 42, 0.92);
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
       padding: 12px 28px;
@@ -114,6 +114,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       z-index: 10;
       flex-wrap: wrap;
       gap: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     .station-brand {
@@ -143,7 +144,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-size: 1.15rem;
       font-weight: 800;
       letter-spacing: -0.02em;
-      color: #ffffff;
+      color: var(--text);
       line-height: 1.2;
     }
 
@@ -171,7 +172,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-size: 0.78rem;
       font-weight: 700;
       text-decoration: none;
-      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
       transition: all 0.15s ease;
       cursor: pointer;
     }
@@ -221,6 +222,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       border-radius: 9999px;
       font-size: 0.75rem;
       font-weight: 700;
+      color: var(--text);
     }
 
     .status-dot {
@@ -269,7 +271,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       border: 1px solid var(--border);
       border-radius: 20px;
       padding: 26px 24px;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -282,9 +284,9 @@ KIOSK_HTML = """<!DOCTYPE html>
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(37, 99, 235, 0.15);
-      border: 1px solid rgba(37, 99, 235, 0.35);
-      color: #60a5fa;
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      color: #2563eb;
       padding: 4px 12px;
       border-radius: 9999px;
       font-size: 0.72rem;
@@ -297,7 +299,7 @@ KIOSK_HTML = """<!DOCTYPE html>
     .kiosk-card-left h2 {
       font-size: 1.35rem;
       font-weight: 800;
-      color: #ffffff;
+      color: var(--text);
       margin-bottom: 6px;
     }
 
@@ -314,8 +316,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       background: #ffffff;
       padding: 14px;
       border-radius: 18px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.25);
-      border: 2px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08), 0 0 15px rgba(37, 99, 235, 0.08);
+      border: 2px solid var(--border);
       margin-bottom: 14px;
       display: flex;
       align-items: center;
@@ -341,7 +343,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       padding: 6px 12px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.78rem;
-      color: #38bdf8;
+      color: #0284c7;
       word-break: break-all;
       margin-bottom: 16px;
       max-width: 340px;
@@ -369,14 +371,14 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-size: 0.88rem;
       font-weight: 700;
       text-decoration: none;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
       transition: all 0.15s ease;
     }
 
     .btn-download-kiosk:hover {
       background: linear-gradient(135deg, #059669 0%, #047857 100%);
       transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
     }
 
     .btn-download-kiosk svg {
@@ -399,7 +401,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
     .step-micro {
       font-size: 0.7rem;
-      color: var(--text-dim);
+      color: var(--text-muted);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -410,8 +412,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      background: rgba(37, 99, 235, 0.2);
-      color: #60a5fa;
+      background: rgba(37, 99, 235, 0.12);
+      color: #2563eb;
       font-weight: 800;
       display: flex;
       align-items: center;
@@ -425,7 +427,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       border: 1px solid var(--border);
       border-radius: 20px;
       padding: 26px 26px;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -442,7 +444,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-weight: 800;
       letter-spacing: -0.02em;
       margin-bottom: 5px;
-      color: #ffffff;
+      color: var(--text);
     }
 
     .card-title-group p {
@@ -461,8 +463,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     .otp-slot {
       width: 50px;
       height: 60px;
-      background: var(--surface-card);
-      border: 2px solid var(--border);
+      background: #f8fafc;
+      border: 2px solid #cbd5e1;
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -470,21 +472,21 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-family: 'JetBrains Mono', monospace;
       font-size: 1.85rem;
       font-weight: 700;
-      color: #ffffff;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+      color: var(--text);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
       transition: all 0.15s ease;
     }
 
     .otp-slot.filled {
-      border-color: #3b82f6;
-      background: rgba(37, 99, 235, 0.14);
-      color: #60a5fa;
+      border-color: #2563eb;
+      background: #eff6ff;
+      color: #2563eb;
       transform: scale(1.02);
     }
 
     .otp-slot.active {
-      border-color: var(--accent);
-      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
     }
 
     /* Alert / Status Banners */
@@ -505,20 +507,20 @@ KIOSK_HTML = """<!DOCTYPE html>
     .alert-banner.error {
       display: block;
       background: var(--danger-bg);
-      border: 1px solid rgba(239, 68, 68, 0.35);
-      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #b91c1c;
     }
 
     .alert-banner.error h3 {
       font-size: 0.92rem;
       font-weight: 700;
-      color: #f87171;
+      color: #dc2626;
       margin-bottom: 2px;
     }
 
     .alert-banner.error p {
       font-size: 0.8rem;
-      color: #fca5a5;
+      color: #b91c1c;
     }
 
     /* Keypad Grid */
@@ -531,23 +533,24 @@ KIOSK_HTML = """<!DOCTYPE html>
 
     .key-btn {
       background: var(--key-bg);
-      border: 1px solid var(--border);
+      border: 1.5px solid var(--border);
       border-radius: 12px;
       height: 56px;
       font-size: 1.45rem;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
       transition: all 0.12s ease;
       touch-action: manipulation;
     }
 
     .key-btn:hover {
       background: var(--key-hover);
-      border-color: rgba(255, 255, 255, 0.15);
+      border-color: #cbd5e1;
     }
 
     .key-btn:active {
@@ -560,16 +563,18 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-weight: 700;
       letter-spacing: 0.03em;
       color: var(--text-muted);
+      background: #f8fafc;
     }
 
     .key-btn.action-btn:hover {
-      color: #ffffff;
+      color: var(--text);
+      background: #f1f5f9;
     }
 
     .key-btn.clear-btn:active {
-      background: rgba(239, 68, 68, 0.2);
+      background: rgba(239, 68, 68, 0.1);
       border-color: var(--danger);
-      color: #f87171;
+      color: var(--danger);
     }
 
     .key-btn svg {
@@ -601,7 +606,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
     .print-btn:hover:not(:disabled) {
       background: linear-gradient(135deg, #3b82f6, #2563eb);
-      box-shadow: 0 6px 24px rgba(37, 99, 235, 0.5);
+      box-shadow: 0 6px 24px rgba(37, 99, 235, 0.4);
       transform: translateY(-1px);
     }
 
@@ -610,11 +615,11 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .print-btn:disabled {
-      background: #1e293b;
-      color: var(--text-dim);
+      background: #e2e8f0;
+      color: #94a3b8;
       box-shadow: none;
       cursor: not-allowed;
-      border: 1px solid var(--border);
+      border: 1px solid #cbd5e1;
     }
 
     .print-btn svg {
@@ -631,8 +636,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(11, 15, 25, 0.88);
-      backdrop-filter: blur(10px);
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(8px);
       z-index: 100;
       align-items: center;
       justify-content: center;
@@ -645,14 +650,14 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .modal-card {
-      background: var(--surface);
+      background: #ffffff;
       border: 1px solid var(--border);
       border-radius: 24px;
       padding: 36px 32px;
       text-align: center;
       max-width: 440px;
       width: 90%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
     }
 
     .modal-icon-wrap {
@@ -666,20 +671,20 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .modal-icon-wrap.loading {
-      background: rgba(37, 99, 235, 0.15);
-      border: 2px solid rgba(37, 99, 235, 0.3);
+      background: rgba(37, 99, 235, 0.1);
+      border: 2px solid rgba(37, 99, 235, 0.25);
     }
 
     .modal-icon-wrap.success {
-      background: rgba(16, 185, 129, 0.15);
-      border: 2px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.1);
+      border: 2px solid rgba(16, 185, 129, 0.25);
     }
 
     .spinner {
       width: 38px;
       height: 38px;
-      border: 4px solid rgba(255, 255, 255, 0.25);
-      border-top-color: #3b82f6;
+      border: 4px solid rgba(37, 99, 235, 0.15);
+      border-top-color: #2563eb;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -692,7 +697,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       font-size: 1.45rem;
       font-weight: 800;
       margin-bottom: 8px;
-      color: #ffffff;
+      color: var(--text);
     }
 
     .modal-content p {
@@ -705,11 +710,12 @@ KIOSK_HTML = """<!DOCTYPE html>
       display: inline-block;
       margin-top: 18px;
       padding: 6px 16px;
-      background: rgba(255, 255, 255, 0.06);
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
       border-radius: 9999px;
       font-size: 0.8rem;
       font-weight: 600;
-      color: var(--text-dim);
+      color: var(--text-muted);
     }
 
     footer {
@@ -718,7 +724,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       padding: 12px 20px;
       font-size: 0.76rem;
       color: var(--text-dim);
-      border-top: 1px solid rgba(31, 45, 68, 0.4);
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.85);
     }
   </style>
 </head>

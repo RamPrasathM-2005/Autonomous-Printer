@@ -78,8 +78,17 @@ class PrintService:
             cups_job_id=cups_job_id
         )
 
-        # 4. Monitor CUPS job completion
-        cups_status = cups_service.monitor_job(cups_job_id)
+        # 4. Monitor CUPS job completion with paper status reporting
+        def status_callback(status: str, error_code: str = None, message: str = None):
+            backend_client.update_job_status(
+                job_id=job_id,
+                status=status,
+                cups_job_id=cups_job_id,
+                error_code=error_code,
+                message=message
+            )
+
+        cups_status = cups_service.monitor_job(cups_job_id, on_status_callback=status_callback)
         if cups_status == "COMPLETED":
             backend_client.update_job_status(
                 job_id=job_id,
@@ -88,6 +97,15 @@ class PrintService:
             )
             agent_logger.info(f"Successfully finished job {job_id} (CUPS ID {cups_job_id})")
             return True
+        elif cups_status == "OUT_OF_PAPER":
+            backend_client.update_job_status(
+                job_id=job_id,
+                status="PRINTING",
+                cups_job_id=cups_job_id,
+                error_code="OUT_OF_PAPER",
+                message="Printer is out of paper. Please load paper into the tray to continue printing."
+            )
+            return False
         else:
             backend_client.update_job_status(
                 job_id=job_id,

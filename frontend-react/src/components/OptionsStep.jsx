@@ -93,8 +93,8 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
         paper_size: firstConfig.paperSize,
         orientation: firstConfig.orientation,
         print_quality: firstConfig.printQuality,
-        pageRange: firstConfig.rangeOption === 'all' ? null : firstConfig.customRange,
-        page_range: firstConfig.rangeOption === 'all' ? null : firstConfig.customRange,
+        pageRange: firstConfig.rangeOption === 'all' ? null : (firstConfig.rangeOption === 'custom' ? firstConfig.customRange : firstConfig.rangeOption),
+        page_range: firstConfig.rangeOption === 'all' ? null : (firstConfig.rangeOption === 'custom' ? firstConfig.customRange : firstConfig.rangeOption),
       };
 
       const items = configs.map(c => ({
@@ -103,7 +103,8 @@ export default function OptionsStep({ documents = [], onBack, onNext }) {
         colour: c.isColor,
         sides: c.sides,
         paper_size: c.paperSize,
-        page_range: c.rangeOption === 'all' ? null : c.customRange,
+        orientation: c.orientation,
+        page_range: c.rangeOption === 'all' ? null : (c.rangeOption === 'custom' ? c.customRange : c.rangeOption),
       }));
 
       const order = await api.createOrder({

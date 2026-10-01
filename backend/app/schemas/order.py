@@ -97,6 +97,8 @@ class OrderResponse(BaseModel):
     amount: float
     currency: str
     status: OrderStatus
+    errorCode: Optional[str] = Field(default=None, alias="errorCode", serialization_alias="errorCode")
+    errorMessage: Optional[str] = Field(default=None, alias="errorMessage", serialization_alias="errorMessage")
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
 
     def __init__(self, **data):
@@ -110,6 +112,10 @@ class OrderResponse(BaseModel):
             data["printSettings"] = data.pop("print_settings")
         if "total_pages" in data and "totalPages" not in data:
             data["totalPages"] = data.pop("total_pages")
+        if "error_code" in data and "errorCode" not in data:
+            data["errorCode"] = data.pop("error_code")
+        if "error_message" in data and "errorMessage" not in data:
+            data["errorMessage"] = data.pop("error_message")
         if "created_at" in data and "createdAt" not in data:
             data["createdAt"] = data.pop("created_at")
         super().__init__(**data)

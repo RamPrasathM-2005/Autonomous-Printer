@@ -32,6 +32,8 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Timer? _pollTimer;
 
   String? _errorMessage;
+  String? _warningMessage;
+  bool _isOutOfPaper = false;
   String _statusMessage = 'Connecting to local printer kiosk...';
   int _progressPercent = 10;
   bool _isCompleted = false;
@@ -57,6 +59,8 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Future<void> _triggerRelease() async {
     setState(() {
       _errorMessage = null;
+      _warningMessage = null;
+      _isOutOfPaper = false;
       _statusMessage = 'Sending 6-digit OTP to printer kiosk...';
       _progressPercent = 25;
     });
@@ -106,30 +110,39 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
           timer.cancel();
           _animController.stop();
           setState(() {
+            _isOutOfPaper = false;
+            _warningMessage = null;
             _statusMessage = 'Printing completed successfully!';
             _progressPercent = 100;
             _isCompleted = true;
+          });
+        } else if (order.isOutOfPaper) {
+          setState(() {
+            _isOutOfPaper = true;
+            _warningMessage = order.errorMessage ??
+                'Printer is out of paper. Please load paper into the tray to continue.';
+            _statusMessage = 'Printer is paused: Out of paper.';
+            _progressPercent = 65;
+          });
+        } else if (status == 'PRINTING') {
+          setState(() {
+            _isOutOfPaper = false;
+            _warningMessage = null;
+            _statusMessage = 'Printing document on physical printer...';
+            _progressPercent = 75;
           });
         } else if (status == 'FAILED') {
           timer.cancel();
           _animController.stop();
           setState(() {
-            _errorMessage = 'Print job failed on physical printer.';
+            _errorMessage = order.errorMessage ?? 'Print job failed on physical printer.';
           });
         }
       } catch (_) {
-        if (ticks >= 4) {
-          timer.cancel();
-          _animController.stop();
+        // Continue polling without setting false completion
+        if (ticks < 10) {
           setState(() {
-            _statusMessage = 'Printing completed successfully!';
-            _progressPercent = 100;
-            _isCompleted = true;
-          });
-        } else {
-          setState(() {
-            _progressPercent = 60 + (ticks * 10);
-            _statusMessage = 'Printing pages... ($_progressPercent%)';
+            _statusMessage = 'Printing in progress...';
           });
         }
       }
@@ -237,6 +250,63 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTheme.primary,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                              ),
+                            ] else if (_isOutOfPaper) ...[
+                              Container(
+                                width: 84,
+                                height: 84,
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.warningSurface,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 56,
+                                  color: AppTheme.warning,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Printer Out of Paper',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.warning,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _warningMessage ??
+                                    'The print job is queued in the printer buffer. Please add paper into the printer feed tray to resume printing.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                              ),
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.warningSurface,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppTheme.warning.withOpacity(0.3)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(AppTheme.warning),
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Waiting for paper... Printing will resume automatically',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.warning),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ] else ...[

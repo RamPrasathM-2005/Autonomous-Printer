@@ -169,10 +169,16 @@ class OrderService:
                 any_colour = True
 
             doc_path = storage_service.resolve_storage_key(doc.storage_key)
+            item_sides = getattr(item.settings, 'sides', 'one-sided') or 'one-sided'
+            item_orient = getattr(item.settings, 'orientation', 'portrait') or 'portrait'
+            item_paper = getattr(item.settings, 'paperSize', 'A4') or 'A4'
             documents_for_merge.append({
                 "path": doc_path,
                 "pages": selected_pages,
                 "copies": item.settings.copies,
+                "sides": item_sides,
+                "orientation": item_orient,
+                "paper_size": item_paper,
                 "is_image": doc.mime_type.startswith("image/") or doc_path.suffix.lower() in [".png", ".jpg", ".jpeg", ".webp"]
             })
             items_summary.append({
@@ -181,6 +187,9 @@ class OrderService:
                 "pages": item_pages,
                 "copies": item.settings.copies,
                 "colour": item.settings.colour,
+                "sides": item_sides,
+                "orientation": item_orient,
+                "paper_size": item_paper,
                 "amount": item_price
             })
 
@@ -192,14 +201,27 @@ class OrderService:
         target_combined_path = storage_service.storage_root / target_combined_rel
         target_combined_path.parent.mkdir(parents=True, exist_ok=True)
 
+        any_duplex = any(d["sides"] in ["two-sided-long-edge", "two-sided-short-edge", "duplex"] for d in documents_for_merge)
+
         writer = PdfWriter()
         for doc_item in documents_for_merge:
             f_path = doc_item["path"]
             sel_pages = doc_item["pages"]
             copies = doc_item["copies"]
+            doc_duplex = doc_item["sides"] in ["two-sided-long-edge", "two-sided-short-edge", "duplex"]
+            orientation = doc_item["orientation"].lower()
+
             for _ in range(copies):
+                # If printer is printing duplex, ensure new document copy starts on a new physical sheet (odd page)
+                if any_duplex and len(writer.pages) % 2 != 0:
+                    writer.add_blank_page()
+
                 if doc_item["is_image"]:
                     with Image.open(f_path) as img:
+                        if orientation == "landscape" and img.width < img.height:
+                            img = img.rotate(90, expand=True)
+                        elif orientation == "portrait" and img.width > img.height:
+                            img = img.rotate(90, expand=True)
                         rgb_img = img.convert("RGB")
                         buf = io.BytesIO()
                         rgb_img.save(buf, format="PDF")
@@ -207,13 +229,24 @@ class OrderService:
                         img_reader = PdfReader(buf)
                         for p in img_reader.pages:
                             writer.add_page(p)
+                            if any_duplex and not doc_duplex:
+                                writer.add_blank_page()
                 else:
                     reader = PdfReader(str(f_path))
                     t_pages = len(reader.pages)
                     pages_to_add = sel_pages if sel_pages else list(range(1, t_pages + 1))
                     for p_num in pages_to_add:
                         if 1 <= p_num <= t_pages:
-                            writer.add_page(reader.pages[p_num - 1])
+                            p = reader.pages[p_num - 1]
+                            w = float(p.mediabox.width)
+                            h = float(p.mediabox.height)
+                            if orientation == "landscape" and w < h:
+                                p.rotate(90)
+                            elif orientation == "portrait" and w > h:
+                                p.rotate(90)
+                            writer.add_page(p)
+                            if any_duplex and not doc_duplex:
+                                writer.add_blank_page()
 
         with open(target_combined_path, "wb") as f_out:
             writer.write(f_out)
@@ -242,6 +275,9 @@ class OrderService:
         combined_settings = req.settings.model_dump(by_alias=True) if req.settings else {}
         combined_settings["colour"] = any_colour
         combined_settings["copies"] = 1
+        combined_settings["sides"] = "two-sided-long-edge" if any_duplex else "one-sided"
+        combined_settings["pageRange"] = "all"
+        combined_settings["page_range"] = "all"
         combined_settings["items"] = items_summary
 
         order = Order(

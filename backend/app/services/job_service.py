@@ -76,6 +76,10 @@ class JobService:
             job.status = PrintJobStatus.PRINTING
             if update.cupsJobId:
                 job.cups_job_id = update.cupsJobId
+            if update.errorCode:
+                job.error_code = update.errorCode
+            if update.message:
+                job.error_message = update.message
             if order.status == OrderStatus.RELEASED:
                 validate_order_transition(order.status, OrderStatus.PRINTING)
                 order.status = OrderStatus.PRINTING
@@ -83,6 +87,8 @@ class JobService:
 
         elif target_status == PrintJobStatus.COMPLETED:
             job.status = PrintJobStatus.COMPLETED
+            job.error_code = None
+            job.error_message = None
             if order.status == OrderStatus.PRINTING:
                 validate_order_transition(order.status, OrderStatus.COMPLETED)
                 order.status = OrderStatus.COMPLETED
