@@ -806,9 +806,6 @@ KIOSK_HTML = """<!DOCTYPE html>
         <div class="qr-url-pill" id="kioskQrUrlText">
           {{ web_url }}
         </div>
-        <div id="kioskTunnelBadge" style="display: {{ 'inline-flex' if is_tunneled else 'none' }}; align-items: center; justify-content: center; gap: 6px; margin: 8px auto 0; font-size: 0.75rem; font-weight: 700; color: #60a5fa; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); padding: 4px 12px; border-radius: 20px; width: fit-content;">
-          ⚡ Cloudflare Quick Tunnel Active
-        </div>
 
         <!-- Direct Actions -->
         <div class="action-group">

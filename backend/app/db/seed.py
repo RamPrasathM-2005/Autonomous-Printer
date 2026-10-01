@@ -98,19 +98,19 @@ def seed():
             printer2 = Printer(
                 id="printer_central_02",
                 server_id="PRINT-SERVER-001",
-                cups_printer_name="Printer_2",
-                display_name="Secondary Station Printer (Printer 2)",
-                supports_color=True,
-                supports_duplex=False,
+                cups_printer_name="HP_LaserJet_400_M401dn_E9A0F4",
+                display_name="HP LaserJet 400 M401dn (Unit 2)",
+                supports_color=False,
+                supports_duplex=True,
                 is_active=True
             )
             db.add(printer2)
-            print("  - Created printer 2: Printer_2 (Secondary Printer)")
+            print("  - Created printer 2: HP_LaserJet_400_M401dn_E9A0F4 (Unit 2)")
         else:
-            printer2.cups_printer_name = "Printer_2"
-            printer2.display_name = "Secondary Station Printer (Printer 2)"
-            printer2.supports_color = True
-            printer2.supports_duplex = False
+            printer2.cups_printer_name = "HP_LaserJet_400_M401dn_E9A0F4"
+            printer2.display_name = "HP LaserJet 400 M401dn (Unit 2)"
+            printer2.supports_color = False
+            printer2.supports_duplex = True
 
         db.commit()
         print("[SUCCESS] Database seeding complete!")

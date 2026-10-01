@@ -62,13 +62,24 @@ class OTPService:
                     "otp_hash": hashed_p1,
                     "active": True
                 },
+                "HP_LaserJet_400_M401dn_E9A0F4": {
+                    "printer_id": "printer_central_02",
+                    "printer_name": "HP LaserJet 400 M401dn (Unit 2)",
+                    "cups_printer_name": "HP_LaserJet_400_M401dn_E9A0F4",
+                    "description": "High-Speed Laser • Duplex B&W",
+                    "type": "B&W Laser",
+                    "badge": "Station Unit 2",
+                    "otp": otp_p2,
+                    "otp_hash": hashed_p2,
+                    "active": True
+                },
                 "Printer_2": {
                     "printer_id": "printer_central_02",
-                    "printer_name": "Secondary Station Printer",
-                    "cups_printer_name": "Printer_2",
-                    "description": "Standard Station Printer • Color Supported",
-                    "type": "Color / Tray 2",
-                    "badge": "Central Station - Tray 2",
+                    "printer_name": "HP LaserJet 400 M401dn (Unit 2)",
+                    "cups_printer_name": "HP_LaserJet_400_M401dn_E9A0F4",
+                    "description": "High-Speed Laser • Duplex B&W",
+                    "type": "B&W Laser",
+                    "badge": "Station Unit 2",
                     "otp": otp_p2,
                     "otp_hash": hashed_p2,
                     "active": True

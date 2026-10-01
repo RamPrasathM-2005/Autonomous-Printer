@@ -54,7 +54,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   double _printProgress = 0.0;
 
   static const String _kPrinter1Id = 'HP_LaserJet_400_M401dn_F36EC0';
-  static const String _kPrinter2Id = 'Printer_2';
+  static const String _kPrinter2Id = 'HP_LaserJet_400_M401dn_E9A0F4';
 
   @override
   void initState() {
@@ -558,9 +558,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               Expanded(
                 child: _buildPrinterCard(
                   name: _kPrinter1Id,
-                  title: 'HP LaserJet 400',
+                  title: 'HP LaserJet (Unit 1)',
                   subtitle: 'Duplex • B&W • Fast',
-                  trayLabel: 'Tray 1 • Standard',
+                  trayLabel: 'Unit 1 • Ready',
                   icon: Icons.print_rounded,
                   accentColor: const Color(0xFF2563EB),
                 ),
@@ -569,10 +569,10 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               Expanded(
                 child: _buildPrinterCard(
                   name: _kPrinter2Id,
-                  title: 'Secondary Printer',
-                  subtitle: 'Color / Media',
-                  trayLabel: 'Tray 2 • Special',
-                  icon: Icons.color_lens_outlined,
+                  title: 'HP LaserJet (Unit 2)',
+                  subtitle: 'Duplex • B&W • Fast',
+                  trayLabel: 'Unit 2 • Ready',
+                  icon: Icons.print_rounded,
                   accentColor: const Color(0xFF059669),
                 ),
               ),
