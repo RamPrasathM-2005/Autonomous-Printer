@@ -7,6 +7,7 @@ import '../models/payment.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
+import '../widgets/workflow_stepper.dart';
 import 'payment_success_screen.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
@@ -229,41 +230,48 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 960),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 780;
+      body: Column(
+        children: [
+          const WorkflowStepper(currentStep: 3),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 780;
 
-                final itemsWidget = _buildDocumentItemsList();
-                final summaryWidget = _buildSummaryCard(finalAmount);
+                      final itemsWidget = _buildDocumentItemsList();
+                      final summaryWidget = _buildSummaryCard(finalAmount);
 
-                if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: itemsWidget),
-                      const SizedBox(width: 24),
-                      Expanded(flex: 2, child: summaryWidget),
-                    ],
-                  );
-                }
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 3, child: itemsWidget),
+                            const SizedBox(width: 24),
+                            Expanded(flex: 2, child: summaryWidget),
+                          ],
+                        );
+                      }
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    itemsWidget,
-                    const SizedBox(height: 16),
-                    summaryWidget,
-                  ],
-                );
-              },
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          itemsWidget,
+                          const SizedBox(height: 16),
+                          summaryWidget,
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -552,21 +560,6 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          OutlinedButton(
-            onPressed: _busy ? null : () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(42),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Modify Print Settings',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
 

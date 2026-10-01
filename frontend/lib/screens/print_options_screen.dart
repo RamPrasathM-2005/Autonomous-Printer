@@ -9,6 +9,7 @@ import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
 import '../widgets/real_document_preview.dart';
+import '../widgets/workflow_stepper.dart';
 import 'document_editor_screen.dart';
 import 'order_summary_screen.dart';
 
@@ -99,23 +100,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     });
   }
 
-  void _setAllColorMode(bool isColor) {
-    setState(() {
-      _globalIsColor = isColor;
-      for (int i = 0; i < _configs.length; i++) {
-        _configs[i] = _configs[i].copyWith(isColor: isColor);
-      }
-    });
-  }
-
-  void _setAllSides(String sides) {
-    setState(() {
-      _globalSides = sides;
-      for (int i = 0; i < _configs.length; i++) {
-        _configs[i] = _configs[i].copyWith(sides: sides);
-      }
-    });
-  }
 
   void _toggleDocumentColor(int index) {
     setState(() {
@@ -296,107 +280,136 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 840;
+      body: Column(
+        children: [
+          const WorkflowStepper(currentStep: 2),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 840;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(12, 16, 12, 90),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1080),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Error Banner
-                    if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFFECACA)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline, size: 16, color: Color(0xFFB91C1C)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMessage!,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFFB91C1C)),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 14, color: Color(0xFFB91C1C)),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => setState(() => _errorMessage = null),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // 1. Global Print Settings Card
-                    _buildGlobalSettingsCard(isWide),
-
-                    const SizedBox(height: 16),
-
-                    // 2. Quick Batch Actions Toolbar
-                    _buildBatchToolbar(),
-
-                    const SizedBox(height: 14),
-
-                    // 3. Section Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Text(
-                              'Uploaded Documents',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1080),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Error Banner
+                          if (_errorMessage != null) ...[
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFFECACA)),
                               ),
-                              child: Text(
-                                '${_configs.length}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline, size: 16, color: Color(0xFFB91C1C)),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMessage!,
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFFB91C1C)),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 14, color: Color(0xFFB91C1C)),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => setState(() => _errorMessage = null),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // 1. Global Print Settings Card
+                          _buildGlobalSettingsCard(isWide),
+
+                          // Single Add Files button placed directly below Global Settings card
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _isUploadingMore ? null : _pickMoreFiles,
+                                icon: _isUploadingMore
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.add_circle_outline_rounded, size: 18),
+                                label: Text(
+                                  _isUploadingMore ? 'Adding Files...' : '+ Add More Files',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.primary,
+                                  side: const BorderSide(color: AppTheme.primary, width: 1.2),
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  backgroundColor: AppTheme.primary.withValues(alpha: 0.04),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                        const Text(
-                          'Tap card to edit range',
-                          style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                          ),
 
-                    // 4. Responsive Document Cards Grid
-                    _buildDocumentGrid(constraints.maxWidth),
-                  ],
-                ),
-              ),
+                          // 2. Section Header
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Uploaded Documents',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${_configs.length}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Text(
+                                'Tap card to edit range',
+                                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          // 3. Responsive Document Cards Grid
+                          _buildDocumentGrid(constraints.maxWidth),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
       // Sticky Bottom Price & Continue Bar
       bottomNavigationBar: Container(
@@ -548,55 +561,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildBatchToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.bolt, size: 15, color: AppTheme.primary),
-          const SizedBox(width: 4),
-          const Text(
-            'Quick Apply All:',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-          ),
-          const Spacer(),
-          _buildQuickActionBtn('All B&W', () => _setAllColorMode(false)),
-          const SizedBox(width: 6),
-          _buildQuickActionBtn('All Color', () => _setAllColorMode(true)),
-          const SizedBox(width: 6),
-          _buildQuickActionBtn('All 2-Sided', () => _setAllSides('two-sided-long-edge')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActionBtn(String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.primary,
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildColorModeSelector() {
     return Column(
@@ -837,8 +801,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
       crossAxisCount = 3;
     }
 
-    final totalItems = _configs.length + 1; // +1 for "Add More Files" card
-
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -848,11 +810,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         mainAxisSpacing: 10,
         childAspectRatio: maxWidth < 400 ? 0.96 : 0.92,
       ),
-      itemCount: totalItems,
+      itemCount: _configs.length,
       itemBuilder: (context, index) {
-        if (index == _configs.length) {
-          return _buildAddMoreFilesCard();
-        }
         return _buildDocumentCard(_configs[index], index);
       },
     );
@@ -1035,69 +994,4 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildAddMoreFilesCard() {
-    return InkWell(
-      onTap: _pickMoreFiles,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceWhite,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppTheme.primary.withValues(alpha: 0.35),
-            style: BorderStyle.solid,
-            width: 1.5,
-          ),
-        ),
-        child: Center(
-          child: _isUploadingMore
-              ? const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Uploading...',
-                      style: TextStyle(fontSize: 10, color: AppTheme.textSecondary),
-                    ),
-                  ],
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: AppTheme.primary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      '+ Add Files',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                    const Text(
-                      'PDF, JPG, PNG',
-                      style: TextStyle(fontSize: 9, color: AppTheme.textSecondary),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
 }

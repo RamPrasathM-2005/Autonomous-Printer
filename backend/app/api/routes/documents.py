@@ -49,6 +49,58 @@ def get_document_details(
 
     return doc
 
+@router.get("/{document_id}/preview")
+def get_document_preview(
+    document_id: str,
+    page: int = 1,
+    dpi: int = 120,
+    db: Session = Depends(get_db)
+):
+    """
+    Renders high-quality preview of PDF or image documents.
+    Fast server-side rendering with PyMuPDF for all devices and web.
+    """
+    from fastapi.responses import Response, FileResponse
+    from app.services.storage_service import storage_service
+    import fitz
+
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc or doc.status == DocumentStatus.DELETED:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="NOT_FOUND",
+            message="Document not found."
+        )
+
+    file_path = storage_service.resolve_storage_key(doc.storage_key)
+    if not file_path.exists():
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="FILE_NOT_FOUND",
+            message="Document file not found on disk."
+        )
+
+    mime = (doc.mime_type or "").lower()
+    if mime == "application/pdf" or file_path.suffix.lower() == ".pdf":
+        try:
+            pdf = fitz.open(str(file_path))
+            total = len(pdf)
+            page_idx = max(0, min(page - 1, total - 1)) if total > 0 else 0
+            pdf_page = pdf.load_page(page_idx)
+            pix = pdf_page.get_pixmap(dpi=dpi)
+            png_bytes = pix.tobytes("png")
+            pdf.close()
+            return Response(content=png_bytes, media_type="image/png")
+        except Exception as e:
+            raise AppException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                error_code="PREVIEW_RENDER_ERROR",
+                message=f"Failed to render PDF preview: {e}"
+            )
+    else:
+        return FileResponse(str(file_path), media_type=mime or "image/png")
+
+
 @router.delete("/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: str,

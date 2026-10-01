@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
 import '../services/api_service.dart';
+import '../widgets/workflow_stepper.dart';
 import 'upload_screen.dart';
 
 class PrintProgressScreen extends StatefulWidget {
@@ -107,7 +108,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
       ),
       body: Column(
         children: [
-          // WorkflowStepper removed — no top flow bar
+          const WorkflowStepper(currentStep: 5),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),

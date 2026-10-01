@@ -149,8 +149,18 @@ class OrderOtp {
   final String orderId;
   final String otp;
   final String expiresAt;
+  final Map<String, dynamic>? printerOtps;
+  final String? selectedPrinter;
+  final bool printerSelectionLocked;
 
-  OrderOtp({required this.orderId, required this.otp, required this.expiresAt});
+  OrderOtp({
+    required this.orderId,
+    required this.otp,
+    required this.expiresAt,
+    this.printerOtps,
+    this.selectedPrinter,
+    this.printerSelectionLocked = false,
+  });
 
   String get otpCode => otp;
 
@@ -159,6 +169,11 @@ class OrderOtp {
       orderId: json['orderId'] ?? json['order_id'] ?? '',
       otp: json['otp'] ?? '',
       expiresAt: json['expiresAt'] ?? json['expires_at'] ?? '',
+      printerOtps: json['printerOtps'] ?? json['printer_otps'],
+      selectedPrinter: json['selectedPrinter'] ?? json['selected_printer'],
+      printerSelectionLocked:
+          json['printerSelectionLocked'] == true ||
+          json['printer_selection_locked'] == true,
     );
   }
 }

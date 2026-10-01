@@ -8,6 +8,7 @@ import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_service.dart';
 import '../services/razorpay_web_service.dart';
+import '../widgets/workflow_stepper.dart';
 import 'payment_success_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -390,40 +391,47 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Payment')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth < 760) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          details,
-                          const SizedBox(height: 16),
-                          summary,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 3, child: details),
-                        const SizedBox(width: 24),
-                        Expanded(flex: 2, child: summary),
-                      ],
-                    );
-                  },
+      body: Column(
+        children: [
+          const WorkflowStepper(currentStep: 3),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth < 760) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                details,
+                                const SizedBox(height: 16),
+                                summary,
+                              ],
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: details),
+                              const SizedBox(width: 24),
+                              Expanded(flex: 2, child: summary),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

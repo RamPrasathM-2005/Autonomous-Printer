@@ -141,3 +141,47 @@ def test_maintenance_cleanup(client, test_user, db_session):
     assert "deleted_documents" in data
     db_session.refresh(doc)
     assert doc.status == DocumentStatus.DELETED
+
+def test_dual_printer_otps_and_one_time_switch_lock(client, test_print_server, test_agent_token, db_session):
+    pdf_bytes = create_sample_pdf(1)
+    up = client.post("/api/documents/upload", files={"file": ("doc_dual.pdf", pdf_bytes, "application/pdf")}).json()
+    order = client.post("/api/orders", json={"document_id": up["documentId"], "print_server_id": test_print_server.id, "settings": {"copies": 1}}).json()
+
+    # Get OTP info
+    res = client.get(f"/api/orders/{order['id']}/otp")
+    assert res.status_code == 200
+    otp_data = res.json()
+    assert "printerOtps" in otp_data
+    potps = otp_data["printerOtps"]
+    assert "HP_LaserJet_400_M401dn_F36EC0" in potps
+    assert "Printer_2" in potps
+    otp1 = potps["HP_LaserJet_400_M401dn_F36EC0"]["otp"]
+    otp2 = potps["Printer_2"]["otp"]
+    assert otp1 != otp2
+
+    # Switch printer allowed once
+    switch_res = client.post(f"/api/orders/{order['id']}/printer", json={"cups_printer_name": "Printer_2"})
+    assert switch_res.status_code == 200
+    assert switch_res.json()["printerSelectionLocked"] == True
+
+    # Switching a second time must be BLOCKED
+    switch_res2 = client.post(f"/api/orders/{order['id']}/printer", json={"cups_printer_name": "HP_LaserJet_400_M401dn_F36EC0"})
+    assert switch_res2.status_code == 400
+    assert switch_res2.json()["error"] == "PRINTER_LOCKED"
+
+    # Mark payment captured so release can proceed
+    from app.db.models.payment import Payment, PaymentStatus
+    import uuid
+    pmt = Payment(id=f"pmt_{uuid.uuid4().hex[:8]}", order_id=order["id"], razorpay_order_id="rzp_test", status=PaymentStatus.CAPTURED, amount=2.0, currency="INR")
+    db_session.add(pmt)
+    db_session.commit()
+
+    # Release using OTP 2
+    rel_res = client.post("/api/agent/release-kiosk", json={"otp": otp2})
+    assert rel_res.status_code == 200
+    assert rel_res.json()["status"] == "RELEASED"
+
+    # Crucial: Using OTP 1 now MUST FAIL with ALREADY_PRINTED because both OTPs are expired
+    rel_res2 = client.post("/api/agent/release-kiosk", json={"otp": otp1})
+    assert rel_res2.status_code == 400
+    assert rel_res2.json()["error"] == "ALREADY_PRINTED"

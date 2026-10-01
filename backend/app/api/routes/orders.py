@@ -142,11 +142,15 @@ def get_order_otp(
         order.updated_at = now
         db.commit()
 
-    plaintext, expires_at = otp_service.get_otp_for_order(db, order.id)
+    plaintext, expires_at, printer_otps = otp_service.get_otp_for_order(db, order.id)
+    cur_settings = dict(order.print_settings or {})
     return OTPResponse(
         order_id=order.id,
         otp=plaintext,
-        expires_at=expires_at
+        expires_at=expires_at,
+        printer_otps=printer_otps,
+        selected_printer=cur_settings.get("cups_printer_name"),
+        printer_selection_locked=cur_settings.get("printer_selection_locked", False)
     )
 
 class SelectPrinterRequest(BaseModel):
@@ -168,15 +172,27 @@ def select_order_printer(
             message="Order not found."
         )
 
+    current_settings = dict(order.print_settings or {})
+
+    # Check if switching is already locked (one-time switch policy)
+    if current_settings.get("printer_selection_locked", False):
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="PRINTER_LOCKED",
+            message="Printer selection has already been locked and cannot be switched again."
+        )
+
     chosen_printer = payload.cups_printer_name or payload.printer_name or payload.printer_id
     if payload.printer_id and not payload.cups_printer_name:
         p = db.query(Printer).filter(Printer.id == payload.printer_id).first()
         if p:
             chosen_printer = p.cups_printer_name
 
-    current_settings = dict(order.print_settings or {})
     current_settings["printer_name"] = chosen_printer
     current_settings["cups_printer_name"] = chosen_printer
+    current_settings["selected_printer"] = chosen_printer
+    current_settings["printer_switch_count"] = current_settings.get("printer_switch_count", 0) + 1
+    current_settings["printer_selection_locked"] = True
     order.print_settings = current_settings
 
     # Also update any queued print job
@@ -186,7 +202,8 @@ def select_order_printer(
     return {
         "status": "SUCCESS",
         "orderId": order_id,
-        "selectedPrinter": chosen_printer
+        "selectedPrinter": chosen_printer,
+        "printerSelectionLocked": True
     }
 
 @router.post("/{order_id}/release")

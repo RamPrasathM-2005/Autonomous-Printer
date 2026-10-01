@@ -15,9 +15,6 @@ import '../services/document_bytes_cache.dart';
 import '../widgets/workflow_stepper.dart';
 import 'print_options_screen.dart';
 
-import 'payment_screen.dart';
-import 'otp_release_screen.dart';
-import 'print_progress_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Security: dangerous extensions that must never be uploaded
@@ -119,52 +116,6 @@ class _UploadScreenState extends State<UploadScreen>
   PrintServer? _selectedStation;
   bool _isLoadingStations = true;
 
-  Future<void> _resumeOrder() async {
-    try {
-      final orders = await _apiService.listOrders();
-      if (!mounted) return;
-      if (orders.isEmpty) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('No orders yet.')));
-        return;
-      }
-      final order = await showDialog<dynamic>(
-        context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('Your orders'),
-          children: orders
-              .map(
-                (order) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, order),
-                  child: Text(
-                    '${order.currency} ${order.amount.toStringAsFixed(2)} - ${order.statusLabel}\n${order.id}',
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      );
-      if (order == null || !mounted) return;
-      final Widget screen;
-      if (order.status == 'CREATED') {
-        screen = PaymentScreen(order: order);
-      } else if (order.status == 'WAITING_FOR_OTP') {
-        screen = OtpReleaseScreen(orderId: order.id);
-      } else {
-        screen = PrintProgressScreen(
-          orderId: order.id,
-          otp: '',
-          printServerId: order.printServerId,
-        );
-      }
-      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userError(e))));
-      }
-    }
-  }
 
   @override
   void initState() {
@@ -521,11 +472,6 @@ class _UploadScreenState extends State<UploadScreen>
           ],
         ),
         actions: [
-          if (_apiService.hasSession)
-            TextButton(
-              onPressed: _resumeOrder,
-              child: const Text('Your orders'),
-            ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
             child: ElevatedButton.icon(
@@ -582,11 +528,6 @@ class _UploadScreenState extends State<UploadScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Printer Station Banner
-                      _buildStationCard(),
-
-                      const SizedBox(height: 20),
-
                       // Section Title & File Count (always visible)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -919,104 +860,6 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  Widget _buildStationCard() {
-    final isOnline = _selectedStation?.status.toLowerCase() == 'online';
-    return InkWell(
-      onTap: _showServerConfigDialog,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceWhite,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.border),
-          boxShadow: AppTheme.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isOnline
-                    ? AppTheme.successSurface
-                    : AppTheme.warningSurface,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.print_rounded,
-                color: isOnline ? AppTheme.success : AppTheme.warning,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          _selectedStation?.name ?? 'Print Station',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isOnline
-                              ? AppTheme.successSurface
-                              : AppTheme.warningSurface,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          (isOnline ? 'ONLINE' : 'CONNECTING').toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: isOnline
-                                ? const Color(0xFF047857)
-                                : const Color(0xFFB45309),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _selectedStation?.location ?? (isOnline ? 'Available' : 'Tap to configure server IP'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isOnline ? AppTheme.textSecondary : AppTheme.primary,
-                      fontWeight: isOnline ? FontWeight.normal : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.tune_rounded,
-              size: 16,
-              color: AppTheme.textMuted,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildDropzoneCard() {
     return Container(

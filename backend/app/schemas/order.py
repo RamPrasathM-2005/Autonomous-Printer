@@ -126,10 +126,19 @@ class OTPResponse(BaseModel):
     orderId: str = Field(..., alias="orderId", serialization_alias="orderId")
     otp: str
     expiresAt: datetime = Field(..., alias="expiresAt", serialization_alias="expiresAt")
+    printerOtps: Optional[Dict[str, Any]] = Field(default=None, alias="printerOtps", serialization_alias="printerOtps")
+    selectedPrinter: Optional[str] = Field(default=None, alias="selectedPrinter", serialization_alias="selectedPrinter")
+    printerSelectionLocked: Optional[bool] = Field(default=False, alias="printerSelectionLocked", serialization_alias="printerSelectionLocked")
 
     def __init__(self, **data):
         if "order_id" in data and "orderId" not in data:
             data["orderId"] = data.pop("order_id")
         if "expires_at" in data and "expiresAt" not in data:
             data["expiresAt"] = data.pop("expires_at")
+        if "printer_otps" in data and "printerOtps" not in data:
+            data["printerOtps"] = data.pop("printer_otps")
+        if "selected_printer" in data and "selectedPrinter" not in data:
+            data["selectedPrinter"] = data.pop("selected_printer")
+        if "printer_selection_locked" in data and "printerSelectionLocked" not in data:
+            data["printerSelectionLocked"] = data.pop("printer_selection_locked")
         super().__init__(**data)

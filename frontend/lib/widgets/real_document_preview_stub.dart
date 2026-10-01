@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../services/document_bytes_cache.dart';
@@ -26,7 +27,7 @@ class RealDocumentPreviewWidget extends StatelessWidget {
 
     if (!document.isPdf && bytes != null && bytes.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(isThumbnail ? 4 : 8),
+        borderRadius: BorderRadius.circular(isThumbnail ? 6 : 10),
         child: Image.memory(
           bytes,
           width: width,
@@ -36,6 +37,37 @@ class RealDocumentPreviewWidget extends StatelessWidget {
       );
     }
 
+    final previewUrl =
+        '${ApiConfig.backendUrl}/api/documents/${document.id}/preview?page=1';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(isThumbnail ? 6 : 10),
+      child: Image.network(
+        previewUrl,
+        width: width,
+        height: height,
+        fit: isThumbnail ? BoxFit.cover : BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: width,
+            height: height,
+            color: const Color(0xFFF1F5F9),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => _buildFallback(),
+      ),
+    );
+  }
+
+  Widget _buildFallback() {
     return Container(
       width: width,
       height: height,

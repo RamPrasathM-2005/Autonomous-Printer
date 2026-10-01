@@ -7,6 +7,7 @@ import '../models/document.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
 import '../services/invoice_service.dart';
+import '../widgets/workflow_stepper.dart';
 import 'otp_release_screen.dart';
 import 'upload_screen.dart';
 
@@ -131,11 +132,15 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+      body: Column(
+        children: [
+          const WorkflowStepper(currentStep: 4),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isNarrow = constraints.maxWidth < 460;
@@ -566,15 +571,6 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      TextButton.icon(
-                        onPressed: _printAnother,
-                        icon: const Icon(Icons.home_outlined, size: 16),
-                        label: const Text('Back to Home', style: TextStyle(fontSize: 12)),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
                     ] else ...[
                       Row(
                         children: [
@@ -625,33 +621,19 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _printAnother,
-                              icon: const Icon(Icons.add_to_photos_outlined, size: 16),
-                              label: const Text('Print Another Document'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _printAnother,
+                          icon: const Icon(Icons.add_to_photos_outlined, size: 16),
+                          label: const Text('Print Another Document'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextButton.icon(
-                              onPressed: _printAnother,
-                              icon: const Icon(Icons.home_outlined, size: 16),
-                              label: const Text('Back to Home'),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                     const SizedBox(height: 20),
@@ -662,6 +644,9 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
           ),
         ),
       ),
+    ),
+  ],
+),
     );
   }
 
