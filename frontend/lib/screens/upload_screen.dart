@@ -12,6 +12,7 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
+import '../widgets/workflow_stepper.dart';
 import 'print_options_screen.dart';
 
 import 'payment_screen.dart';
@@ -503,14 +504,27 @@ class _UploadScreenState extends State<UploadScreen>
               onPressed: _resumeOrder,
               child: const Text('Your orders'),
             ),
-          IconButton(
-            onPressed: _showServerConfigDialog,
-            icon: const Icon(
-              Icons.dns_outlined,
-              color: AppTheme.textSecondary,
-              size: 20,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+            child: ElevatedButton.icon(
+              onPressed: _showServerConfigDialog,
+              icon: const Icon(Icons.dns_rounded, size: 14, color: Colors.white),
+              label: const Text(
+                'Server',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-            tooltip: 'Server Settings',
           ),
           _isLoadingStations
               ? const Center(
@@ -536,7 +550,7 @@ class _UploadScreenState extends State<UploadScreen>
       ),
       body: Column(
         children: [
-          // WorkflowStepper removed — no top flow bar on any page
+          const WorkflowStepper(currentStep: 1),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),

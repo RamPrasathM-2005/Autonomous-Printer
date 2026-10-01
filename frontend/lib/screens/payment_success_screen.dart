@@ -30,6 +30,7 @@ class PaymentSuccessScreen extends StatefulWidget {
 
 class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
   bool _isGeneratingInvoice = false;
+  String _selectedPrinterName = 'HP_LaserJet_400_M401dn_F36EC0';
 
   String get _formattedDate {
     final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
@@ -380,6 +381,10 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
                     ),
                     const SizedBox(height: 14),
 
+                    // Destination Printer Selection
+                    _buildDestinationPrinterSelection(),
+                    const SizedBox(height: 14),
+
                     // 3. Payment & Transaction Breakdown Card
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -687,4 +692,145 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
       ),
     );
   }
+
+  Widget _buildDestinationPrinterSelection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.print_outlined, color: AppTheme.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Select Destination Printer',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Choose which printer will print your order at this station:',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'HP_LaserJet_400_M401dn_F36EC0',
+                  title: 'HP LaserJet 400',
+                  subtitle: 'Duplex • B&W • Fast',
+                  icon: Icons.print_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'Printer_2',
+                  title: 'Secondary Printer',
+                  subtitle: 'Color / Tray 2 • High Res',
+                  icon: Icons.color_lens_outlined,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinterCard({
+    required String name,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedPrinterName == name;
+    return InkWell(
+      onTap: () async {
+        setState(() {
+          _selectedPrinterName = name;
+        });
+        await ApiService().selectOrderPrinter(
+          orderId: widget.order.id,
+          cupsPrinterName: name,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Target printer assigned to $title'),
+              duration: const Duration(seconds: 1),
+              backgroundColor: AppTheme.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: isSelected ? AppTheme.primary : AppTheme.textSecondary),
+                const Spacer(),
+                if (isSelected)
+                  const Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.primary),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                subtitle,
+                style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

@@ -30,6 +30,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
   int _secondsLeft = 900; // 15 mins
   Timer? _countdownTimer;
+  String _selectedPrinterName = 'HP_LaserJet_400_M401dn_F36EC0';
 
   @override
   void initState() {
@@ -372,6 +373,8 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         ),
                       ),
 
+                      const SizedBox(height: 20),
+                      _buildDestinationPrinterSelection(),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -435,4 +438,139 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       ),
     );
   }
+
+  Widget _buildDestinationPrinterSelection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.print_outlined, color: AppTheme.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Select Destination Printer',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Two printers are connected to this station. Choose which printer will print your pages:',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'HP_LaserJet_400_M401dn_F36EC0',
+                  title: 'HP LaserJet 400',
+                  subtitle: 'Duplex • B&W • Fast',
+                  icon: Icons.print_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildPrinterCard(
+                  name: 'Printer_2',
+                  title: 'Secondary Printer',
+                  subtitle: 'Color / Tray 2 • High Res',
+                  icon: Icons.color_lens_outlined,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinterCard({
+    required String name,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedPrinterName == name;
+    return InkWell(
+      onTap: () async {
+        setState(() {
+          _selectedPrinterName = name;
+        });
+        await _apiService.selectOrderPrinter(
+          orderId: widget.orderId,
+          cupsPrinterName: name,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Target printer assigned to $title'),
+              duration: const Duration(seconds: 1),
+              backgroundColor: AppTheme.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: isSelected ? AppTheme.primary : AppTheme.textSecondary),
+                const Spacer(),
+                if (isSelected)
+                  const Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.primary),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                subtitle,
+                style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

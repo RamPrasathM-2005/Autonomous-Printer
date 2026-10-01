@@ -253,6 +253,25 @@ class ApiService {
     await _post('/api/orders/$id/release', {'otp': otp});
   }
 
+  Future<bool> selectOrderPrinter({
+    required String orderId,
+    required String cupsPrinterName,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/orders/$orderId/printer');
+      final response = await http
+          .post(
+            uri,
+            headers: await _headers(),
+            body: jsonEncode({'cups_printer_name': cupsPrinterName}),
+          )
+          .timeout(const Duration(seconds: 8));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<dynamic> _post(String path, Map<String, dynamic> data) async =>
       _decode(
         await http
