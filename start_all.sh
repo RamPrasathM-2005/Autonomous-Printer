@@ -8,8 +8,6 @@
 #   * Port 3100: React Web Customer Interface
 # ==============================================================================
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -78,7 +76,7 @@ cleanup() {
     wait 2>/dev/null || true
     echo -e "\033[1;32m[✓] All services cleanly stopped.\033[0m"
 }
-trap cleanup SIGINT SIGTERM EXIT
+trap cleanup SIGINT SIGTERM
 
 # 4. Launch FastAPI Backend (Port 8000)
 echo -e "\033[1;32m[1/4] Starting FastAPI Backend on http://0.0.0.0:8000 ...\033[0m"
