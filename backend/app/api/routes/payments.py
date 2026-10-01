@@ -8,6 +8,11 @@ from app.services.payment_service import payment_service
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
+@router.get("/capabilities")
+def payment_capabilities():
+    from app.config.settings import settings
+    return {"paymentMode": "test" if settings.RAZORPAY_KEY_ID.startswith("rzp_test_") else "live"}
+
 @router.post("/create", response_model=PaymentCreateResponse, status_code=status.HTTP_201_CREATED)
 def create_payment(
     req: PaymentCreateRequest,

@@ -6,9 +6,25 @@ class ApiConfig {
   static const String _keyAgentUrl = 'agent_base_url';
   static const String _keySelectedStationId = 'selected_station_id';
 
-  // Smart defaults: 127.0.0.1 works on Web, Desktop, and Physical Mobile (via adb reverse)
-  static String get defaultBackendUrl => 'http://127.0.0.1:8000';
-  static String get defaultAgentUrl => 'http://127.0.0.1:5001';
+  // Smart defaults: 127.0.0.1 for Web and Desktop, 10.0.2.2 for Android emulator
+  static String get defaultBackendUrl {
+    const configured = String.fromEnvironment('API_BASE_URL');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb && !['localhost', '127.0.0.1'].contains(Uri.base.host)) {
+      return Uri.base.origin;
+    }
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+        ? 'http://10.0.2.2:8000'
+        : 'http://127.0.0.1:8000';
+  }
+
+  static String get defaultAgentUrl {
+    const configured = String.fromEnvironment('AGENT_BASE_URL');
+    if (configured.isNotEmpty) return configured;
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+        ? 'http://10.0.2.2:5000'
+        : 'http://127.0.0.1:5000';
+  }
 
   static String backendUrl = defaultBackendUrl;
   static String agentUrl = defaultAgentUrl;
@@ -20,13 +36,14 @@ class ApiConfig {
     String? storedBackend = prefs.getString(_keyBackendUrl);
     String? storedAgent = prefs.getString(_keyAgentUrl);
 
-    // Auto-correct any leftover emulator loopback 10.0.2.2 to 127.0.0.1
-    if (storedBackend != null && storedBackend.contains('10.0.2.2')) {
-      storedBackend = 'http://127.0.0.1:8000';
+    // On Web, if stored URL is the Android emulator loopback 10.0.2.2, auto-correct to localhost
+    if (kIsWeb &&
+        (storedBackend == null || storedBackend.contains('10.0.2.2'))) {
+      storedBackend = defaultBackendUrl;
       await prefs.setString(_keyBackendUrl, storedBackend);
     }
-    if (storedAgent != null && (storedAgent.contains('10.0.2.2') || storedAgent.contains(':5000'))) {
-      storedAgent = 'http://127.0.0.1:5001';
+    if (kIsWeb && (storedAgent == null || storedAgent.contains('10.0.2.2'))) {
+      storedAgent = defaultAgentUrl;
       await prefs.setString(_keyAgentUrl, storedAgent);
     }
 

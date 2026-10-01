@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -187,4 +187,29 @@ def select_order_printer(
         "status": "SUCCESS",
         "orderId": order_id,
         "selectedPrinter": chosen_printer
+    }
+
+@router.post("/{order_id}/release")
+def release_order_endpoint(
+    order_id: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    otp = str(payload.get("otp", "")).strip()
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="NOT_FOUND",
+            message="Order not found."
+        )
+    job = otp_service.verify_and_release_job(
+        db=db,
+        server_id=order.print_server_id,
+        plaintext_otp=otp
+    )
+    return {
+        "status": "RELEASED",
+        "orderId": order.id,
+        "jobId": job.id
     }

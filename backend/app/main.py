@@ -30,6 +30,7 @@ from app.api.routes.payments import router as payments_router
 from app.api.routes.agent import router as agent_router
 from app.api.routes.maintenance import router as maintenance_router
 from app.api.routes.kiosk import router as kiosk_router
+from app.api.routes.sessions import router as sessions_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,6 +88,7 @@ app.include_router(payments_router)
 app.include_router(agent_router)
 app.include_router(maintenance_router)
 app.include_router(kiosk_router)
+app.include_router(sessions_router)
 
 from app.schemas.agent import AgentReleaseRequest
 from app.db.session import get_db

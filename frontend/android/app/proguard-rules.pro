@@ -1,10 +1,8 @@
-# Flutter Wrapper Rules
--keep class io.flutter.** { *; }
--keep class com.razorpay.** { *; }
+# Razorpay Standard Checkout Flutter integration.
+-keepattributes *Annotation*
 -dontwarn com.razorpay.**
-
-# Suppress Play Core SplitInstall warnings for minified release build
--dontwarn com.google.android.play.core.**
--dontwarn com.google.android.play.core.splitcompat.**
--dontwarn com.google.android.play.core.splitinstall.**
--dontwarn com.google.android.play.core.tasks.**
+-keep class com.razorpay.** { *; }
+-optimizations !method/inlining/
+-keepclasseswithmembers class * {
+    public void onPayment*(...);
+}

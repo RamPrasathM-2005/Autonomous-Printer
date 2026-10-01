@@ -90,9 +90,18 @@ PIDS+=($!)
 sleep 2
 
 # 6. Launch Flutter Web Frontend (Port 3000)
-if [ ! -d "$SCRIPT_DIR/frontend/build/web" ] && command -v flutter &> /dev/null; then
-    echo -e "\033[1;36m[*] Building Flutter Web production bundle...\033[0m"
-    (cd "$SCRIPT_DIR/frontend" && flutter build web --release)
+FORCE_BUILD=false
+for arg in "$@"; do
+    case "$arg" in
+        --build|-build|-Build|-b) FORCE_BUILD=true ;;
+    esac
+done
+
+if [ "$FORCE_BUILD" = true ] || [ ! -d "$SCRIPT_DIR/frontend/build/web" ]; then
+    if command -v flutter &> /dev/null; then
+        echo -e "\033[1;36m[*] Building Flutter Web production bundle...\033[0m"
+        (cd "$SCRIPT_DIR/frontend" && flutter build web --release)
+    fi
 fi
 
 if [ -d "$SCRIPT_DIR/frontend/build/web" ]; then

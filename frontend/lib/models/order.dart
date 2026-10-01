@@ -42,14 +42,13 @@ class PrintSettings {
   });
 
   Map<String, dynamic> toJson() => {
-        'pageRange': pageRange,
-        'copies': copies,
-        'colour': colour,
-        'sides': sides,
-        'paperSize': paperSize,
-        'orientation': orientation,
-        'mockPrinting': mockPrinting,
-      };
+    'pageRange': pageRange,
+    'copies': copies,
+    'colour': colour,
+    'sides': sides,
+    'paperSize': paperSize,
+    'orientation': orientation,
+  };
 
   factory PrintSettings.fromJson(Map<String, dynamic> json) {
     return PrintSettings(
@@ -81,8 +80,6 @@ class PrintOrder {
   final double amount;
   final String currency;
   final String status;
-  final String? errorCode;
-  final String? errorMessage;
   final String createdAt;
 
   PrintOrder({
@@ -96,12 +93,10 @@ class PrintOrder {
     required this.amount,
     required this.currency,
     required this.status,
-    this.errorCode,
-    this.errorMessage,
     required this.createdAt,
   });
 
-  String get formattedAmount => '₹${amount.toStringAsFixed(2)}';
+  String get formattedAmount => 'â‚¹${amount.toStringAsFixed(2)}';
 
   bool get isWaitingOtp => status.toUpperCase() == 'WAITING_FOR_OTP';
   String get statusLabel => switch (status.toUpperCase()) {
@@ -120,9 +115,6 @@ class PrintOrder {
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
   bool get isPrinting => status.toUpperCase() == 'PRINTING';
   bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
-  bool get isOutOfPaper =>
-      (errorCode?.toUpperCase() == 'OUT_OF_PAPER') ||
-      (errorMessage?.toLowerCase().contains('paper') == true);
 
   bool get isColor => printSettings.colour;
   bool get duplex => printSettings.sides != 'one-sided';
@@ -131,7 +123,7 @@ class PrintOrder {
 
   factory PrintOrder.fromJson(Map<String, dynamic> json) {
     return PrintOrder(
-      id: json['id'] ?? json['orderId'] ?? '',
+      id: json['id'] ?? '',
       userId: (json['userId'] ?? json['user_id'])?.toString(),
       documentId: json['documentId'] ?? json['document_id'] ?? '',
       printServerId: json['printServerId'] ?? json['print_server_id'] ?? '',
@@ -148,8 +140,6 @@ class PrintOrder {
           : 0.0,
       currency: json['currency'] ?? 'INR',
       status: json['status'] ?? 'WAITING_FOR_PAYMENT',
-      errorCode: json['errorCode'] ?? json['error_code'],
-      errorMessage: json['errorMessage'] ?? json['error_message'],
       createdAt: json['createdAt'] ?? json['created_at'] ?? '',
     );
   }
@@ -160,19 +150,15 @@ class OrderOtp {
   final String otp;
   final String expiresAt;
 
-  OrderOtp({
-    required this.orderId,
-    required this.otp,
-    required this.expiresAt,
-  });
+  OrderOtp({required this.orderId, required this.otp, required this.expiresAt});
 
   String get otpCode => otp;
 
   factory OrderOtp.fromJson(Map<String, dynamic> json) {
     return OrderOtp(
-      orderId: json['order_id'] ?? json['orderId'] ?? '',
+      orderId: json['orderId'] ?? json['order_id'] ?? '',
       otp: json['otp'] ?? '',
-      expiresAt: json['expires_at'] ?? json['expiresAt'] ?? '',
+      expiresAt: json['expiresAt'] ?? json['expires_at'] ?? '',
     );
   }
 }
