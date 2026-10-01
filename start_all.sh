@@ -176,7 +176,8 @@ fi
 echo -e "   \033[1m2. Physical Kiosk Screen:\033[0m      \033[1;34mhttp://127.0.0.1:5001/kiosk\033[0m"
 echo -e "   \033[1m3. FastAPI Backend & Docs:\033[0m     \033[1;32mhttp://127.0.0.1:8000/docs\033[0m"
 if [ -f "$SCRIPT_DIR/storage/tunnel_url.txt" ]; then
-    echo -e "   \033[1m4. Cloudflare Public URL:\033[0m      \033[1;33m$(cat "$SCRIPT_DIR/storage/tunnel_url.txt")\033[0m"
+    TUNNEL_DISPLAY=$(cat "$SCRIPT_DIR/storage/tunnel_url.txt" 2>/dev/null || true)
+    echo -e "   \033[1m4. Cloudflare Public URL:\033[0m      \033[1;33m$TUNNEL_DISPLAY\033[0m"
 fi
 echo -e "\033[1;32m====================================================================\033[0m"
 echo -e "   \033[2mPress Ctrl+C at any time to cleanly stop all running services.\033[0m"
