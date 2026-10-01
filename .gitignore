@@ -60,3 +60,4 @@ Thumbs.db
 print-agent/state/
 
 !docs/SECURITY.md
+!/AGENTS.md
