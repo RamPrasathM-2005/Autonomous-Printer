@@ -10,6 +10,7 @@ class PrintJobStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     FINAL_FAILED = "FINAL_FAILED"
+    CANCELLED = "CANCELLED"
 
 class PrintJob(Base):
     __tablename__ = "print_jobs"

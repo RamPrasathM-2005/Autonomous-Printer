@@ -14,3 +14,7 @@ foreach ($name in @('frontend', 'agent', 'reconciliation', 'backend')) {
     }
     Remove-Item -LiteralPath $stateFile
 }
+foreach ($extra in @('flutter_web.pid', 'hot_reload_trigger')) {
+    $extraFile = Join-Path $runtime $extra
+    if (Test-Path -LiteralPath $extraFile) { Remove-Item -LiteralPath $extraFile -Force }
+}

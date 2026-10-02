@@ -13,6 +13,7 @@ class OrderStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
     REFUNDED = "REFUNDED"
 
 class Order(Base):

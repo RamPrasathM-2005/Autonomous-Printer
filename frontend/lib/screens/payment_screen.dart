@@ -9,8 +9,11 @@ import '../models/document.dart';
 import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_service.dart';
+import '../services/order_recovery_service.dart';
 import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
+import 'upload_screen.dart';
+import '../widgets/payment_failed_dialog.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -35,6 +38,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void initState() {
     super.initState();
+    OrderRecoveryService().setActiveOrder(widget.order.id, stage: 'UNPAID');
     _loadCapabilities();
   }
 
@@ -68,6 +72,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final order = await _api.getOrder(widget.order.id);
     if (!mounted) return;
     if (order.status == 'WAITING_FOR_OTP' || order.status == 'PAID') {
+      OrderRecoveryService().setActiveOrder(order.id, stage: 'WAITING_FOR_OTP');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -106,10 +111,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
       if (!result.success) {
         if (mounted) {
-          setState(
-            () => _message = result.errorMessage == 'DISMISSED'
-                ? 'Checkout closed. Check payment status before paying again.'
-                : result.errorMessage,
+          setState(() {
+            _busy = false;
+            _message = 'Payment was not completed.';
+          });
+          PaymentFailedDialog.show(
+            context,
+            onRetry: () => _pay(),
+            onCancel: () => _handleCancelOrder(),
           );
         }
         return;
@@ -123,8 +132,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
       await _showConfirmedOrder(paymentId: result.razorpayPaymentId);
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _message = 'Payment unconfirmed. Check status before paying again.',
+        setState(() {
+          _busy = false;
+          _message = 'Payment unconfirmed. Check status before paying again.';
+        });
+        PaymentFailedDialog.show(
+          context,
+          onRetry: () => _pay(),
+          onCancel: () => _handleCancelOrder(),
         );
       }
     } finally {
@@ -151,6 +166,52 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _handleCancelOrder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: const Text(
+          'Are you sure you want to cancel this order? You can then start a fresh print job.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await _api.cancelOrder(widget.order.id);
+      OrderRecoveryService().clearActiveOrder();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const UploadScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message = userError(e, fallback: 'Could not cancel order. Please try again.');
+        });
+      }
     }
   }
 
@@ -516,6 +577,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: const Text(
                     'Check payment status',
                     style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                TextButton.icon(
+                  onPressed: _busy ? null : _handleCancelOrder,
+                  icon: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+                  label: const Text(
+                    'Cancel Order',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.danger,
+                    ),
                   ),
                 ),
 

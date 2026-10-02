@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/session_store.dart';
 import 'active_tunnel.dart';
 
 class ApiConfig {
@@ -44,6 +45,7 @@ class ApiConfig {
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    await SessionStore.init(prefs);
     String? storedBackend = prefs.getString(_keyBackendUrl);
     String? storedAgent = prefs.getString(_keyAgentUrl);
     // Smart Cloudflare Tunnel & Web Origin synchronization

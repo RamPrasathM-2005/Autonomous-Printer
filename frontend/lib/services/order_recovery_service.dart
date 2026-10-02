@@ -1,0 +1,171 @@
+import '../models/order.dart';
+import 'api_service.dart';
+import 'session_store.dart';
+
+enum RecoveryStage {
+  none,
+  unpaid,
+  waitingOtp,
+  printing,
+  completed,
+  terminated,
+}
+
+class OrderRecoveryResult {
+  final RecoveryStage stage;
+  final PrintOrder? order;
+  final OrderOtp? otp;
+  final String? selectedPrinter;
+  final bool printerSelectionLocked;
+  final bool canUploadNew;
+  final bool isCompletedReceipt;
+
+  const OrderRecoveryResult({
+    required this.stage,
+    this.order,
+    this.otp,
+    this.selectedPrinter,
+    this.printerSelectionLocked = false,
+    this.canUploadNew = true,
+    this.isCompletedReceipt = false,
+  });
+
+  bool get hasActiveUnfinishedOrder =>
+      stage == RecoveryStage.unpaid ||
+      stage == RecoveryStage.waitingOtp ||
+      stage == RecoveryStage.printing;
+}
+
+class OrderRecoveryService {
+  static const String _kActiveOrderId = 'autonomous_printer_active_order_id';
+  static const String _kLastCompletedOrderId = 'autonomous_printer_last_completed_order_id';
+  static const String _kActiveOrderStage = 'autonomous_printer_active_order_stage';
+
+  static final OrderRecoveryService _instance = OrderRecoveryService._internal();
+  factory OrderRecoveryService() => _instance;
+  OrderRecoveryService._internal();
+
+  final ApiService _api = ApiService();
+
+  String? get activeOrderId => readSessionValue(_kActiveOrderId);
+  String? get lastCompletedOrderId => readSessionValue(_kLastCompletedOrderId);
+  String? get activeOrderStage => readSessionValue(_kActiveOrderStage);
+
+  void setActiveOrder(String orderId, {String? stage}) {
+    writeSessionValue(_kActiveOrderId, orderId);
+    if (stage != null) {
+      writeSessionValue(_kActiveOrderStage, stage);
+    }
+  }
+
+  void updateActiveStage(String stage) {
+    writeSessionValue(_kActiveOrderStage, stage);
+  }
+
+  void markCompleted(String orderId) {
+    clearSessionValue(_kActiveOrderId);
+    clearSessionValue(_kActiveOrderStage);
+    writeSessionValue(_kLastCompletedOrderId, orderId);
+  }
+
+  void clearAll() {
+    clearSessionValue(_kActiveOrderId);
+    clearSessionValue(_kActiveOrderStage);
+    clearSessionValue(_kLastCompletedOrderId);
+  }
+
+  /// Print Again clears completed order and prepares clean state for a new order.
+  void printAgain() {
+    clearAll();
+  }
+
+  void clearActiveOrder() {
+    clearSessionValue(_kActiveOrderId);
+    clearSessionValue(_kActiveOrderStage);
+  }
+
+  /// Single source of truth backend check.
+  /// Queries backend /api/orders/active using cached order IDs and customer session.
+  Future<OrderRecoveryResult> checkRecovery() async {
+    try {
+      final cachedActiveId = activeOrderId;
+      final cachedCompletedId = lastCompletedOrderId;
+
+      final data = await _api.checkActiveOrder(
+        orderId: cachedActiveId ?? cachedCompletedId,
+      );
+      final hasActive = data['hasActiveOrder'] == true;
+      final stageStr = (data['stage'] as String? ?? 'NONE').toUpperCase();
+      final orderData = data['order'] as Map<String, dynamic>?;
+      final PrintOrder? order =
+          orderData != null ? PrintOrder.fromJson(orderData) : null;
+
+      if (hasActive && order != null) {
+        setActiveOrder(order.id, stage: stageStr);
+
+        if (stageStr == 'UNPAID') {
+          return OrderRecoveryResult(
+            stage: RecoveryStage.unpaid,
+            order: order,
+            canUploadNew: false,
+          );
+        } else if (stageStr == 'WAITING_FOR_OTP') {
+          final otpData = data['otp'] as Map<String, dynamic>?;
+          final otp = otpData != null ? OrderOtp.fromJson(otpData) : null;
+          final selectedPrinter = data['selectedPrinter'] as String?;
+          final isLocked = data['printerSelectionLocked'] == true;
+
+          return OrderRecoveryResult(
+            stage: RecoveryStage.waitingOtp,
+            order: order,
+            otp: otp,
+            selectedPrinter: selectedPrinter,
+            printerSelectionLocked: isLocked,
+            canUploadNew: false,
+          );
+        } else if (stageStr == 'PRINTING') {
+          return OrderRecoveryResult(
+            stage: RecoveryStage.printing,
+            order: order,
+            selectedPrinter: data['selectedPrinter'] as String?,
+            canUploadNew: false,
+          );
+        }
+      }
+
+      // Completed receipt reload
+      if (stageStr == 'COMPLETED' && order != null) {
+        markCompleted(order.id);
+        return OrderRecoveryResult(
+          stage: RecoveryStage.completed,
+          order: order,
+          selectedPrinter: data['selectedPrinter'] as String?,
+          canUploadNew: false,
+          isCompletedReceipt: true,
+        );
+      }
+
+      if (stageStr == 'TERMINATED') {
+        clearActiveOrder();
+        return const OrderRecoveryResult(
+          stage: RecoveryStage.terminated,
+          canUploadNew: true,
+        );
+      }
+
+      if (cachedActiveId != null) {
+        clearActiveOrder();
+      }
+
+      return const OrderRecoveryResult(
+        stage: RecoveryStage.none,
+        canUploadNew: true,
+      );
+    } catch (_) {
+      return const OrderRecoveryResult(
+        stage: RecoveryStage.none,
+        canUploadNew: true,
+      );
+    }
+  }
+}

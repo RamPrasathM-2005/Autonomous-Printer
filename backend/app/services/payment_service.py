@@ -37,9 +37,9 @@ class PaymentService:
                 message=f"Order status is {order.status.value}, cannot initiate payment."
             )
 
-        # Check if pending payment already exists
+        # If payment is already captured, return existing
         existing_payment = db.query(Payment).filter(Payment.order_id == order_id).first()
-        if existing_payment:
+        if existing_payment and existing_payment.status == PaymentStatus.CAPTURED:
             amount_paise = int(existing_payment.amount * 100)
             return PaymentCreateResponse(
                 payment_id=existing_payment.id,
@@ -63,7 +63,7 @@ class PaymentService:
                 rzp_resp = client.order.create({
                     "amount": amount_paise,
                     "currency": order.currency,
-                    "receipt": order.id,
+                    "receipt": f"{order.id}_{uuid.uuid4().hex[:6]}",
                     "notes": {"userId": str(user_id)}
                 })
                 rzp_order_id = rzp_resp["id"]
@@ -72,19 +72,27 @@ class PaymentService:
                 print(f"[WARN] Razorpay live order creation failed: {e}. Falling back to test ID.")
                 rzp_order_id = f"order_rzp_{uuid.uuid4().hex[:14]}"
 
-        payment = Payment(
-            id=payment_id,
-            order_id=order.id,
-            user_id=user_id,
-            razorpay_order_id=rzp_order_id,
-            amount=order.amount,
-            currency=order.currency,
-            status=PaymentStatus.PENDING,
-            created_at=datetime.now(timezone.utc)
-        )
-        db.add(payment)
-        db.commit()
-        db.refresh(payment)
+        if existing_payment:
+            existing_payment.razorpay_order_id = rzp_order_id
+            existing_payment.status = PaymentStatus.PENDING
+            existing_payment.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing_payment)
+            payment = existing_payment
+        else:
+            payment = Payment(
+                id=payment_id,
+                order_id=order.id,
+                user_id=user_id,
+                razorpay_order_id=rzp_order_id,
+                amount=order.amount,
+                currency=order.currency,
+                status=PaymentStatus.PENDING,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(payment)
+            db.commit()
+            db.refresh(payment)
 
         return PaymentCreateResponse(
             payment_id=payment.id,

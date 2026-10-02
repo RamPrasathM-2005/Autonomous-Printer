@@ -59,7 +59,12 @@ class RefundService:
         rzp_refund_id = f"rfnd_{uuid.uuid4().hex[:14]}"
         success = True
 
-        if payment.razorpay_payment_id and settings.RAZORPAY_KEY_ID != "rzp_test_key_id":
+        is_test_payment = (
+            payment.razorpay_payment_id.startswith("pay_test_")
+            or payment.razorpay_payment_id.startswith("pay_simulated_")
+            or settings.RAZORPAY_KEY_ID in ["rzp_test_key_id", "test_key"]
+        )
+        if payment.razorpay_payment_id and not is_test_payment:
             try:
                 import razorpay
                 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))

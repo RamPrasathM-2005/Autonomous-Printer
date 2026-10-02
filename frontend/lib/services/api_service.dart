@@ -252,7 +252,19 @@ class ApiService {
           body: canonical,
         )
         .timeout(const Duration(seconds: 60));
-    return PrintOrder.fromJson(_decode(response));
+    final createdOrder = PrintOrder.fromJson(_decode(response));
+    return createdOrder;
+  }
+
+  Future<Map<String, dynamic>> checkActiveOrder({String? orderId}) async {
+    final query = orderId != null && orderId.trim().isNotEmpty
+        ? '?order_id=${Uri.encodeComponent(orderId.trim())}'
+        : '';
+    final uri = Uri.parse('$_baseUrl/api/orders/active$query');
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(const Duration(seconds: 8));
+    return Map<String, dynamic>.from(_decode(response));
   }
 
   Future<List<PrintOrder>> listOrders() async => (_decode(
@@ -277,6 +289,18 @@ class ApiService {
           .timeout(const Duration(seconds: 10)),
     ),
   );
+
+  Future<Map<String, dynamic>> cancelOrder(String id, {String? reason}) async {
+    final payload = {'reason': reason ?? 'Customer cancelled order'};
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/api/orders/$id/cancel'),
+          headers: await _headers(),
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 15));
+    return Map<String, dynamic>.from(_decode(response));
+  }
 
   Future<PaymentInitiateResponse> createPaymentOrder(String id) =>
       createPayment(id);

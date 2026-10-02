@@ -1,4 +1,17 @@
-param([switch]$Build, [switch]$NoBrowser)
+param(
+    [switch]$Build,
+    [switch]$NoBrowser,
+    [Alias('dev', 'hotreload', 'hot_reload', 'd')]
+    [switch]$Hot
+)
+
+# Support double-dash and legacy flags passed in $args
+foreach ($a in $args) {
+    if ($a -match '^--?(hot|dev|hotreload|hot_reload|d)$') { $Hot = $true }
+    if ($a -match '^--?build$') { $Build = $true }
+    if ($a -match '^--?nobrowser$') { $NoBrowser = $true }
+}
+
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runtime = Join-Path $projectRoot '.runtime'
@@ -8,7 +21,10 @@ if (-not (Test-Path -LiteralPath $python)) {
 }
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 $webRoot = Join-Path $projectRoot 'frontend\build\web'
-if ($Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))) {
+
+if ($Hot) {
+    Write-Host "[*] Windows Hot-Reload mode enabled."
+} elseif ($Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))) {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
     $flutter = Get-Command flutter -ErrorAction Stop
     Push-Location (Join-Path $projectRoot 'frontend')
@@ -22,7 +38,7 @@ if ($Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))
     } finally { Pop-Location }
 }
 
-function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl) {
+function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [int]$TimeoutSec = 45) {
     $stateFile = Join-Path $runtime "$Name.json"
     if (Test-Path -LiteralPath $stateFile) {
         $saved = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
@@ -45,7 +61,7 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl) {
         -RedirectStandardError (Join-Path $runtime "$Name.err.log")
     @{ Id = $proc.Id; StartTicks = $proc.StartTime.ToUniversalTime().Ticks.ToString() } |
         ConvertTo-Json | Set-Content -LiteralPath $stateFile
-    $deadline = (Get-Date).AddSeconds(45)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
     do {
         $proc.Refresh()
         if ($proc.HasExited) { throw "$Name exited. Check .runtime\$Name.err.log and .runtime\$Name.out.log." }
@@ -59,7 +75,12 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl) {
     throw "$Name did not become ready. Check .runtime logs."
 }
 
-Start-LocalService 'backend' (Join-Path $projectRoot 'backend') '-u -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers' 8000 'http://127.0.0.1:8000/health'
+$backendArgs = '-u -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers'
+if ($Hot) {
+    $backendArgs += ' --reload'
+    Write-Host "[*] Backend live auto-reload enabled (uvicorn --reload)."
+}
+Start-LocalService 'backend' (Join-Path $projectRoot 'backend') $backendArgs 8000 'http://127.0.0.1:8000/health'
 Start-LocalService 'reconciliation' (Join-Path $projectRoot 'backend') '-u -m app.worker' 0 $null
 Push-Location (Join-Path $projectRoot 'print-agent')
 try {
@@ -68,8 +89,20 @@ try {
     $agentPort = [int]$agentPort
 } finally { Pop-Location }
 Start-LocalService 'agent' (Join-Path $projectRoot 'print-agent') '-u -m app.main' $agentPort "http://127.0.0.1:$agentPort/health"
-Start-LocalService 'frontend' $projectRoot '-u scripts/serve_frontend.py' 3000 'http://127.0.0.1:3000/'
-Write-Host "`nApp: http://127.0.0.1:3000/"
+
+if ($Hot) {
+    Write-Host "[*] Starting Flutter Web in LIVE HOT-RELOAD mode on http://127.0.0.1:3000 ..."
+    Start-LocalService 'frontend' $projectRoot '-u scripts/flutter_hot_watcher.py --serve --port 3000 --host 127.0.0.1' 3000 'http://127.0.0.1:3000/' 90
+} else {
+    Start-LocalService 'frontend' $projectRoot '-u scripts/serve_frontend.py' 3000 'http://127.0.0.1:3000/'
+}
+
+if ($Hot) {
+    Write-Host "`nApp: http://127.0.0.1:3000/ [HOT-RELOAD ACTIVE]"
+    Write-Host 'Live watching frontend/lib/*.dart and backend/*.py for changes.'
+} else {
+    Write-Host "`nApp: http://127.0.0.1:3000/ (Pass -Hot for live hot-reload mode)"
+}
 Write-Host 'API docs: http://127.0.0.1:8000/docs'
 Write-Host 'Printing progress is shown inside the authenticated frontend.'
 Write-Host "Station keypad: http://127.0.0.1:$agentPort/kiosk"

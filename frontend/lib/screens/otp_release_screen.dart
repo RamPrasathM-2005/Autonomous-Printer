@@ -11,6 +11,7 @@ import '../models/order.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/invoice_service.dart';
+import '../services/order_recovery_service.dart';
 import 'upload_screen.dart';
 
 class OtpReleaseScreen extends StatefulWidget {
@@ -49,6 +50,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _isSubmittingPrinter = false;
   bool _otpRevealed = false;
   bool _isGeneratingInvoice = false;
+  bool _isCancelling = false;
 
   // 'WAITING', 'PRINTING', 'COMPLETED'
   String _printStatus = 'WAITING';
@@ -88,10 +90,16 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
     try {
       final order = await _apiService.getOrder(widget.orderId);
-      final otp = await _apiService.getOrderOtp(widget.orderId);
+      final statusUpper = order.status.toUpperCase();
+      OrderOtp? otp;
+      if (['WAITING_FOR_OTP', 'PAID', 'JOB_QUEUED'].contains(statusUpper)) {
+        try {
+          otp = await _apiService.getOrderOtp(widget.orderId);
+        } catch (_) {}
+      }
 
       DateTime? expiry;
-      if (otp.expiresAt.isNotEmpty) {
+      if (otp != null && otp.expiresAt.isNotEmpty) {
         try {
           expiry = DateTime.tryParse(
             otp.expiresAt.endsWith('Z') ? otp.expiresAt : '${otp.expiresAt}Z',
@@ -104,20 +112,23 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
       final existingPrinter = order.printSettings.toJson()['printer_name'] ??
           order.printSettings.toJson()['cups_printer_name'] ??
-          otp.selectedPrinter;
+          otp?.selectedPrinter;
 
-      final isLocked = otp.printerSelectionLocked ||
+      final isLocked = (otp?.printerSelectionLocked ?? false) ||
           (order.printSettings.toJson()['printer_selection_locked'] == true);
 
-      final statusUpper = order.status.toUpperCase();
       String currentPrintStatus = 'WAITING';
       double currentProgress = 0.0;
-      if (statusUpper == 'PRINTING') {
+      if (statusUpper == 'PRINTING' || statusUpper == 'RELEASED') {
         currentPrintStatus = 'PRINTING';
-        currentProgress = 0.70;
+        currentProgress = statusUpper == 'RELEASED' ? 0.40 : 0.75;
+        OrderRecoveryService().updateActiveStage('PRINTING');
       } else if (statusUpper == 'COMPLETED' || statusUpper == 'SUCCESS') {
         currentPrintStatus = 'COMPLETED';
         currentProgress = 1.0;
+        OrderRecoveryService().markCompleted(order.id);
+      } else {
+        OrderRecoveryService().setActiveOrder(order.id, stage: 'WAITING_FOR_OTP');
       }
 
       setState(() {
@@ -165,6 +176,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       final status = updated.status.toUpperCase();
 
       if (status == 'PRINTING' || status == 'RELEASED') {
+        OrderRecoveryService().updateActiveStage('PRINTING');
         if (_printStatus != 'PRINTING') {
           setState(() {
             _printStatus = 'PRINTING';
@@ -173,6 +185,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           _startPolling(intervalMs: 400);
         }
       } else if (status == 'COMPLETED' || status == 'SUCCESS') {
+        OrderRecoveryService().markCompleted(widget.orderId);
         if (_printStatus != 'COMPLETED') {
           setState(() {
             _printStatus = 'COMPLETED';
@@ -375,11 +388,80 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   void _printAnotherDocument() {
     _pollingTimer?.cancel();
     _countdownTimer?.cancel();
+    OrderRecoveryService().printAgain();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const UploadScreen()),
       (route) => false,
     );
+  }
+
+  Future<void> _handleCancelAndRefund() async {
+    final refundAmount = _order?.formattedAmount ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order & Refund?'),
+        content: Text(
+          refundAmount.isNotEmpty
+              ? 'Are you sure you want to cancel? Your release OTP will be permanently deactivated and $refundAmount will be refunded.'
+              : 'Are you sure you want to cancel? Your release OTP will be permanently deactivated and your payment will be refunded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel & Refund'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    try {
+      _pollingTimer?.cancel();
+      _countdownTimer?.cancel();
+      await _apiService.cancelOrder(widget.orderId);
+      OrderRecoveryService().clearActiveOrder();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order cancelled and refund initiated.'),
+          backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const UploadScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCancelling = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userError(
+                e,
+                fallback: 'Could not cancel order. It may already be printing.',
+              ),
+            ),
+            backgroundColor: AppTheme.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _fetchOtpAndOrder();
+      }
+    }
   }
 
   @override
@@ -415,15 +497,34 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                       _buildPaymentSummary(),
                       const SizedBox(height: 14),
 
-                      // 2. Printer selection (before lock)
-                      if (!_isPrinterLocked && !_otpRevealed) ...[
+                      // 2. Printer selection (before lock - only when awaiting release)
+                      if (!_isPrinterLocked && !_otpRevealed && _printStatus == 'WAITING') ...[
                         _buildPrinterSelector(),
                         const SizedBox(height: 14),
                       ],
 
-                      // 3. OTP section (after lock)
-                      if (_otpRevealed || _isPrinterLocked) ...[
+                      // 3. OTP section (after lock - only when awaiting release, never when printing or completed)
+                      if ((_otpRevealed || _isPrinterLocked) && _printStatus == 'WAITING') ...[
                         _buildOtpSection(),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Cancel & Refund (only while waiting for release)
+                      if (_printStatus == 'WAITING') ...[
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _isCancelling ? null : _handleCancelAndRefund,
+                            icon: const Icon(Icons.cancel_outlined, size: 16, color: AppTheme.danger),
+                            label: Text(
+                              _isCancelling ? 'Cancelling...' : 'Cancel Order & Request Refund',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.danger,
+                              ),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 14),
                       ],
 

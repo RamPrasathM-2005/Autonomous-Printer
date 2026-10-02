@@ -15,8 +15,12 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
+import '../services/order_recovery_service.dart';
 import '../widgets/server_config_dialog.dart';
+import 'otp_release_screen.dart';
+import 'payment_screen.dart';
 import 'print_options_screen.dart';
+import 'print_progress_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Security: dangerous extensions that must never be uploaded
@@ -120,8 +124,9 @@ class UploadScreen extends StatefulWidget {
 }
 
 class _UploadScreenState extends State<UploadScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
+  final OrderRecoveryService _orderRecovery = OrderRecoveryService();
 
   final List<SelectedDocItem> _selectedFiles = [];
   bool _isUploading = false;
@@ -133,10 +138,155 @@ class _UploadScreenState extends State<UploadScreen>
   List<PrintServer> _stations = [];
   bool _isLoadingStations = true;
 
+  bool _isCheckingOrderRecovery = false;
+  OrderRecoveryResult? _activeRecovery;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadStations();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndRestoreExistingOrder();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndRestoreExistingOrder(forceNavigate: false);
+    }
+  }
+
+  Future<void> _checkAndRestoreExistingOrder({bool forceNavigate = true}) async {
+    if (_isCheckingOrderRecovery) return;
+    setState(() => _isCheckingOrderRecovery = true);
+
+    try {
+      final recovery = await _orderRecovery.checkRecovery();
+      if (!mounted) return;
+
+      setState(() {
+        _activeRecovery = recovery;
+        _isCheckingOrderRecovery = false;
+      });
+
+      if (!forceNavigate) return;
+
+      if (recovery.stage == RecoveryStage.unpaid && recovery.order != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentScreen(order: recovery.order!),
+          ),
+        ).then((_) {
+          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+        });
+      } else if (recovery.stage == RecoveryStage.waitingOtp && recovery.order != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpReleaseScreen(
+              orderId: recovery.order!.id,
+              order: recovery.order!,
+            ),
+          ),
+        ).then((_) {
+          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+        });
+      } else if (recovery.stage == RecoveryStage.printing && recovery.order != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PrintProgressScreen(
+              orderId: recovery.order!.id,
+              otp: '',
+              printServerId: recovery.order!.printServerId,
+            ),
+          ),
+        ).then((_) {
+          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+        });
+      } else if (recovery.stage == RecoveryStage.completed && recovery.order != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpReleaseScreen(
+              orderId: recovery.order!.id,
+              order: recovery.order!,
+            ),
+          ),
+        ).then((_) {
+          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isCheckingOrderRecovery = false);
+    }
+  }
+
+  Future<void> _handleCancelActiveOrder() async {
+    final order = _activeRecovery?.order;
+    if (order == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: const Text(
+          'Are you sure you want to cancel this unpaid order and start a new print job?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _apiService.cancelOrder(order.id);
+      OrderRecoveryService().clearActiveOrder();
+      if (!mounted) return;
+      setState(() {
+        _activeRecovery = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order cancelled. You can now start fresh.'),
+          backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userError(e, fallback: 'Could not cancel order. Try again.'),
+            ),
+            backgroundColor: AppTheme.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadStations() async {
@@ -205,6 +355,54 @@ class _UploadScreenState extends State<UploadScreen>
   int get _totalSizeBytes => _selectedFiles.fold(0, (sum, f) => sum + f.size);
 
   Future<void> _pickFiles() async {
+    if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
+      if (_activeRecovery!.stage == RecoveryStage.unpaid) {
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Unpaid Order Exists'),
+            content: const Text(
+              'You have an unpaid order in progress. Would you like to resume payment or cancel it to start fresh?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text(
+                  'Cancel & Start Fresh',
+                  style: TextStyle(color: AppTheme.danger),
+                ),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop('resume'),
+                child: const Text('Resume Order'),
+              ),
+            ],
+          ),
+        );
+
+        if (choice == 'resume') {
+          _checkAndRestoreExistingOrder(forceNavigate: true);
+          return;
+        } else if (choice == 'cancel') {
+          final order = _activeRecovery?.order;
+          if (order != null) {
+            try {
+              await _apiService.cancelOrder(order.id);
+            } catch (_) {}
+          }
+          OrderRecoveryService().clearActiveOrder();
+          if (mounted) {
+            setState(() => _activeRecovery = null);
+          }
+        } else {
+          return;
+        }
+      } else {
+        _checkAndRestoreExistingOrder(forceNavigate: true);
+        return;
+      }
+    }
+
     setState(() {
       _uploadError = null;
     });
@@ -271,6 +469,11 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Future<void> _handleNext() async {
+    if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
+      _checkAndRestoreExistingOrder(forceNavigate: true);
+      return;
+    }
+
     if (_selectedFiles.isEmpty) {
       setState(() {
         _uploadError = 'Select a document.';
@@ -357,6 +560,15 @@ class _UploadScreenState extends State<UploadScreen>
                       // Error banner
                       if (_uploadError != null) ...[
                         _buildErrorBanner(),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Order Recovery banner
+                      if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) ...[
+                        _buildActiveOrderBanner(),
+                        const SizedBox(height: 16),
+                      ] else if (_activeRecovery != null && _activeRecovery!.stage == RecoveryStage.completed) ...[
+                        _buildCompletedOrderBanner(),
                         const SizedBox(height: 16),
                       ],
 
@@ -539,6 +751,179 @@ class _UploadScreenState extends State<UploadScreen>
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveOrderBanner() {
+    final order = _activeRecovery?.order;
+    if (order == null) return const SizedBox.shrink();
+
+    final isUnpaid = _activeRecovery!.stage == RecoveryStage.unpaid;
+    final isWaitingOtp = _activeRecovery!.stage == RecoveryStage.waitingOtp;
+    final statusText = isUnpaid
+        ? 'Awaiting Payment'
+        : isWaitingOtp
+            ? 'Ready to Release (OTP)'
+            : 'Printing in Progress';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primarySurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primaryBorder),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.pending_actions_rounded,
+            color: AppTheme.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Order in progress (#${order.id})',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isUnpaid) ...[
+            OutlinedButton(
+              onPressed: _handleCancelActiveOrder,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.danger,
+                side: const BorderSide(color: AppTheme.dangerBorder),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          FilledButton(
+            onPressed: () => _checkAndRestoreExistingOrder(forceNavigate: true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Resume',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletedOrderBanner() {
+    final order = _activeRecovery?.order;
+    if (order == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.successSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.successBorder),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            color: AppTheme.success,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Order #${order.id} complete',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${order.totalPages} pages · ₹${order.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => _checkAndRestoreExistingOrder(forceNavigate: true),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.primaryBorder),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Receipt', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 6),
+          FilledButton(
+            onPressed: () {
+              _orderRecovery.printAgain();
+              setState(() => _activeRecovery = null);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.success,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Print Again', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

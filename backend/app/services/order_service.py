@@ -8,17 +8,27 @@ from fastapi import status
 from pypdf import PdfWriter, PdfReader
 from PIL import Image
 
+import app.db.base
 from app.db.models.order import Order, OrderStatus
 from app.db.models.document import Document, DocumentStatus
 from app.db.models.print_server import PrintServer, PrintServerStatus
+from app.db.models.print_job import PrintJob, PrintJobStatus
+from app.db.models.otp import OTP
 from app.schemas.order import OrderCreateRequest, OrderItemConfig, PrintSettingsSchema
 from app.services.pricing_service import pricing_service
 from app.services.storage_service import storage_service
+from app.services.refund_service import refund_service
 from app.utils.errors import AppException
+from app.utils.state_machine import validate_order_transition, validate_job_transition
 
 class OrderService:
     @staticmethod
-    def create_order(db: Session, req: OrderCreateRequest, user_id: Optional[int] = None) -> Order:
+    def create_order(
+        db: Session,
+        req: OrderCreateRequest,
+        user_id: Optional[int] = None,
+        session_token: Optional[str] = None
+    ) -> Order:
         # Validate print server
         server = db.query(PrintServer).filter(PrintServer.id == req.printServerId).first()
         if not server:
@@ -107,12 +117,16 @@ class OrderService:
 
             order_id = f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
+            single_settings = item.settings.model_dump(by_alias=True)
+            if session_token:
+                single_settings["session_token"] = session_token
+
             order = Order(
                 id=order_id,
                 user_id=user_id,
                 document_id=document.id,
                 print_server_id=server.id,
-                print_settings=item.settings.model_dump(by_alias=True),
+                print_settings=single_settings,
                 total_pages=total_pages,
                 copies=item.settings.copies,
                 amount=amount,
@@ -279,6 +293,8 @@ class OrderService:
         combined_settings["pageRange"] = "all"
         combined_settings["page_range"] = "all"
         combined_settings["items"] = items_summary
+        if session_token:
+            combined_settings["session_token"] = session_token
 
         order = Order(
             id=order_id,
@@ -297,5 +313,140 @@ class OrderService:
         db.commit()
         db.refresh(order)
         return order
+
+    @staticmethod
+    def cancel_order(
+        db: Session,
+        order_id: str,
+        user_id: Optional[int] = None,
+        session_token: Optional[str] = None,
+        reason: str = "User requested cancellation"
+    ) -> Dict[str, Any]:
+        """
+        Transactional cancellation of an order.
+        - For UNPAID (CREATED) orders: cancels order immediately and marks documents for cleanup.
+        - For PAID orders (WAITING_FOR_OTP, PAID, JOB_QUEUED): atomically invalidates OTPs,
+          cancels queued print job, marks documents for cleanup, and triggers full refund.
+        - For PRINTING, RELEASED, or COMPLETED orders: raises 400 error as physical printing
+          cannot be reversed.
+        """
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+        if not order:
+            raise AppException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                error_code="NOT_FOUND",
+                message="Order not found."
+            )
+
+        # Validate non-cancellable states
+        if order.status in [OrderStatus.RELEASED, OrderStatus.PRINTING, OrderStatus.COMPLETED]:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="ORDER_NOT_CANCELLABLE",
+                message="Order cannot be cancelled because printing has already started or completed."
+            )
+
+        if order.status == OrderStatus.CANCELLED:
+            return {
+                "status": "SUCCESS",
+                "orderId": order.id,
+                "orderStatus": "CANCELLED",
+                "refundRequired": False,
+                "message": "Order is already cancelled."
+            }
+
+        if order.status == OrderStatus.REFUNDED:
+            return {
+                "status": "SUCCESS",
+                "orderId": order.id,
+                "orderStatus": "REFUNDED",
+                "refundRequired": False,
+                "message": "Order is already cancelled and refunded."
+            }
+
+        now = datetime.now(timezone.utc)
+
+        # Helper to flag documents for cleanup
+        def _flag_documents_cleanup():
+            doc = db.query(Document).filter(Document.id == order.document_id).first()
+            if doc and doc.status == DocumentStatus.ACTIVE:
+                doc.status = DocumentStatus.CLEANUP_PENDING
+            items = (order.print_settings or {}).get("items", [])
+            for it in items:
+                c_id = it.get("document_id")
+                if c_id:
+                    c_doc = db.query(Document).filter(Document.id == c_id).first()
+                    if c_doc and c_doc.status == DocumentStatus.ACTIVE:
+                        c_doc.status = DocumentStatus.CLEANUP_PENDING
+
+        # Case 1: Unpaid Order
+        if order.status == OrderStatus.CREATED:
+            validate_order_transition(order.status, OrderStatus.CANCELLED)
+            order.status = OrderStatus.CANCELLED
+            order.updated_at = now
+            _flag_documents_cleanup()
+            db.commit()
+            db.refresh(order)
+            return {
+                "status": "SUCCESS",
+                "orderId": order.id,
+                "orderStatus": "CANCELLED",
+                "refundRequired": False,
+                "message": "Order cancelled successfully."
+            }
+
+        # Case 2: Paid Pre-Release Order (WAITING_FOR_OTP, PAID, JOB_QUEUED)
+        # 1. Atomically invalidate all active OTPs
+        otps = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).all()
+        for o in otps:
+            o.active = False
+        cur_settings = dict(order.print_settings or {})
+        if "printer_otps" in cur_settings:
+            for p_key, p_info in cur_settings["printer_otps"].items():
+                if isinstance(p_info, dict):
+                    p_info["active"] = False
+            order.print_settings = cur_settings
+
+        # 2. Cancel queued print job
+        job = db.query(PrintJob).filter(PrintJob.order_id == order.id).with_for_update().first()
+        if job:
+            if job.status in [PrintJobStatus.RELEASED, PrintJobStatus.PRINTING, PrintJobStatus.COMPLETED]:
+                raise AppException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    error_code="ORDER_NOT_CANCELLABLE",
+                    message="Print job has already started on the physical printer."
+                )
+            validate_job_transition(job.status, PrintJobStatus.CANCELLED)
+            job.status = PrintJobStatus.CANCELLED
+            job.error_message = reason
+            job.updated_at = now
+
+        # 3. Transition order status
+        validate_order_transition(order.status, OrderStatus.CANCELLED)
+        order.status = OrderStatus.CANCELLED
+        order.updated_at = now
+        _flag_documents_cleanup()
+        db.flush()
+
+        # 4. Process full automated refund
+        refund = refund_service.process_refund(
+            db=db,
+            order_id=order.id,
+            reason=reason or "Customer cancelled order before print release"
+        )
+
+        db.commit()
+        db.refresh(order)
+
+        return {
+            "status": "SUCCESS",
+            "orderId": order.id,
+            "orderStatus": order.status.value,
+            "refundRequired": True,
+            "refundId": refund.id,
+            "razorpayRefundId": refund.razorpay_refund_id,
+            "amount": float(refund.amount),
+            "message": "Order cancelled and full refund processed."
+        }
 
 order_service = OrderService()

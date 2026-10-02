@@ -11,8 +11,12 @@ import '../models/order.dart';
 import '../models/payment.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
+import '../services/order_recovery_service.dart';
 import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
+import 'print_progress_screen.dart';
+import 'upload_screen.dart';
+import '../widgets/payment_failed_dialog.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
   final PrintOrder? order;
@@ -48,6 +52,18 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     super.initState();
     _configs = widget.configs.map((c) => c.copyWith()).toList();
     _currentOrder = widget.order;
+    if (_currentOrder != null) {
+      final s = _currentOrder!.status.toUpperCase();
+      if (s == 'COMPLETED' || s == 'SUCCESS') {
+        OrderRecoveryService().markCompleted(_currentOrder!.id);
+      } else if (['WAITING_FOR_OTP', 'PAID', 'JOB_QUEUED'].contains(s)) {
+        OrderRecoveryService().setActiveOrder(_currentOrder!.id, stage: 'WAITING_FOR_OTP');
+      } else if (['PRINTING', 'RELEASED'].contains(s)) {
+        OrderRecoveryService().updateActiveStage('PRINTING');
+      } else {
+        OrderRecoveryService().setActiveOrder(_currentOrder!.id, stage: 'UNPAID');
+      }
+    }
     _loadCapabilities();
   }
 
@@ -108,6 +124,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     );
 
     _currentOrder = order;
+    OrderRecoveryService().setActiveOrder(order.id, stage: 'UNPAID');
     return order;
   }
 
@@ -133,10 +150,14 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
       if (!result.success) {
         if (mounted) {
-          setState(
-            () => _message = result.errorMessage == 'DISMISSED'
-                ? 'Checkout was dismissed. Check status or try again.'
-                : result.errorMessage,
+          setState(() {
+            _busy = false;
+            _message = 'Payment was not completed.';
+          });
+          PaymentFailedDialog.show(
+            context,
+            onRetry: () => _proceedToPayment(),
+            onCancel: () => _handleCancelOrder(),
           );
         }
         return;
@@ -150,6 +171,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       );
 
       final confirmedOrder = await _api.getOrder(order.id);
+      OrderRecoveryService().setActiveOrder(confirmedOrder.id, stage: 'WAITING_FOR_OTP');
 
       if (!mounted) return;
 
@@ -168,11 +190,17 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
+          _busy = false;
           _message = userError(
             e,
             fallback: 'Payment verification failed. Check status before trying again.',
           );
         });
+        PaymentFailedDialog.show(
+          context,
+          onRetry: () => _proceedToPayment(),
+          onCancel: () => _handleCancelOrder(),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -192,7 +220,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
       if (!mounted) return;
 
-      if (order.status == 'WAITING_FOR_OTP' || order.status == 'PAID') {
+      final s = order.status.toUpperCase();
+      if (['WAITING_FOR_OTP', 'PAID', 'JOB_QUEUED'].contains(s)) {
+        OrderRecoveryService().setActiveOrder(order.id, stage: 'WAITING_FOR_OTP');
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -204,6 +235,26 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             ),
           ),
         );
+      } else if (['PRINTING', 'RELEASED'].contains(s)) {
+        OrderRecoveryService().updateActiveStage('PRINTING');
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PrintProgressScreen(
+              orderId: order.id,
+              otp: '',
+              printServerId: order.printServerId,
+            ),
+          ),
+        );
+      } else if (['COMPLETED', 'SUCCESS'].contains(s)) {
+        OrderRecoveryService().markCompleted(order.id);
+        if (!mounted) return;
+        setState(() {
+          _currentOrder = order;
+          _message = 'This order has already completed printing.';
+        });
       } else {
         setState(
           () => _message = order.status == 'CREATED'
@@ -222,6 +273,54 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _handleCancelOrder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: const Text(
+          'Are you sure you want to cancel this order? Your uploaded document configuration will be discarded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      if (_currentOrder != null) {
+        await _api.cancelOrder(_currentOrder!.id);
+      }
+      OrderRecoveryService().clearActiveOrder();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const UploadScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message = userError(e, fallback: 'Could not cancel order. Please try again.');
+        });
+      }
     }
   }
 
@@ -595,40 +694,89 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     ),
                   ),
 
-                FilledButton(
-                  onPressed: _busy ? null : _proceedToPayment,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    backgroundColor: AppTheme.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                if (_currentOrder != null &&
+                    ['COMPLETED', 'SUCCESS'].contains(_currentOrder!.status.toUpperCase()))
+                  FilledButton(
+                    onPressed: () {
+                      OrderRecoveryService().printAgain();
+                      if (!mounted) return;
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UploadScreen()),
+                        (route) => false,
+                      );
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: AppTheme.success,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Print Again',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  FilledButton(
+                    onPressed: _busy ? null : _proceedToPayment,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Pay $amount',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.arrow_forward_rounded, size: 20),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Pay $amount',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
+
+                  if (_currentOrder != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _busy ? null : _checkPaymentStatus,
+                      child: const Text(
+                        'Check payment status',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.arrow_forward_rounded, size: 20),
-                    ],
-                  ),
-                ),
-
-                if (_currentOrder != null) ...[
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _busy ? null : _checkPaymentStatus,
-                    child: const Text(
-                      'Check payment status',
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: _busy ? null : _handleCancelOrder,
+                    icon: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+                    label: const Text(
+                      'Cancel Order',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.danger,
                       ),
                     ),
                   ),

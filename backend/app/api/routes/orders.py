@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
@@ -21,13 +21,22 @@ router = APIRouter(prefix="/api/orders", tags=["Orders"])
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(
     req: OrderCreateRequest,
+    authorization: Optional[str] = Header(None),
+    x_customer_session: Optional[str] = Header(None, alias="X-Customer-Session"),
     db: Session = Depends(get_db)
 ):
     """
     Public order creation - no login required.
     Creates an order for an uploaded document and calculates authoritative price.
+    Stores session_token for persistent customer order recovery.
     """
-    order = order_service.create_order(db=db, req=req, user_id=None)
+    session_token = None
+    if x_customer_session and x_customer_session.strip():
+        session_token = x_customer_session.strip()
+    elif authorization and authorization.lower().startswith("bearer "):
+        session_token = authorization.split(" ", 1)[1].strip()
+
+    order = order_service.create_order(db=db, req=req, user_id=None, session_token=session_token)
     return OrderResponse(
         id=order.id,
         user_id=order.user_id,
@@ -41,6 +50,131 @@ def create_order(
         status=order.status,
         created_at=order.created_at
     )
+
+@router.get("/active")
+def get_active_order(
+    order_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+    x_customer_session: Optional[str] = Header(None, alias="X-Customer-Session"),
+    db: Session = Depends(get_db)
+):
+    """
+    Authoritative single-source-of-truth order recovery check.
+    Checks if an unfinished order exists for the given order_id or customer session.
+    Returns the exact stage and data without regenerating payments or OTPs.
+    """
+    session_token = None
+    if x_customer_session and x_customer_session.strip():
+        session_token = x_customer_session.strip()
+    elif authorization and authorization.lower().startswith("bearer "):
+        session_token = authorization.split(" ", 1)[1].strip()
+
+    order = None
+    if order_id and order_id.strip():
+        order = db.query(Order).filter(Order.id == order_id.strip()).first()
+
+    if not order and session_token:
+        # Search recent orders for this session token
+        candidates = db.query(Order).order_by(Order.created_at.desc()).limit(25).all()
+        for cand in candidates:
+            c_cfg = dict(cand.print_settings or {})
+            if c_cfg.get("session_token") == session_token:
+                order = cand
+                break
+
+    if not order:
+        return {
+            "hasActiveOrder": False,
+            "stage": "NONE",
+            "canUploadNew": True,
+            "order": None
+        }
+
+    job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
+    cur_settings = dict(order.print_settings or {})
+    ord_resp = OrderResponse(
+        id=order.id,
+        user_id=order.user_id,
+        document_id=order.document_id,
+        print_server_id=order.print_server_id,
+        print_settings=order.print_settings,
+        total_pages=order.total_pages,
+        copies=order.copies,
+        amount=float(order.amount),
+        currency=order.currency,
+        status=order.status,
+        error_code=job.error_code if job else None,
+        error_message=job.error_message if job else None,
+        created_at=order.created_at
+    )
+
+    if order.status == OrderStatus.CREATED:
+        return {
+            "hasActiveOrder": True,
+            "stage": "UNPAID",
+            "canUploadNew": False,
+            "order": ord_resp
+        }
+
+    if order.status in [OrderStatus.PAID, OrderStatus.JOB_QUEUED, OrderStatus.WAITING_FOR_OTP]:
+        # Ensure active OTP exists without changing it if already valid
+        now = datetime.now(timezone.utc)
+        active_otp = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
+        if not active_otp or not cur_settings.get("printer_otps"):
+            otp_service.generate_and_store_otp(db, order.id)
+            order.status = OrderStatus.WAITING_FOR_OTP
+            order.updated_at = now
+            db.commit()
+
+        plaintext, expires_at, printer_otps = otp_service.get_otp_for_order(db, order.id)
+        selected_printer = cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer")
+        is_locked = cur_settings.get("printer_selection_locked", False)
+
+        return {
+            "hasActiveOrder": True,
+            "stage": "WAITING_FOR_OTP",
+            "canUploadNew": False,
+            "selectedPrinter": selected_printer,
+            "printerSelectionLocked": is_locked,
+            "order": ord_resp,
+            "otp": {
+                "orderId": order.id,
+                "otp": plaintext,
+                "expiresAt": expires_at.isoformat(),
+                "printerOtps": printer_otps,
+                "selectedPrinter": selected_printer,
+                "printerSelectionLocked": is_locked
+            }
+        }
+
+    if order.status in [OrderStatus.RELEASED, OrderStatus.PRINTING]:
+        # Once accepted and printing starts, OTP is permanently invalid and never returned.
+        return {
+            "hasActiveOrder": True,
+            "stage": "PRINTING",
+            "canUploadNew": False,
+            "selectedPrinter": cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer"),
+            "order": ord_resp
+        }
+
+    if order.status == OrderStatus.COMPLETED:
+        # Order is completed and read-only. No longer recoverable as unfinished.
+        return {
+            "hasActiveOrder": False,
+            "stage": "COMPLETED",
+            "isCompletedReceipt": True,
+            "canUploadNew": False,
+            "selectedPrinter": cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer"),
+            "order": ord_resp
+        }
+
+    # FAILED, EXPIRED, REFUNDED
+    return {
+        "hasActiveOrder": False,
+        "stage": "TERMINATED",
+        "canUploadNew": True,
+        "order": ord_resp
+    }
 
 @router.get("", response_model=List[OrderResponse])
 def list_orders(db: Session = Depends(get_db)):
@@ -99,7 +233,8 @@ def get_order_otp(
 ):
     """
     Retrieves the 6-digit release OTP for an order that is WAITING_FOR_OTP.
-    No login required - order ID is the token/handle.
+    Permanent invalidation enforced: once printer accepts OTP and job begins,
+    or once completed, OTP is permanently invalid and cannot be viewed or reused.
     """
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
@@ -109,21 +244,29 @@ def get_order_otp(
             message="Order not found."
         )
 
-    # Check if active OTP exists and is unexpired; if not, generate a fresh one
+    if order.status in [OrderStatus.RELEASED, OrderStatus.PRINTING, OrderStatus.COMPLETED]:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="OTP_INVALIDATED",
+            message="OTP is permanently invalid once printing has begun or the order is completed."
+        )
+
+    if order.status in [OrderStatus.FAILED, OrderStatus.EXPIRED, OrderStatus.REFUNDED]:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="OTP_NOT_ACTIVE",
+            message="Order is no longer active."
+        )
+
+    # Check if active OTP exists
     now = datetime.now(timezone.utc)
     active_otp = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
-    is_expired = False
-    if active_otp:
-        exp = active_otp.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if exp < now:
-            is_expired = True
-            active_otp.active = False
-            db.commit()
 
+    # Rule: The OTP must remain valid until it is successfully used to release the print job.
+    # Viewing the OTP, pressing Back, refreshing the browser, closing the application, or restarting
+    # the phone must never invalidate the OTP or require another payment.
     cur_cfg = dict(order.print_settings or {})
-    if not active_otp or is_expired or order.status != OrderStatus.WAITING_FOR_OTP or not cur_cfg.get("printer_otps"):
+    if not active_otp or not cur_cfg.get("printer_otps"):
         # Provision print job if not already present
         existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
         if not existing_job:
@@ -151,7 +294,7 @@ def get_order_otp(
         otp=plaintext,
         expires_at=expires_at,
         printer_otps=printer_otps,
-        selected_printer=cur_settings.get("cups_printer_name"),
+        selected_printer=cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer"),
         printer_selection_locked=cur_settings.get("printer_selection_locked", False)
     )
 
@@ -252,3 +395,26 @@ def release_order_endpoint(
         "orderId": order.id,
         "jobId": job.id
     }
+
+@router.post("/{order_id}/cancel")
+def cancel_order_endpoint(
+    order_id: str,
+    payload: Optional[Dict[str, Any]] = None,
+    authorization: Optional[str] = Header(None),
+    x_customer_session: Optional[str] = Header(None, alias="X-Customer-Session"),
+    db: Session = Depends(get_db)
+):
+    session_token = None
+    if x_customer_session and x_customer_session.strip():
+        session_token = x_customer_session.strip()
+    elif authorization and authorization.lower().startswith("bearer "):
+        session_token = authorization.split(" ", 1)[1].strip()
+
+    reason = (payload or {}).get("reason", "Customer cancelled order")
+    return order_service.cancel_order(
+        db=db,
+        order_id=order_id,
+        user_id=None,
+        session_token=session_token,
+        reason=reason
+    )

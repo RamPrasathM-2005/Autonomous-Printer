@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
 import '../services/api_service.dart';
+import '../services/order_recovery_service.dart';
 import 'upload_screen.dart';
 
 class PrintProgressScreen extends StatefulWidget {
@@ -75,6 +76,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
             _statusMessage = _mockPrinting
                 ? 'Test print complete'
                 : 'Print complete';
+            OrderRecoveryService().markCompleted(widget.orderId);
           } else if (['FAILED', 'EXPIRED', 'REFUNDED'].contains(status)) {
             timer.cancel();
             _animController.stop();
@@ -264,19 +266,10 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () async {
+                              OrderRecoveryService().printAgain();
                               try {
                                 await _apiService.endSession();
-                              } catch (_) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Sign-out unconfirmed. Close this tab when finished.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
+                              } catch (_) {}
                               if (!context.mounted) return;
                               Navigator.pushAndRemoveUntil(
                                 context,
@@ -287,7 +280,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                               );
                             },
                             icon: const Icon(Icons.add_circle_outline_rounded),
-                            label: const Text('New print'),
+                            label: const Text('Print Again'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.primary,
                               padding: const EdgeInsets.symmetric(vertical: 16),
