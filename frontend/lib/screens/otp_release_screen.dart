@@ -106,9 +106,12 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           );
         } catch (_) {}
       }
+      // If the expiry timestamp is missing or unparseable, treat it as already
+      // expired (0) rather than assuming 15 minutes remain. A stale 15-min
+      // countdown would be misleading when the real OTP has less time left.
       final diff = expiry != null
           ? expiry.difference(DateTime.now()).inSeconds
-          : 900;
+          : 0;
 
       final existingPrinter = order.printSettings.toJson()['printer_name'] ??
           order.printSettings.toJson()['cups_printer_name'] ??
@@ -134,6 +137,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       setState(() {
         _order = order;
         _otpData = otp;
+        // Clamp to [0, ∞) — negative means already expired on the server.
         _secondsLeft = diff > 0 ? diff : 0;
         if (existingPrinter != null && existingPrinter.toString().isNotEmpty) {
           _selectedPrinterName = existingPrinter.toString();

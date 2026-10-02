@@ -19,6 +19,9 @@ class OrderRecoveryResult {
   final bool printerSelectionLocked;
   final bool canUploadNew;
   final bool isCompletedReceipt;
+  /// True when the backend was unreachable (network/timeout).
+  /// Callers must not silently treat this as "no active order" — show a warning.
+  final bool networkError;
 
   const OrderRecoveryResult({
     required this.stage,
@@ -28,6 +31,7 @@ class OrderRecoveryResult {
     this.printerSelectionLocked = false,
     this.canUploadNew = true,
     this.isCompletedReceipt = false,
+    this.networkError = false,
   });
 
   bool get hasActiveUnfinishedOrder =>
@@ -86,6 +90,10 @@ class OrderRecoveryService {
 
   /// Single source of truth backend check.
   /// Queries backend /api/orders/active using cached order IDs and customer session.
+  ///
+  /// Returns an [OrderRecoveryResult] with [networkError] set to true when the
+  /// backend is unreachable. Callers must surface a warning instead of treating
+  /// this as "no active order" — doing so risks hiding a paid order from the user.
   Future<OrderRecoveryResult> checkRecovery() async {
     try {
       final cachedActiveId = activeOrderId;
@@ -162,9 +170,13 @@ class OrderRecoveryService {
         canUploadNew: true,
       );
     } catch (_) {
+      // Network or server error — do NOT treat this as "no active order".
+      // Preserve any cached order ID so recovery can be retried on next load.
+      // Set networkError: true so UploadScreen can warn the user.
       return const OrderRecoveryResult(
         stage: RecoveryStage.none,
         canUploadNew: true,
+        networkError: true,
       );
     }
   }

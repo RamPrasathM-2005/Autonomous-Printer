@@ -190,6 +190,26 @@ async def proxy_local_job_status(job_id: str):
 
 
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# APK download routes
+downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
+
+@app.get("/api/downloads/apk", tags=["Downloads"])
+@app.get("/downloads/autonomous-printer.apk", tags=["Downloads"])
+def download_autonomous_printer_apk():
+    apk_file = downloads_dir / "autonomous-printer.apk"
+    if apk_file.exists():
+        return FileResponse(
+            path=str(apk_file),
+            filename="autonomous-printer.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    raise AppException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        error_code="APK_NOT_FOUND",
+        message="Android APK file is not available."
+    )
 
 
 # Frontends directory paths

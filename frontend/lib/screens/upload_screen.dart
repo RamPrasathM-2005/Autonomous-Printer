@@ -1,9 +1,9 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
 
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_error.dart';
 
@@ -160,7 +160,11 @@ class _UploadScreenState extends State<UploadScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAndRestoreExistingOrder(forceNavigate: false);
+      // Force-navigate only when UploadScreen is the topmost route.
+      // If the user is already on PaymentScreen or OtpReleaseScreen, skip to
+      // avoid pushing a duplicate screen on top of the existing one.
+      final isTopRoute = ModalRoute.of(context)?.isCurrent ?? false;
+      _checkAndRestoreExistingOrder(forceNavigate: isTopRoute);
     }
   }
 
@@ -173,9 +177,31 @@ class _UploadScreenState extends State<UploadScreen>
       if (!mounted) return;
 
       setState(() {
-        _activeRecovery = recovery;
+        // Only update _activeRecovery when we got a real response.
+        // On a network error the result stage is 'none' but canUploadNew is true —
+        // we intentionally do NOT clear _activeRecovery so any previously loaded
+        // order banner stays visible until a successful check confirms the order is gone.
+        if (!recovery.networkError) {
+          _activeRecovery = recovery;
+        }
         _isCheckingOrderRecovery = false;
       });
+
+      // Warn the user when the backend is unreachable rather than silently
+      // pretending there is no active order (which could hide a paid order).
+      if (recovery.networkError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not reach the server. Check your connection — any active orders will resume once you reconnect.',
+            ),
+            backgroundColor: AppTheme.warning,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
 
       if (!forceNavigate) return;
 
@@ -346,6 +372,30 @@ class _UploadScreenState extends State<UploadScreen>
     }
   }
 
+  Future<void> _downloadApk() async {
+    final apkUrl = '${ApiConfig.baseUrl}/api/downloads/apk';
+    try {
+      final uri = Uri.parse(apkUrl);
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        await launchUrl(
+          Uri.parse('/downloads/autonomous-printer.apk'),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Starting APK download... Check your browser downloads.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppTheme.primary,
+          ),
+        );
+      }
+    }
+  }
+
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -408,45 +458,48 @@ class _UploadScreenState extends State<UploadScreen>
     });
 
     try {
+      // file_picker v13: pickFiles() returns List<PlatformFile> directly.
+      // An empty list means the user dismissed the picker without selecting.
       final List<PlatformFile> files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
 
-      if (files.isNotEmpty) {
-        for (final file in files) {
-          final Uint8List rawBytes = await file.readAsBytes();
+      // User cancelled the picker — nothing to do.
+      if (files.isEmpty) return;
 
-          if (rawBytes.isEmpty) {
-            setState(
-              () => _uploadError =
-                  'Cannot read "${file.name}" — please try again.',
-            );
-            continue;
-          }
+      for (final file in files) {
+        final Uint8List rawBytes = await file.readAsBytes();
 
-          final List<int> fileBytes = rawBytes;
-
-          final secError = _validateFileBytes(file.name, fileBytes);
-          if (secError != null) {
-            setState(() => _uploadError = secError);
-            continue;
-          }
-
-          if (!_selectedFiles.any(
-            (f) => f.name == file.name && f.size == fileBytes.length,
-          )) {
-            _selectedFiles.add(
-              SelectedDocItem(
-                name: file.name,
-                size: fileBytes.length,
-                bytes: fileBytes,
-              ),
-            );
-          }
+        if (rawBytes.isEmpty) {
+          setState(
+            () => _uploadError =
+                'Cannot read "${file.name}" — please try again.',
+          );
+          continue;
         }
-        setState(() {});
+
+        final List<int> fileBytes = rawBytes;
+
+        final secError = _validateFileBytes(file.name, fileBytes);
+        if (secError != null) {
+          setState(() => _uploadError = secError);
+          continue;
+        }
+
+        if (!_selectedFiles.any(
+          (f) => f.name == file.name && f.size == fileBytes.length,
+        )) {
+          _selectedFiles.add(
+            SelectedDocItem(
+              name: file.name,
+              size: fileBytes.length,
+              bytes: fileBytes,
+            ),
+          );
+        }
       }
+      setState(() {});
     } catch (e) {
       setState(() {
         _uploadError = 'Unable to open this file. Choose another.';
@@ -572,6 +625,12 @@ class _UploadScreenState extends State<UploadScreen>
                         const SizedBox(height: 16),
                       ],
 
+                      // Web APK Download Banner (only shown on Web UI, hidden on mobile APK)
+                      if (kIsWeb) ...[
+                        _buildWebApkBanner(),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Upload zone
                       _buildDropzone(),
                       const SizedBox(height: 20),
@@ -649,7 +708,35 @@ class _UploadScreenState extends State<UploadScreen>
           ),
         ],
       ),
-      actions: [const HelpAction(), const SizedBox(width: 4)],
+      actions: [
+        if (kIsWeb) ...[
+          OutlinedButton.icon(
+            onPressed: _downloadApk,
+            icon: const Icon(Icons.android_rounded, size: 16, color: Color(0xFF059669)),
+            label: const Text(
+              'Download APK',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              side: const BorderSide(color: AppTheme.border),
+              backgroundColor: AppTheme.surfaceSubtle,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+        const HelpAction(),
+        const SizedBox(width: 4),
+      ],
     );
   }
 
@@ -924,6 +1011,69 @@ class _UploadScreenState extends State<UploadScreen>
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text('Print Again', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebApkBanner() {
+    if (!kIsWeb) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFA7F3D0)),
+            ),
+            child: const Icon(Icons.android_rounded, color: Color(0xFF059669), size: 22),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Autonomous Printer Android App',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Use our mobile app for faster uploads and scanning.',
+                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: _downloadApk,
+            icon: const Icon(Icons.download_rounded, size: 14),
+            label: const Text(
+              'Download APK',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
