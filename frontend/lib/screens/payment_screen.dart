@@ -69,15 +69,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _showConfirmedOrder({String? paymentId}) async {
-    final order = await _api.getOrder(widget.order.id);
-    if (!mounted) return;
-    if (order.status == 'WAITING_FOR_OTP' || order.status == 'PAID') {
+    // Poll the backend for up to 2 seconds after verification — the order status
+    // can still be CREATED briefly due to a webhook/DB lag after Razorpay confirms.
+    PrintOrder? order;
+    for (int attempt = 0; attempt < 5; attempt++) {
+      order = await _api.getOrder(widget.order.id);
+      final s = order.status.toUpperCase();
+      if (s == 'WAITING_FOR_OTP' || s == 'PAID' || s == 'JOB_QUEUED') break;
+      if (attempt < 4) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    if (!mounted || order == null) return;
+    final s = order.status.toUpperCase();
+    if (s == 'WAITING_FOR_OTP' || s == 'PAID' || s == 'JOB_QUEUED') {
       OrderRecoveryService().setActiveOrder(order.id, stage: 'WAITING_FOR_OTP');
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => OtpReleaseScreen(
-            orderId: order.id,
+            orderId: order!.id,
             order: order,
             documents: widget.documents,
             configs: widget.configs,
@@ -87,9 +98,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
     } else {
       setState(
-        () => _message = order.status == 'CREATED'
-            ? 'Payment unconfirmed. Check status before paying again.'
-            : order.statusLabel,
+        () => _message = s == 'CREATED'
+            ? 'Payment unconfirmed. Tap "Check payment status" to verify.'
+            : order!.statusLabel,
       );
     }
   }

@@ -206,14 +206,53 @@ class _UploadScreenState extends State<UploadScreen>
       if (!forceNavigate) return;
 
       if (recovery.stage == RecoveryStage.unpaid && recovery.order != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PaymentScreen(order: recovery.order!),
-          ),
-        ).then((_) {
-          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-        });
+        // Before routing to PaymentScreen, reconcile to catch the race condition
+        // where Razorpay captured the payment but the verify API call didn't
+        // complete before the user navigated away. If payment was actually captured,
+        // route directly to OtpReleaseScreen instead of asking to pay again.
+        final orderId = recovery.order!.id;
+        OrderRecoveryResult updatedRecovery = recovery;
+        try {
+          await _apiService.reconcilePayment(orderId);
+          // Re-check backend state after reconcile.
+          final recheckRecovery = await _orderRecovery.checkRecovery();
+          if (!recheckRecovery.networkError) {
+            updatedRecovery = recheckRecovery;
+            if (!recovery.networkError) {
+              setState(() => _activeRecovery = updatedRecovery);
+            }
+          }
+        } catch (_) {
+          // Reconcile failed — proceed with original recovery result.
+        }
+
+        if (!mounted) return;
+
+        if (updatedRecovery.stage == RecoveryStage.waitingOtp &&
+            updatedRecovery.order != null) {
+          // Payment was actually confirmed — go straight to OTP, never show payment again.
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpReleaseScreen(
+                orderId: updatedRecovery.order!.id,
+                order: updatedRecovery.order!,
+              ),
+            ),
+          ).then((_) {
+            if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+          });
+        } else {
+          // Genuinely unpaid — show payment screen.
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PaymentScreen(order: recovery.order!),
+            ),
+          ).then((_) {
+            if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
+          });
+        }
       } else if (recovery.stage == RecoveryStage.waitingOtp && recovery.order != null) {
         Navigator.push(
           context,
@@ -625,11 +664,6 @@ class _UploadScreenState extends State<UploadScreen>
                         const SizedBox(height: 16),
                       ],
 
-                      // Web APK Download Banner (only shown on Web UI, hidden on mobile APK)
-                      if (kIsWeb) ...[
-                        _buildWebApkBanner(),
-                        const SizedBox(height: 16),
-                      ],
 
                       // Upload zone
                       _buildDropzone(),
@@ -709,31 +743,12 @@ class _UploadScreenState extends State<UploadScreen>
         ],
       ),
       actions: [
-        if (kIsWeb) ...[
-          OutlinedButton.icon(
+        if (kIsWeb)
+          IconButton(
             onPressed: _downloadApk,
-            icon: const Icon(Icons.android_rounded, size: 16, color: Color(0xFF059669)),
-            label: const Text(
-              'Download APK',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              side: const BorderSide(color: AppTheme.border),
-              backgroundColor: AppTheme.surfaceSubtle,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+            icon: const Icon(Icons.android_rounded, size: 20, color: Color(0xFF059669)),
+            tooltip: 'Download Android App',
           ),
-          const SizedBox(width: 4),
-        ],
         const HelpAction(),
         const SizedBox(width: 4),
       ],
@@ -1017,68 +1032,6 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  Widget _buildWebApkBanner() {
-    if (!kIsWeb) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFA7F3D0)),
-            ),
-            child: const Icon(Icons.android_rounded, color: Color(0xFF059669), size: 22),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Autonomous Printer Android App',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Use our mobile app for faster uploads and scanning.',
-                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            onPressed: _downloadApk,
-            icon: const Icon(Icons.download_rounded, size: 14),
-            label: const Text(
-              'Download APK',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildErrorBanner() {
     return Container(
