@@ -210,6 +210,17 @@ KIOSK_HTML = """<!DOCTYPE html>
       color: white;
     }
 
+    .otp-cell.error {
+      border-color: #ef4444 !important;
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #f87171 !important;
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.4) !important;
+    }
+
+    .otp-display-container.shake {
+      animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
     /* On-Screen Touch Keypad */
     .keypad-grid {
       display: grid;
@@ -640,7 +651,31 @@ KIOSK_HTML = """<!DOCTYPE html>
       hideError();
     }
 
+    function shakeOtpCells() {
+      const container = document.getElementById('otp-cells');
+      if (container) {
+        container.classList.remove('shake');
+        void container.offsetWidth;
+        container.classList.add('shake');
+      }
+      for (let i = 0; i < 6; i++) {
+        const cell = document.getElementById('c' + i);
+        if (cell) cell.classList.add('error');
+      }
+    }
+
+    function clearCellErrors() {
+      const container = document.getElementById('otp-cells');
+      if (container) container.classList.remove('shake');
+      for (let i = 0; i < 6; i++) {
+        const cell = document.getElementById('c' + i);
+        if (cell) cell.classList.remove('error');
+      }
+    }
+
     function pressDigit(d) {
+      clearCellErrors();
+      hideError();
       if (currentOtp.length < 6) {
         currentOtp += d;
         updateOtpDisplay();
@@ -648,6 +683,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     function backspaceOtp() {
+      clearCellErrors();
+      hideError();
       if (currentOtp.length > 0) {
         currentOtp = currentOtp.slice(0, -1);
         updateOtpDisplay();
@@ -655,6 +692,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     function clearOtp() {
+      clearCellErrors();
+      hideError();
       currentOtp = "";
       updateOtpDisplay();
     }
@@ -663,11 +702,13 @@ KIOSK_HTML = """<!DOCTYPE html>
       const b = document.getElementById('error-banner');
       b.innerText = msg;
       b.classList.add('error');
+      b.style.display = 'block';
     }
 
     function hideError() {
       const b = document.getElementById('error-banner');
       b.classList.remove('error');
+      b.style.display = 'none';
     }
 
     // Submit OTP and transition directly to Progress Screen
@@ -686,12 +727,14 @@ KIOSK_HTML = """<!DOCTYPE html>
           body: JSON.stringify({ otp: currentOtp })
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
           // Transition to Progress View immediately!
           showProgressView(data);
         } else {
-          showError(data.detail?.message || data.message || "Invalid OTP code. Please verify the code on your phone.");
+          const errMsg = data.message || (data.detail && typeof data.detail === 'object' ? data.detail.message : data.detail) || "Invalid OTP code. Please verify the code on your phone.";
+          showError(errMsg);
+          shakeOtpCells();
           proceedBtn.disabled = false;
           proceedBtn.innerHTML = `<span>PROCEED & PRINT</span><svg style="width: 20px; height: 20px; fill: currentColor;" viewBox="0 0 24 24"><path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-7.85-1.42 1.42L16.86 11H5v2z"/></svg>`;
         }
@@ -703,14 +746,22 @@ KIOSK_HTML = """<!DOCTYPE html>
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ otp: currentOtp })
           });
-          const agentData = await agentRes.json();
+          const agentData = await agentRes.json().catch(() => ({}));
           if (agentRes.ok) {
             showProgressView(agentData.job || agentData);
+            return;
+          } else {
+            const agentErrMsg = agentData.message || "Invalid OTP code. Please check your phone.";
+            showError(agentErrMsg);
+            shakeOtpCells();
+            proceedBtn.disabled = false;
+            proceedBtn.innerHTML = `<span>PROCEED & PRINT</span><svg style="width: 20px; height: 20px; fill: currentColor;" viewBox="0 0 24 24"><path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-7.85-1.42 1.42L16.86 11H5v2z"/></svg>`;
             return;
           }
         } catch (_) {}
 
         showError("Could not connect to release server. Please retry.");
+        shakeOtpCells();
         proceedBtn.disabled = false;
         proceedBtn.innerHTML = `<span>PROCEED & PRINT</span><svg style="width: 20px; height: 20px; fill: currentColor;" viewBox="0 0 24 24"><path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-7.85-1.42 1.42L16.86 11H5v2z"/></svg>`;
       }

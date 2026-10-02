@@ -474,6 +474,24 @@ KIOSK_HTML = """<!DOCTYPE html>
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
     }
 
+    .otp-slot.error {
+      border-color: #ef4444 !important;
+      background: #fef2f2 !important;
+      color: #ef4444 !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+    }
+
+    .otp-display-container.shake {
+      animation: otpShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes otpShake {
+      10%, 90% { transform: translate3d(-2px, 0, 0); }
+      20%, 80% { transform: translate3d(4px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+      40%, 60% { transform: translate3d(6px, 0, 0); }
+    }
+
     /* Alert / Status Banners */
     .alert-banner {
       display: none;
@@ -663,6 +681,11 @@ KIOSK_HTML = """<!DOCTYPE html>
     .modal-icon-wrap.success {
       background: rgba(16, 185, 129, 0.1);
       border: 2px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .modal-icon-wrap.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 2px solid rgba(239, 68, 68, 0.25);
     }
 
     .spinner {
@@ -913,6 +936,9 @@ KIOSK_HTML = """<!DOCTYPE html>
         <svg id="modalCheckIcon" viewBox="0 0 24 24" style="display:none; fill:#10b981;">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
+        <svg id="modalErrorIcon" viewBox="0 0 24 24" style="display:none; fill:#ef4444; width:38px; height:38px;">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/>
+        </svg>
       </div>
       <div class="modal-content">
         <h3 id="modalTitle">OTP Verified</h3>
@@ -1008,11 +1034,28 @@ KIOSK_HTML = """<!DOCTYPE html>
       alertTitle.textContent = title;
       alertMessage.textContent = message;
       alertBanner.className = isError ? 'alert-banner error' : 'alert-banner success';
+      alertBanner.style.display = 'block';
     }
 
     function hideAlert() {
       alertBanner.style.display = 'none';
       alertBanner.className = 'alert-banner';
+    }
+
+    function showErrorSlots() {
+      const container = document.getElementById('otpContainer');
+      if (container) {
+        container.classList.remove('shake');
+        void container.offsetWidth;
+        container.classList.add('shake');
+      }
+      otpSlots.forEach(slot => slot.classList.add('error'));
+    }
+
+    function clearErrorSlots() {
+      const container = document.getElementById('otpContainer');
+      if (container) container.classList.remove('shake');
+      otpSlots.forEach(slot => slot.classList.remove('error'));
     }
 
     function pressDigit(val) {
@@ -1026,6 +1069,7 @@ KIOSK_HTML = """<!DOCTYPE html>
     function handleKeyPress(val) {
       if (isSubmitting) return;
       hideAlert();
+      clearErrorSlots();
 
       if (val === 'clear') {
         currentOtp = "";
@@ -1086,6 +1130,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       modalIconWrap.className = 'modal-icon-wrap loading';
       modalSpinner.style.display = 'block';
       modalCheckIcon.style.display = 'none';
+      const modalErrorIcon = document.getElementById('modalErrorIcon');
+      if (modalErrorIcon) modalErrorIcon.style.display = 'none';
       modalTitle.textContent = 'Verifying Code';
       modalMessage.textContent = 'Validating release OTP...';
       modalPrinterBadge.style.display = 'none';
@@ -1185,17 +1231,14 @@ KIOSK_HTML = """<!DOCTYPE html>
           }
 
         } else {
-          statusModal.style.display = 'none';
-          isSubmitting = false;
-
-          const errCode = data.error || 'ERROR';
+          const errCode = data.error || 'INVALID_OTP';
           let errTitle = 'Invalid OTP';
-          let errMsg = 'Please check the OTP and try again.';
+          let errMsg = data.message || 'Incorrect OTP code. Please check your phone.';
 
           if (errCode === 'OTP_EXPIRED') {
             errTitle = 'OTP Expired';
-            errMsg = 'OTP has expired (valid 24h). Please request a new order.';
-          } else if (errCode === 'ORDER_ALREADY_COMPLETED') {
+            errMsg = 'OTP has expired. Please check your order status on your phone.';
+          } else if (errCode === 'ORDER_ALREADY_COMPLETED' || errCode === 'ALREADY_PRINTED') {
             errTitle = 'Already Printed';
             errMsg = 'This order has already been printed.';
           } else if (errCode === 'ORDER_PRINTING') {
@@ -1213,20 +1256,43 @@ KIOSK_HTML = """<!DOCTYPE html>
           } else if (errCode === 'TOO_MANY_ATTEMPTS') {
             errTitle = 'Attempts Exceeded';
             errMsg = 'Maximum OTP attempts exceeded. Please generate a new OTP.';
-          } else {
-            errMsg = data.message || 'Please check the OTP and try again.';
+          } else if (!data.message) {
+            errMsg = 'Invalid OTP code. Please verify the code on your phone and try again.';
           }
 
-          showAlert(errTitle, errMsg, true);
-          currentOtp = "";
-          updateDisplay();
+          modalIconWrap.className = 'modal-icon-wrap error';
+          modalSpinner.style.display = 'none';
+          if (modalErrorIcon) modalErrorIcon.style.display = 'block';
+          modalTitle.textContent = errTitle;
+          modalMessage.textContent = errMsg;
+          modalProgressContainer.style.display = 'none';
+
+          setTimeout(() => {
+            statusModal.style.display = 'none';
+            isSubmitting = false;
+            showAlert(errTitle, errMsg, true);
+            showErrorSlots();
+            currentOtp = "";
+            updateDisplay();
+          }, 1200);
         }
       } catch (err) {
-        statusModal.style.display = 'none';
-        isSubmitting = false;
-        showAlert('Connection Error', 'Local print station cannot communicate with service.', true);
-        currentOtp = "";
-        updateDisplay();
+        modalIconWrap.className = 'modal-icon-wrap error';
+        modalSpinner.style.display = 'none';
+        const modalErrorIcon = document.getElementById('modalErrorIcon');
+        if (modalErrorIcon) modalErrorIcon.style.display = 'block';
+        modalTitle.textContent = 'Connection Error';
+        modalMessage.textContent = 'Local print station cannot communicate with service.';
+        modalProgressContainer.style.display = 'none';
+
+        setTimeout(() => {
+          statusModal.style.display = 'none';
+          isSubmitting = false;
+          showAlert('Connection Error', 'Local print station cannot communicate with service.', true);
+          showErrorSlots();
+          currentOtp = "";
+          updateDisplay();
+        }, 1200);
       }
     }
 
