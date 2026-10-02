@@ -675,16 +675,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                _isPrinterLocked
-                                    ? Icons.visibility_rounded
-                                    : Icons.lock_open_rounded,
-                                size: 16,
-                                color: _selectedPrinterName == null
-                                    ? AppTheme.textMuted
-                                    : Colors.white,
-                              ),
-                              const SizedBox(width: 8),
                               Text(
                                 _selectedPrinterName == null
                                     ? 'Select a printer first'
