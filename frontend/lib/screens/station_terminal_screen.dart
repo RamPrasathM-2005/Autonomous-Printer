@@ -1,3 +1,5 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -100,8 +102,9 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Print station')),
+    return AppScaffold(
+      appBar: AppBar(
+        actions: const [HelpAction()],title: const Text('Print station')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(

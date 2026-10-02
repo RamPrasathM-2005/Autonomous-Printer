@@ -1,3 +1,5 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -117,7 +119,7 @@ class _StationsScreenState extends State<StationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(
         title: const Text('Print Stations'),
         actions: [
@@ -126,11 +128,7 @@ class _StationsScreenState extends State<StationsScreen> {
             tooltip: 'Enter station ID',
             onPressed: _manualStationDialog,
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-            onPressed: _loadServers,
-          ),
+          const HelpAction(),
         ],
       ),
       body: RefreshIndicator(

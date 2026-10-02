@@ -83,7 +83,7 @@ class RealDocumentPreviewWidget extends StatelessWidget {
             document.isPdf
                 ? Icons.picture_as_pdf_rounded
                 : Icons.image_rounded,
-            size: isThumbnail ? 22 : 36,
+            size: isThumbnail ? 16 : 36,
             color: document.isPdf
                 ? const Color(0xFFDC2626)
                 : const Color(0xFF2563EB),

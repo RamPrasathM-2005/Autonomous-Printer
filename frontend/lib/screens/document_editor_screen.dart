@@ -1,3 +1,6 @@
+import '../widgets/print_action_bar.dart';
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
@@ -123,8 +126,7 @@ class _DocumentEditorScreenState extends State<DocumentEditorScreen> {
     final doc = widget.initialConfig.document;
     final isLandscape = _orientation == 'landscape';
 
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: AppBar(
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
@@ -143,6 +145,7 @@ class _DocumentEditorScreenState extends State<DocumentEditorScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          const HelpAction(),
           TextButton(
             onPressed: _resetToDefault,
             child: const Text(
@@ -695,65 +698,10 @@ class _DocumentEditorScreenState extends State<DocumentEditorScreen> {
     );
   }
 
-  Widget _buildBottomBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        border: Border(top: BorderSide(color: AppTheme.border)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$_calculatedPages ${_calculatedPages == 1 ? 'page' : 'pages'} × $_copies',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                  Text(
-                    '₹${_estimatedCost.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _saveSettings,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 13,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    'Apply Settings',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomBar() => PrintActionBar(
+    details: '$_calculatedPages pages \u00d7 $_copies',
+    amount: '\u20b9${_estimatedCost.toStringAsFixed(2)}',
+    action: 'Apply Settings',
+    onPressed: _saveSettings,
+  );
 }

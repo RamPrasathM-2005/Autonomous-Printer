@@ -1,3 +1,8 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/real_document_preview.dart';
+import 'document_editor_screen.dart';
+import '../widgets/help_action.dart';
+
 import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
@@ -30,6 +35,8 @@ class OrderSummaryScreen extends StatefulWidget {
 class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
   final ApiService _api = ApiService();
 
+  late List<DocumentPrintConfig> _configs;
+  bool _filesExpanded = true;
   PrintOrder? _currentOrder;
   PaymentInitiateResponse? _payment;
   bool _busy = false;
@@ -39,6 +46,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
   @override
   void initState() {
     super.initState();
+    _configs = widget.configs.map((c) => c.copyWith()).toList();
     _currentOrder = widget.order;
     _loadCapabilities();
   }
@@ -54,19 +62,16 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     } catch (_) {}
   }
 
-  int get _totalCopies =>
-      widget.configs.fold(0, (sum, c) => sum + c.copies);
-
   int get _totalCalculatedPages =>
-      widget.configs.fold(0, (sum, c) => sum + (c.calculatedPages * c.copies));
+      _configs.fold(0, (sum, c) => sum + (c.calculatedPages * c.copies));
 
   double get _totalEstimatedTotal =>
-      widget.configs.fold(0.0, (sum, c) => sum + c.estimatedCost);
+      _configs.fold(0.0, (sum, c) => sum + c.estimatedCost);
 
   Future<PrintOrder> _ensureOrderCreated() async {
     if (_currentOrder != null) return _currentOrder!;
 
-    final primary = widget.configs.first;
+    final primary = _configs.first;
     final primarySettings = PrintSettings(
       copies: primary.copies,
       colour: primary.isColor,
@@ -78,7 +83,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           : primary.rangeOption,
     );
 
-    final List<Map<String, dynamic>> itemsPayload = widget.configs.map((c) {
+    final List<Map<String, dynamic>> itemsPayload = _configs.map((c) {
       final pr = (c.isCustomRange && c.customRange.trim().isNotEmpty)
           ? c.customRange.trim()
           : c.rangeOption;
@@ -96,7 +101,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     }).toList();
 
     final order = await _api.createOrder(
-      documentId: widget.primaryDocument.id,
+      documentId: primary.document.id,
       printServerId: widget.selectedStationId,
       printSettings: primarySettings,
       items: itemsPayload,
@@ -154,8 +159,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           builder: (_) => OtpReleaseScreen(
             orderId: confirmedOrder.id,
             order: confirmedOrder,
-            configs: widget.configs,
-            documents: widget.configs.map((c) => c.document).toList(),
+            configs: _configs,
+            documents: _configs.map((c) => c.document).toList(),
             paymentId: result.razorpayPaymentId,
           ),
         ),
@@ -194,8 +199,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             builder: (_) => OtpReleaseScreen(
               orderId: order.id,
               order: order,
-              configs: widget.configs,
-              documents: widget.configs.map((c) => c.document).toList(),
+              configs: _configs,
+              documents: _configs.map((c) => c.document).toList(),
             ),
           ),
         );
@@ -226,10 +231,14 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         ? '₹${_currentOrder!.amount.toStringAsFixed(2)}'
         : '₹${_totalEstimatedTotal.toStringAsFixed(2)}';
 
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: AppBar(
-        title: const Text('Order Summary'),
+        actions: const [HelpAction()],
+        title: const Text(
+          'Order Summary',
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 18),
+        ),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
         bottom: const PreferredSize(
@@ -242,33 +251,82 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 600;
-                final itemsWidget = _buildDocumentItemsList();
-                final summaryWidget = _buildSummaryPanel(finalAmount);
-
-                if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: itemsWidget),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: summaryWidget),
-                    ],
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    itemsWidget,
-                    const SizedBox(height: 14),
-                    summaryWidget,
-                  ],
-                );
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Review Your Order',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.7,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildDocumentItemsList(),
+                const SizedBox(height: 24),
+                const Text(
+                  'Order Summary',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                _buildSummaryPanel(finalAmount),
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _canEdit => !_busy && _currentOrder == null;
+
+  Future<void> _editDocument(int index) async {
+    final updated = await Navigator.push<DocumentPrintConfig>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentEditorScreen(initialConfig: _configs[index]),
+      ),
+    );
+    if (updated != null && mounted) setState(() => _configs[index] = updated);
+  }
+
+  void _preview(DocumentPrintConfig config) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: SizedBox(
+          width: 780,
+          height: MediaQuery.sizeOf(context).height * 0.85,
+          child: Column(
+            children: [
+              ListTile(
+                title: Text(
+                  config.document.filename,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  tooltip: 'Close preview',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: RealDocumentPreview(
+                    document: config.document,
+                    isLandscape: config.orientation == 'landscape',
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -279,118 +337,135 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border),
-        boxShadow: AppTheme.cardShadow,
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          Container(
+            color: AppTheme.surfaceSubtle,
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Documents',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                const Expanded(
+                  child: Text(
+                    'Uploaded Files',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
-                Text(
-                  '${widget.configs.length} ${widget.configs.length == 1 ? 'file' : 'files'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textMuted,
+                IconButton(
+                  tooltip: _filesExpanded ? 'Collapse files' : 'Expand files',
+                  onPressed: () =>
+                      setState(() => _filesExpanded = !_filesExpanded),
+                  icon: Icon(
+                    _filesExpanded ? Icons.expand_less : Icons.expand_more,
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppTheme.border),
-          // Document rows
-          ...List.generate(widget.configs.length, (i) {
-            final c = widget.configs[i];
-            final isLast = i == widget.configs.length - 1;
-            return Column(
-              children: [
-                _buildDocumentRow(c),
-                if (!isLast) const Divider(height: 1, color: AppTheme.border),
-              ],
-            );
-          }),
+          if (_filesExpanded)
+            ...List.generate(
+              _configs.length,
+              (index) => _buildDocumentRow(index),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildDocumentRow(DocumentPrintConfig c) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+  Widget _buildDocumentRow(int index) {
+    final c = _configs[index];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
         children: [
-          // File type badge
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: c.isColor ? AppTheme.primarySurface : AppTheme.surfaceSubtle,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: c.isColor ? AppTheme.primaryBorder : AppTheme.border,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                c.document.isPdf ? 'PDF' : 'IMG',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  color: c.isColor ? AppTheme.primary : AppTheme.textSecondary,
-                  letterSpacing: 0.3,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 56,
+                height: 76,
+                child: IgnorePointer(
+                  child: RealDocumentPreview(
+                    document: c.document,
+                    isThumbnail: true,
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  c.document.filename,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.document.filename,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${c.document.pages} ${c.document.pages == 1 ? 'page' : 'pages'}',
+                      style: const TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${c.copies} ${c.copies == 1 ? 'copy' : 'copies'} \u00b7 ${c.colorDescription} \u00b7 ${c.sidesDescription} \u00b7 ${c.paperSize}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      c.pageRangeDescription,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '${c.pageRangeDescription} · ${c.isColor ? 'Color' : 'B&W'} · ${c.copies}x · ${c.calculatedPages * c.copies} pgs',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textMuted,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Text(
-            '₹${c.estimatedCost.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '\u20b9${c.estimatedCost.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit file settings',
+                onPressed: _canEdit ? () => _editDocument(index) : null,
+                icon: const Icon(Icons.edit_outlined, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Preview file',
+                onPressed: () => _preview(c),
+                icon: const Icon(Icons.open_in_full, size: 19),
+              ),
+              IconButton(
+                tooltip: 'Remove file',
+                onPressed: _canEdit && _configs.length > 1
+                    ? () => setState(() => _configs.removeAt(index))
+                    : null,
+                icon: const Icon(Icons.delete_outline, size: 19),
+                color: AppTheme.danger,
+              ),
+            ],
           ),
         ],
       ),
@@ -415,7 +490,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Summary',
+                  'Bill Details',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -424,7 +499,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                 ),
                 if (_testPaymentMode)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.warningSurface,
                       borderRadius: BorderRadius.circular(5),
@@ -448,9 +526,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _summaryLine('Documents', '${widget.configs.length}'),
-                _summaryLine('Copies', '$_totalCopies'),
-                _summaryLine('Billable pages', '$_totalCalculatedPages'),
+                _summaryLine('Total Files', '${_configs.length}'),
+                _summaryLine('Total Pages', '$_totalCalculatedPages'),
+                _summaryLine('Total Cost', amount),
+                _summaryLine('Handling Charges', 'FREE'),
                 const SizedBox(height: 12),
                 const Divider(height: 1, color: AppTheme.border),
                 const SizedBox(height: 12),
@@ -458,20 +537,25 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Total',
+                      'Grand Total',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimary,
                       ),
                     ),
-                    Text(
-                      amount,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                        letterSpacing: -0.5,
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          amount,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -480,7 +564,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                 if (_message != null) ...[
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.dangerSurface,
                       borderRadius: BorderRadius.circular(8),
@@ -508,35 +595,28 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     ),
                   ),
 
-                // Pay button
-                GestureDetector(
-                  onTap: _busy ? null : _proceedToPayment,
-                  child: Container(
-                    height: 50,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: _busy ? AppTheme.surfaceSubtle : AppTheme.primary,
-                      borderRadius: BorderRadius.circular(10),
+                FilledButton(
+                  onPressed: _busy ? null : _proceedToPayment,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.lock_outline_rounded,
-                          size: 16,
-                          color: _busy ? AppTheme.textMuted : Colors.white,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Pay $amount',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Pay Now',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: _busy ? AppTheme.textMuted : Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ],
                   ),
                 ),
 

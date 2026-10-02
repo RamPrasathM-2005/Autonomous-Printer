@@ -1,3 +1,6 @@
+import '../widgets/print_action_bar.dart';
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -259,9 +262,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: AppBar(
+        actions: const [HelpAction()],
         title: const Text('Print Settings'),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,
@@ -330,8 +333,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                                 else
                                   const Icon(Icons.add_rounded,
                                       size: 14, color: AppTheme.primary),
-                                const SizedBox(width: 5),
-                                Text(
+                                          Text(
                                   _isUploadingMore ? 'Adding...' : 'Add file',
                                   style: const TextStyle(
                                     fontSize: 12,
@@ -415,13 +417,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                     color: AppTheme.textPrimary,
                   ),
                 ),
-                Text(
-                  'Applies to all documents',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textMuted,
-                  ),
-                ),
               ],
             ),
           ),
@@ -430,7 +425,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
             padding: const EdgeInsets.all(16),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 480;
+                final isWide = constraints.maxWidth >= 600;
                 if (isWide) {
                   return Column(
                     children: [
@@ -466,13 +461,9 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(child: _buildOrientationToggle()),
-                        const SizedBox(width: 10),
-                        Expanded(child: _buildSidesToggle()),
-                      ],
-                    ),
+                    _buildOrientationToggle(),
+                    const SizedBox(height: 12),
+                    _buildSidesToggle(),
                   ],
                 );
               },
@@ -786,16 +777,14 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 3),
-                  Row(
+                  Wrap(
+                    spacing: 5, runSpacing: 5,
                     children: [
                       _specPill(c.isColor ? 'Color' : 'B&W'),
-                      const SizedBox(width: 5),
                       _specPill('${c.copies}x'),
-                      const SizedBox(width: 5),
                       _specPill(c.paperSize),
                       if (hasCustom) ...[
-                        const SizedBox(width: 5),
-                        _specPill('Custom', highlighted: true),
+                          _specPill('Custom', highlighted: true),
                       ],
                     ],
                   ),
@@ -890,73 +879,10 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     );
   }
 
-  Widget _buildBottomBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        border: Border(top: BorderSide(color: AppTheme.border)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_configs.length} doc${_configs.length == 1 ? '' : 's'} · $_totalCalculatedPages pages',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                  Text(
-                    '₹${_totalEstimatedTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: _continueToSummary,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 13,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Continue',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 6),
-                      Icon(Icons.arrow_forward_rounded,
-                          size: 16, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildBottomBar() => PrintActionBar(
+    details: '${_configs.length} files \u00b7 $_totalCalculatedPages pages',
+    amount: '\u20b9${_totalEstimatedTotal.toStringAsFixed(2)}',
+    action: 'Continue',
+    onPressed: _continueToSummary,
+  );
 }

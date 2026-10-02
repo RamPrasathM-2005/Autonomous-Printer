@@ -1,3 +1,6 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -5,7 +8,6 @@ import 'package:flutter/material.dart';
 import '../services/api_error.dart';
 
 import 'package:file_picker/file_picker.dart';
-
 
 import '../config/api_config.dart';
 import '../config/theme.dart';
@@ -16,14 +18,33 @@ import '../services/document_bytes_cache.dart';
 import '../widgets/server_config_dialog.dart';
 import 'print_options_screen.dart';
 
-
 // ---------------------------------------------------------------------------
 // Security: dangerous extensions that must never be uploaded
 // ---------------------------------------------------------------------------
 const _kDangerousExtensions = [
-  'exe', 'bat', 'sh', 'js', 'vbs', 'ps1', 'psm1', 'psd1',
-  'jar', 'html', 'htm', 'php', 'py', 'rb', 'pl', 'cmd',
-  'com', 'msi', 'dll', 'scr', 'hta', 'wsf', 'wsh',
+  'exe',
+  'bat',
+  'sh',
+  'js',
+  'vbs',
+  'ps1',
+  'psm1',
+  'psd1',
+  'jar',
+  'html',
+  'htm',
+  'php',
+  'py',
+  'rb',
+  'pl',
+  'cmd',
+  'com',
+  'msi',
+  'dll',
+  'scr',
+  'hta',
+  'wsf',
+  'wsh',
 ];
 
 /// Returns a non-null error string if the file fails security checks.
@@ -45,8 +66,10 @@ String? _validateFileBytes(String filename, List<int> bytes) {
   }
 
   if (ext == 'pdf') {
-    if (bytes[0] != 0x25 || bytes[1] != 0x50 ||
-        bytes[2] != 0x44 || bytes[3] != 0x46) {
+    if (bytes[0] != 0x25 ||
+        bytes[1] != 0x50 ||
+        bytes[2] != 0x44 ||
+        bytes[3] != 0x46) {
       return '"$filename" does not appear to be a valid PDF — content mismatch.';
     }
   } else if (ext == 'jpg' || ext == 'jpeg') {
@@ -54,8 +77,10 @@ String? _validateFileBytes(String filename, List<int> bytes) {
       return '"$filename" does not appear to be a valid JPEG image.';
     }
   } else if (ext == 'png') {
-    if (bytes[0] != 0x89 || bytes[1] != 0x50 ||
-        bytes[2] != 0x4E || bytes[3] != 0x47) {
+    if (bytes[0] != 0x89 ||
+        bytes[1] != 0x50 ||
+        bytes[2] != 0x4E ||
+        bytes[3] != 0x47) {
       return '"$filename" does not appear to be a valid PNG image.';
     }
   }
@@ -105,8 +130,8 @@ class _UploadScreenState extends State<UploadScreen>
   double _uploadProgress = 0.0;
 
   PrintServer? _selectedStation;
+  List<PrintServer> _stations = [];
   bool _isLoadingStations = true;
-
 
   @override
   void initState() {
@@ -120,6 +145,8 @@ class _UploadScreenState extends State<UploadScreen>
       final stations = await _apiService.fetchPrintServers();
       if (!mounted) return;
       setState(() {
+        _stations = stations;
+        _selectedStation = null;
         if (stations.isNotEmpty) {
           _selectedStation = stations.firstWhere(
             (s) => s.status.toLowerCase() == 'online',
@@ -136,6 +163,8 @@ class _UploadScreenState extends State<UploadScreen>
           final stations = await _apiService.fetchPrintServers();
           if (!mounted) return;
           setState(() {
+            _stations = stations;
+            _selectedStation = null;
             if (stations.isNotEmpty) {
               _selectedStation = stations.firstWhere(
                 (s) => s.status.toLowerCase() == 'online',
@@ -166,7 +195,6 @@ class _UploadScreenState extends State<UploadScreen>
       await _loadStations();
     }
   }
-
 
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -221,14 +249,12 @@ class _UploadScreenState extends State<UploadScreen>
         }
         setState(() {});
       }
-
     } catch (e) {
       setState(() {
         _uploadError = 'Unable to open this file. Choose another.';
       });
     }
   }
-
 
   void _removeFile(int index) {
     setState(() {
@@ -268,8 +294,7 @@ class _UploadScreenState extends State<UploadScreen>
       for (int i = 0; i < total; i++) {
         final item = _selectedFiles[i];
         setState(() {
-          _uploadStatusText =
-              'Uploading ${i + 1} of $total: ${item.name}';
+          _uploadStatusText = 'Uploading ${i + 1} of $total: ${item.name}';
           _uploadProgress = (i + 0.5) / total;
         });
 
@@ -313,8 +338,7 @@ class _UploadScreenState extends State<UploadScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -341,9 +365,7 @@ class _UploadScreenState extends State<UploadScreen>
                       const SizedBox(height: 20),
 
                       // File list
-                      if (_selectedFiles.isNotEmpty) ...[
-                        _buildFileList(),
-                      ],
+                      if (_selectedFiles.isNotEmpty) ...[_buildFileList()],
 
                       // Upload progress
                       if (_isUploading) ...[
@@ -400,151 +422,122 @@ class _UploadScreenState extends State<UploadScreen>
             ),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'Autonomous Printer',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-              letterSpacing: -0.3,
+          const Flexible(
+            child: Text(
+              'Autonomous Printer',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+                letterSpacing: -0.3,
+              ),
             ),
           ),
         ],
       ),
-      actions: [
-        // Server connection button
-        GestureDetector(
-          onTap: _showServerConfigDialog,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: ApiConfig.isTunneled
-                    ? AppTheme.successBorder
-                    : AppTheme.border,
-              ),
-              borderRadius: BorderRadius.circular(8),
-              color: ApiConfig.isTunneled
-                  ? AppTheme.successSurface
-                  : AppTheme.surfaceSubtle,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: ApiConfig.isTunneled
-                        ? AppTheme.success
-                        : AppTheme.textMuted,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  ApiConfig.isTunneled ? 'Cloud' : 'Local',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: ApiConfig.isTunneled
-                        ? AppTheme.success
-                        : AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Refresh
-        _isLoadingStations
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                ),
-              )
-            : IconButton(
-                onPressed: _loadStations,
-                icon: const Icon(
-                  Icons.refresh_rounded,
-                  color: AppTheme.textMuted,
-                  size: 18,
-                ),
-                tooltip: 'Refresh',
-              ),
-        const SizedBox(width: 4),
-      ],
+      actions: [const HelpAction(), const SizedBox(width: 4)],
     );
   }
 
   Widget _buildStatusBar() {
-    final station = _selectedStation;
-    final isOnline = station != null && station.status.toLowerCase() == 'online';
-
-    if (_isLoadingStations) {
-      return Container(
-        height: 36,
-        color: AppTheme.surfaceSubtle,
-        alignment: Alignment.center,
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.textMuted),
-            ),
-            SizedBox(width: 8),
-            Text(
-              'Connecting to station...',
-              style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (station == null) return const SizedBox.shrink();
-
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        color: isOnline ? AppTheme.successSurface : AppTheme.surfaceSubtle,
-        border: Border(
-          bottom: BorderSide(
-            color: isOnline ? AppTheme.successBorder : AppTheme.border,
-          ),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: isOnline ? AppTheme.success : AppTheme.textMuted,
-              shape: BoxShape.circle,
+          Flexible(
+            child: PopupMenuButton<String>(
+              tooltip: 'Check nearby stations',
+              enabled: !_isLoadingStations,
+              itemBuilder: (_) => _stations.isEmpty
+                  ? [
+                      const PopupMenuItem(
+                        enabled: false,
+                        value: '',
+                        child: Text('No stations available'),
+                      ),
+                    ]
+                  : _stations
+                        .map(
+                          (s) => PopupMenuItem<String>(
+                            enabled: false,
+                            value: s.id,
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.print_outlined,
+                                color: s.canAcceptJobs
+                                    ? AppTheme.success
+                                    : AppTheme.textMuted,
+                              ),
+                              title: Text(s.name),
+                              subtitle: Text(
+                                '${s.location} \u00b7 ${s.canAcceptJobs ? 'Available' : 'Unavailable'}',
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.near_me_outlined,
+                      size: 16,
+                      color: AppTheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _isLoadingStations
+                            ? 'Loading stations...'
+                            : 'Nearby stations',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 2,
+                      ),
+                    ),
+                    const Icon(Icons.expand_more, size: 16),
+                  ],
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 7),
-          Text(
-            isOnline
-                ? '${station.name} · Ready'
-                : '${station.name} · Offline',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isOnline ? AppTheme.success : AppTheme.textMuted,
+          const SizedBox(width: 12),
+          Flexible(
+            child: OutlinedButton(
+              onPressed: _isUploading ? null : _showServerConfigDialog,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: AppTheme.surfaceWhite,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                side: const BorderSide(color: AppTheme.primaryBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.dns_outlined, size: 15),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '${ApiConfig.isTunneled ? 'Cloud' : 'Local'} connection',
+                      style: const TextStyle(fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -562,15 +555,16 @@ class _UploadScreenState extends State<UploadScreen>
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 16),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppTheme.danger,
+            size: 16,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _uploadError!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppTheme.danger,
-              ),
+              style: const TextStyle(fontSize: 13, color: AppTheme.danger),
             ),
           ),
           const SizedBox(width: 8),
@@ -583,7 +577,10 @@ class _UploadScreenState extends State<UploadScreen>
                   await _loadStations();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.danger.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
@@ -602,7 +599,11 @@ class _UploadScreenState extends State<UploadScreen>
               const SizedBox(width: 6),
               GestureDetector(
                 onTap: () => setState(() => _uploadError = null),
-                child: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: AppTheme.danger,
+                ),
               ),
             ],
           ),
@@ -612,75 +613,57 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Widget _buildDropzone() {
-    return GestureDetector(
-      onTap: _isUploading ? null : _pickFiles,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceWhite,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppTheme.border,
-            width: 1.5,
-            style: BorderStyle.solid,
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
-          boxShadow: AppTheme.cardShadow,
-        ),
-        child: Column(
-          children: [
-            // Icon area — restrained, not theatrical
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppTheme.primarySurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.primaryBorder),
-              ),
-              child: const Icon(
-                Icons.upload_file_rounded,
-                color: AppTheme.primary,
-                size: 24,
-              ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Ready to Print?',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.6,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Select files to print',
-              style: TextStyle(
-                fontSize: 16,
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: _isUploading ? null : _pickFiles,
+            icon: const Icon(Icons.file_upload_outlined, size: 22),
+            label: const Text('Upload File'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(64),
+              backgroundColor: AppTheme.primarySurface,
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.primaryBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 17,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'PDF, JPG, or PNG',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.textMuted,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-              decoration: BoxDecoration(
-                color: AppTheme.primary,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Text(
-                'Browse Files',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Supported formats: PDF, JPG, PNG',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+        ],
       ),
     );
   }

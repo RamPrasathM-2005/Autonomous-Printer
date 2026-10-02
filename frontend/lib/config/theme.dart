@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 // ---------------------------------------------------------------------------
 // AppTheme — Precision Utility aesthetic
-// Ink-blue on white. No gradient backgrounds. Controlled density. Surgical.
+// Blue accents, white cards, and a soft tiled page background.
 // ---------------------------------------------------------------------------
 
 class AppTheme {
@@ -11,7 +11,7 @@ class AppTheme {
   static const Color primaryDark  = Color(0xFF1447AE);
   static const Color primaryLight = Color(0xFF4A80E8);
 
-  // Ink-blue surfaces (thin tints, not gradients)
+  // Blue surface tints
   static const Color primarySurface = Color(0xFFF0F5FF);
   static const Color primaryBorder  = Color(0xFFBFCFEF);
 

@@ -1,5 +1,7 @@
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../services/api_service.dart';
@@ -22,6 +24,8 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
   late final TextEditingController _controller;
   String? _detectedTunnelUrl;
   bool _detectingTunnel = false;
+  bool _connecting = false;
+  String? _error;
 
   @override
   void initState() {
@@ -41,6 +45,42 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
     }
   }
 
+  Future<void> _connect() async {
+    var address = _controller.text.trim();
+    if (!address.contains('://')) address = 'http://$address';
+    final uri = Uri.tryParse(address);
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      setState(() => _error = 'Enter a valid server address.');
+      return;
+    }
+    address = address.replaceAll(RegExp(r'/+$'), '');
+    setState(() {
+      _connecting = true;
+      _error = null;
+    });
+    try {
+      final response = await http
+          .get(Uri.parse('$address/health'))
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200) throw Exception('Unavailable');
+      await ApiConfig.updateBackendUrl(address);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Unable to connect. Check the address and network.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -56,7 +96,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
           Icon(Icons.dns_rounded, color: AppTheme.primary, size: 22),
           SizedBox(width: 8),
           Text(
-            'Server Configuration',
+            'Connection',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
           ),
         ],
@@ -67,15 +107,21 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter backend API tunnel or server URL for quick remote/tunnel deployment:',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
+              'Enter the print server address.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                height: 1.3,
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: _controller,
+              enabled: !_connecting,
               decoration: InputDecoration(
-                hintText: 'https://xxxx.trycloudflare.com',
-                labelText: 'Backend Server URL',
+                errorText: _error,
+                hintText: 'http://192.168.1.10:8000',
+                labelText: 'Server address',
                 labelStyle: const TextStyle(fontSize: 12),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear_rounded, size: 18),
@@ -101,8 +147,12 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async {
-                      final data = await Clipboard.getData(Clipboard.kTextPlain);
-                      if (data != null && data.text != null && data.text!.trim().isNotEmpty) {
+                      final data = await Clipboard.getData(
+                        Clipboard.kTextPlain,
+                      );
+                      if (data != null &&
+                          data.text != null &&
+                          data.text!.trim().isNotEmpty) {
                         setState(() {
                           _controller.text = data.text!.trim();
                         });
@@ -120,13 +170,23 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                     icon: const Icon(Icons.paste_rounded, size: 16),
                     label: const Text(
                       'Paste from Clipboard',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primary,
-                      side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      side: BorderSide(
+                        color: AppTheme.primary.withValues(alpha: 0.4),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
                     ),
                   ),
                 ),
@@ -143,8 +203,12 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                   tooltip: 'Scan for active Cloudflare tunnel',
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primary,
-                    side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: BorderSide(
+                      color: AppTheme.primary.withValues(alpha: 0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ],
@@ -160,7 +224,11 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.cloud_done_rounded, color: Color(0xFF16A34A), size: 20),
+                    const Icon(
+                      Icons.cloud_done_rounded,
+                      color: Color(0xFF16A34A),
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -168,11 +236,19 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                         children: [
                           const Text(
                             'Active Cloudflare Quick Tunnel Found',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF166534)),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF166534),
+                            ),
                           ),
                           Text(
                             _detectedTunnelUrl!,
-                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF15803D)),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                              color: Color(0xFF15803D),
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -185,12 +261,21 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                         });
                       },
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         foregroundColor: const Color(0xFF16A34A),
                       ),
-                      child: const Text('Use', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                      child: const Text(
+                        'Use',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -201,26 +286,23 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: _connecting ? null : () => Navigator.pop(context, false),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () async {
-            final newUrl = _controller.text.trim();
-            if (newUrl.isNotEmpty) {
-              await ApiConfig.updateBackendUrl(newUrl);
-              if (context.mounted) {
-                Navigator.pop(context, true);
-              }
-            }
-          },
+          onPressed: _connecting ? null : _connect,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppTheme.primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
-          child: const Text('Save & Connect', style: TextStyle(fontWeight: FontWeight.w700)),
+          child: Text(
+            _connecting ? 'Connecting...' : 'Save & Connect',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );

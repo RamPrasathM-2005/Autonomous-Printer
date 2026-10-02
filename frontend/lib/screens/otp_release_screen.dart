@@ -1,3 +1,5 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -382,9 +384,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: AppBar(
+        actions: const [HelpAction()],
         title: const Text('Order & Release'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,

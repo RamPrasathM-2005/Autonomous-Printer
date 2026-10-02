@@ -1,3 +1,5 @@
+import '../widgets/app_scaffold.dart';
+import '../widgets/help_action.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -159,9 +161,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final amount = '${order.currency} ${order.amount.toStringAsFixed(2)}';
     final items = settings.items;
 
-    return Scaffold(
-      backgroundColor: AppTheme.bgCanvas,
+    return AppScaffold(
       appBar: AppBar(
+        actions: const [HelpAction()],
         title: const Text('Payment'),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,

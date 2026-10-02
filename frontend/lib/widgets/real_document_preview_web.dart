@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
+
 import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
@@ -39,6 +40,8 @@ class RealDocumentPreviewWidget extends StatefulWidget {
 
 class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
   static final Set<String> _registeredViews = {};
+  static int _nextId = 0;
+  final int _instanceId = _nextId++;
   String? _viewType;
   int _currentPage = 1;
 
@@ -54,6 +57,7 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.document.id != widget.document.id ||
         oldWidget.isLandscape != widget.isLandscape) {
+      if (oldWidget.document.id != widget.document.id) _currentPage = 1;
       _setupView();
       _triggerRender();
     }
@@ -62,9 +66,9 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
   void _setupView() {
     final doc = widget.document;
     final bytes = DocumentBytesCache.get(doc.id);
-    if (doc.isPdf && bytes != null && !widget.isThumbnail) {
-      final viewId = 'pdf-canvas-view-${doc.id}';
-      final canvasId = 'pdf-canvas-${doc.id}';
+    if (doc.isPdf && bytes != null) {
+      final viewId = 'pdf-canvas-view-${doc.id}-$_instanceId';
+      final canvasId = 'pdf-canvas-${doc.id}-$_instanceId';
 
       if (!_registeredViews.contains(viewId)) {
         ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
@@ -96,9 +100,9 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
   void _triggerRender() {
     final doc = widget.document;
     final bytes = DocumentBytesCache.get(doc.id);
-    if (doc.isPdf && bytes != null && !widget.isThumbnail) {
+    if (doc.isPdf && bytes != null) {
       final base64Str = base64Encode(bytes);
-      final canvasId = 'pdf-canvas-${doc.id}';
+      final canvasId = 'pdf-canvas-${doc.id}-$_instanceId';
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Future.delayed(const Duration(milliseconds: 150), () {
@@ -144,7 +148,7 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
     }
 
     // 2. If it is a PDF and we are rendering canvas view on web
-    if (doc.isPdf && _viewType != null && !widget.isThumbnail) {
+    if (doc.isPdf && _viewType != null) {
       return Container(
         width: widget.width,
         height: widget.height,
@@ -164,12 +168,15 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
         child: Stack(
           children: [
             Positioned.fill(child: HtmlElementView(viewType: _viewType!)),
-            if (doc.pages > 1)
+            if (doc.pages > 1 && !widget.isThumbnail)
               Positioned(
                 bottom: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.75),
                     borderRadius: BorderRadius.circular(16),
@@ -233,8 +240,10 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
         children: [
           Icon(
             doc.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-            size: widget.isThumbnail ? 22 : 36,
-            color: doc.isPdf ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
+            size: widget.isThumbnail ? 16 : 36,
+            color: doc.isPdf
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF2563EB),
           ),
           if (!widget.isThumbnail) ...[
             const SizedBox(height: 8),
@@ -251,7 +260,10 @@ class _RealDocumentPreviewWidgetState extends State<RealDocumentPreviewWidget> {
             const SizedBox(height: 2),
             Text(
               '${doc.pages} ${doc.pages == 1 ? 'page' : 'pages'} · ${doc.formattedSize}',
-              style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppTheme.textSecondary,
+              ),
             ),
           ] else ...[
             const SizedBox(height: 2),
