@@ -40,22 +40,35 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
+is_production = settings.ENVIRONMENT.lower() in ("production", "prod")
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="Smart Self-Service Printing Platform FastAPI Backend",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
 )
 
-# CORS configuration: Allow all origins and headers for local & Cloudflare Quick Tunnel access
+# CORS configuration: Restrict to configured origins, localhost, LAN, and Cloudflare tunnel
+cors_origins = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else [settings.ALLOWED_ORIGINS]
+
+cors_origin_regex = (
+    r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
+    r"|^https://[a-zA-Z0-9-]+\.trycloudflare\.com$"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=r"https?://.*",
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 import time
 import subprocess
@@ -102,9 +115,9 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 @app.post("/agent/release-kiosk", include_in_schema=False)
-def alias_release_kiosk(req: AgentReleaseRequest, db: Session = Depends(get_db)):
+def alias_release_kiosk(req: AgentReleaseRequest, request: Request, db: Session = Depends(get_db)):
     from app.api.routes.agent import release_job_kiosk
-    return release_job_kiosk(req, db)
+    return release_job_kiosk(req, request, db)
 
 @app.get("/health", tags=["Health"])
 def health_check():
@@ -196,13 +209,13 @@ from fastapi.responses import FileResponse
 downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
 
 @app.get("/api/downloads/apk", tags=["Downloads"])
-@app.get("/downloads/autonomous-printer.apk", tags=["Downloads"])
-def download_autonomous_printer_apk():
-    apk_file = downloads_dir / "autonomous-printer.apk"
+@app.get("/downloads/achuppori.apk", tags=["Downloads"])
+def download_achuppori_apk():
+    apk_file = downloads_dir / "achuppori.apk"
     if apk_file.exists():
         return FileResponse(
             path=str(apk_file),
-            filename="autonomous-printer.apk",
+            filename="achuppori.apk",
             media_type="application/vnd.android.package-archive"
         )
     raise AppException(

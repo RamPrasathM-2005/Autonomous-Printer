@@ -100,7 +100,8 @@ KIOSK_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Autonomous Print Station - Terminal</title>
+  <link rel="icon" href="/static/achuppori-logo.png">
+  <title>Achuppori - Terminal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
@@ -801,12 +802,10 @@ KIOSK_HTML = """<!DOCTYPE html>
   <header>
     <div class="station-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24">
-          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-        </svg>
+        <img src="/static/achuppori-logo.png" alt="Achuppori" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">
       </div>
       <div class="brand-text">
-        <h1>AUTONOMOUS PRINT STATION</h1>
+        <h1>ACHUPPORI</h1>
         <p>Self-Service Instant Release Terminal</p>
       </div>
     </div>
@@ -970,7 +969,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
   <!-- Bottom Kiosk Footer -->
   <footer>
-    Station ID: {{ agent_id }} &bull; Printer: {{ printer_name }} &bull; OTP Valid for 24 Hours &bull; Autonomous Self-Service
+    Station ID: {{ agent_id }} &bull; Printer: {{ printer_name }} &bull; OTP Valid for 24 Hours &bull; Achuppori
   </footer>
 
   <script>
@@ -1367,7 +1366,8 @@ SMART_GATEWAY_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Autonomous Print Station</title>
+  <link rel="icon" href="/static/achuppori-logo.png">
+  <title>Achuppori</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
@@ -1509,10 +1509,10 @@ SMART_GATEWAY_HTML = """<!DOCTYPE html>
     </div>
 
     <div class="icon-wrapper">
-      <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+        <img src="/static/achuppori-logo.png" alt="Achuppori" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">
     </div>
 
-    <h1>Autonomous Print Hub</h1>
+    <h1>Achuppori</h1>
     <p class="subtitle">Upload documents from your phone, complete checkout, and collect printed pages with your 6-digit PIN.</p>
 
     <div class="specs-grid">
@@ -1562,7 +1562,7 @@ def render_kiosk():
     # QR code points directly to the active Cloudflare tunnel if available
     qr_target = tunnel_url if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/kiosk/open"
     qr_data_uri = generate_qr_base64(qr_target)
-    apk_url = f"{tunnel_url}/downloads/autonomous-printer.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
+    apk_url = f"{tunnel_url}/downloads/achuppori.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/achuppori.apk"
 
     return render_template_string(
         KIOSK_HTML,
@@ -1580,7 +1580,7 @@ def get_qr_status():
     tunnel_url = get_tunnel_url()
     target_url = tunnel_url if tunnel_url else get_web_url()
     qr_data_uri = generate_qr_base64(target_url)
-    apk_url = f"{tunnel_url}/downloads/autonomous-printer.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/autonomous-printer.apk"
+    apk_url = f"{tunnel_url}/downloads/achuppori.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/achuppori.apk"
     return jsonify({
         "is_tunneled": bool(tunnel_url),
         "target_url": target_url,

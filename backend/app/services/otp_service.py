@@ -1,3 +1,7 @@
+import time
+import logging
+import threading
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from fastapi import status
@@ -11,6 +15,57 @@ from app.db.models.payment import Payment, PaymentStatus
 from app.utils.crypto import generate_secure_otp, hash_sha256, encrypt_value, decrypt_value
 from app.utils.errors import AppException
 from app.utils.state_machine import validate_order_transition, validate_job_transition
+
+logger = logging.getLogger("smartprint.security")
+
+class OTPRateLimiter:
+    """Thread-safe in-memory sliding-window rate limiter & cooldown manager for OTP verifications."""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._attempts = {}
+        self._cooldowns = {}
+
+    def check_rate_limit(self, key: str, max_attempts: int, window_seconds: int, cooldown_seconds: int) -> tuple[bool, int]:
+        now = time.time()
+        with self._lock:
+            # Check active cooldown
+            if key in self._cooldowns:
+                if now < self._cooldowns[key]:
+                    remaining = int(self._cooldowns[key] - now) + 1
+                    return False, remaining
+                else:
+                    del self._cooldowns[key]
+
+            # Clean expired timestamps
+            if key in self._attempts:
+                dq = self._attempts[key]
+                while dq and dq[0] < now - window_seconds:
+                    dq.popleft()
+                if len(dq) >= max_attempts:
+                    self._cooldowns[key] = now + cooldown_seconds
+                    return False, cooldown_seconds
+
+            return True, 0
+
+    def record_failed_attempt(self, key: str, max_attempts: int, window_seconds: int, cooldown_seconds: int) -> int:
+        now = time.time()
+        with self._lock:
+            if key not in self._attempts:
+                self._attempts[key] = deque()
+            dq = self._attempts[key]
+            dq.append(now)
+            while dq and dq[0] < now - window_seconds:
+                dq.popleft()
+            if len(dq) >= max_attempts:
+                self._cooldowns[key] = now + cooldown_seconds
+            return len(dq)
+
+    def reset(self, key: str):
+        with self._lock:
+            self._attempts.pop(key, None)
+            self._cooldowns.pop(key, None)
+
+_otp_rate_limiter = OTPRateLimiter()
 
 class OTPService:
     @staticmethod
@@ -144,14 +199,32 @@ class OTPService:
     def verify_and_release_job(
         db: Session,
         server_id: str | None = None,
-        plaintext_otp: str = ""
+        plaintext_otp: str = "",
+        client_ip: str | None = None
     ) -> PrintJob:
         """
         Transactional verification of OTP by print server or kiosk web interface.
-        Supports dual-printer OTPs: routes job to the selected printer based on
-        which OTP was entered, and immediately invalidates both OTPs to prevent duplicate printing.
+        Enforces attempt counting, lockout, cooldowns, and rate limiting across both kiosk
+        and agent verification endpoints.
         """
         raw_otp = plaintext_otp.strip()
+        rate_key = f"ip:{client_ip}" if client_ip else (f"server:{server_id}" if server_id else "global_kiosk")
+
+        # 0. Cooldown and rate limit check
+        allowed, retry_after = _otp_rate_limiter.check_rate_limit(
+            rate_key,
+            max_attempts=settings.OTP_RATE_LIMIT_ATTEMPTS,
+            window_seconds=settings.OTP_RATE_LIMIT_WINDOW_SECONDS,
+            cooldown_seconds=settings.OTP_COOLDOWN_SECONDS
+        )
+        if not allowed:
+            logger.warning(f"[SECURITY] OTP release rate-limited for {rate_key}. Cooldown: {retry_after}s remaining.")
+            raise AppException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                error_code="TOO_MANY_ATTEMPTS",
+                message=f"Too many failed OTP attempts. Please wait {retry_after} seconds before trying again."
+            )
+
         hashed_input = hash_sha256(raw_otp)
 
         # 1. Search candidate by standard OTP table hash
@@ -230,28 +303,53 @@ class OTPService:
                 if matching_entry:
                     break
 
+        # 3. Handle failed verification (attempt counter, lockout, and rate limiting)
         if not matching_entry:
+            failed_count = _otp_rate_limiter.record_failed_attempt(
+                rate_key,
+                max_attempts=settings.OTP_RATE_LIMIT_ATTEMPTS,
+                window_seconds=settings.OTP_RATE_LIMIT_WINDOW_SECONDS,
+                cooldown_seconds=settings.OTP_COOLDOWN_SECONDS
+            )
+
+            # Target active waiting OTPs: increment attempt count on active candidates
+            otp_query = (
+                db.query(OTP)
+                .join(Order, Order.id == OTP.order_id)
+                .join(PrintJob, PrintJob.order_id == Order.id)
+                .filter(OTP.active == True, Order.status == OrderStatus.WAITING_FOR_OTP)
+            )
             if server_id:
-                active_otp = (
-                    db.query(OTP)
-                    .join(Order, Order.id == OTP.order_id)
-                    .join(PrintJob, PrintJob.order_id == Order.id)
-                    .filter(PrintJob.server_id == server_id, OTP.active == True)
-                    .order_by(OTP.id.desc())
-                    .first()
-                )
-                if active_otp:
-                    active_otp.attempt_count += 1
-                    if active_otp.attempt_count >= settings.MAX_OTP_ATTEMPTS:
-                        active_otp.active = False
-                        db.commit()
-                        raise AppException(
-                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                            error_code="TOO_MANY_ATTEMPTS",
-                            message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
-                        )
-                    db.commit()
+                otp_query = otp_query.filter(PrintJob.server_id == server_id)
+
+            candidate_otps = otp_query.order_by(OTP.id.desc()).limit(10).all()
+            locked_any = False
+            for cand_otp in candidate_otps:
+                cand_otp.attempt_count += 1
+                if cand_otp.attempt_count >= settings.MAX_OTP_ATTEMPTS:
+                    cand_otp.active = False
+                    locked_any = True
+                    logger.warning(f"[SECURITY] OTP for order {cand_otp.order_id} locked after {cand_otp.attempt_count} failed attempts.")
+
             db.commit()
+
+            masked = f"{raw_otp[:2]}****" if len(raw_otp) >= 4 else "****"
+            logger.warning(f"[SECURITY] Failed OTP verification: otp={masked}, identifier={rate_key}, server={server_id}, failures={failed_count}")
+
+            if locked_any:
+                raise AppException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    error_code="TOO_MANY_ATTEMPTS",
+                    message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
+                )
+
+            if failed_count >= settings.OTP_RATE_LIMIT_ATTEMPTS:
+                raise AppException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    error_code="TOO_MANY_ATTEMPTS",
+                    message=f"Maximum OTP attempts exceeded. Please wait {settings.OTP_COOLDOWN_SECONDS} seconds before trying again."
+                )
+
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="INVALID_OTP",
@@ -260,8 +358,15 @@ class OTPService:
 
         otp_rec, order_rec, job_rec, doc_rec = matching_entry
 
-        # Crucial Anti-Duplicate Rule:
-        # Check if already completed or released. If one OTP was already used, BOTH are expired!
+        # 4. Check if order was cancelled
+        if order_rec.status == OrderStatus.CANCELLED:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="ORDER_CANCELLED",
+                message="This order has been cancelled and its OTP is no longer valid."
+            )
+
+        # 5. Check if already completed or released (Crucial Anti-Duplicate Rule)
         order_settings = dict(order_rec.print_settings or {})
         if (
             order_rec.status in [OrderStatus.COMPLETED, OrderStatus.PRINTING]
@@ -275,11 +380,29 @@ class OTPService:
                 message="This print job has already been printed. Both OTPs are expired."
             )
 
+        # 6. Check attempts lockout
+        if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
+            otp_rec.active = False
+            db.commit()
+            raise AppException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                error_code="TOO_MANY_ATTEMPTS",
+                message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
+            )
+
+        # 7. Check if inactive
+        if not otp_rec.active:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="INVALID_OTP",
+                message="This OTP is inactive or invalid."
+            )
+
         # Idempotency for already released jobs
         if order_rec.status == OrderStatus.RELEASED and job_rec.status == PrintJobStatus.RELEASED:
             return job_rec
 
-        # Verify payment completion
+        # 7. Verify payment completion
         if order_rec.status == OrderStatus.CREATED:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -294,17 +417,7 @@ class OTPService:
                 message="Payment has not been completed for this order."
             )
 
-        # Check attempts lockout
-        if otp_rec.attempt_count >= settings.MAX_OTP_ATTEMPTS:
-            otp_rec.active = False
-            db.commit()
-            raise AppException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                error_code="TOO_MANY_ATTEMPTS",
-                message="Maximum OTP attempts exceeded. Please generate/request a new OTP."
-            )
-
-        # Check expiration
+        # 8. Check expiration
         expires = otp_rec.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=timezone.utc)
@@ -317,6 +430,11 @@ class OTPService:
                 error_code="OTP_EXPIRED",
                 message="OTP Expired. Please generate/request a new OTP."
             )
+
+        # 9. Successful Verification: Reset attempts & clear rate limiter
+        otp_rec.attempt_count = 0
+        _otp_rate_limiter.reset(rate_key)
+        logger.info(f"[SECURITY] OTP successfully verified and released for order {order_rec.id} (Identifier: {rate_key})")
 
         # Determine target printer for this job
         target_printer = matched_printer_name or order_settings.get("cups_printer_name") or "HP_LaserJet_400_M401dn_F36EC0"
@@ -331,11 +449,11 @@ class OTPService:
 
         now = datetime.now(timezone.utc)
 
-        # 1. Immediately invalidate the primary OTP record
+        # Invalidate the primary OTP record
         otp_rec.used_at = now
         otp_rec.active = False
 
-        # 2. Invalidate all printer OTPs in order settings & lock printer selection
+        # Invalidate all printer OTPs in order settings & lock printer selection
         order_settings["cups_printer_name"] = target_printer
         order_settings["printer_name"] = target_printer
         order_settings["selected_printer"] = target_printer
