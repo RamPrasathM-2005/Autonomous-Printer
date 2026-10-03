@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 from typing import List, Union
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -56,7 +57,10 @@ class Settings(BaseSettings):
     HEARTBEAT_TIMEOUT_SECONDS: int = 60
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(Path(__file__).resolve().parent.parent.parent / ".env"),
+            ".env"
+        ),
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -96,17 +100,6 @@ class Settings(BaseSettings):
                     f"CRITICAL SECURITY CONFIGURATION ERROR: The following required production secrets are missing or insecure: {', '.join(missing_secrets)}. "
                     f"Configure them via environment variables or .env file before starting in production mode."
                 )
-        else:
-            # Flexible development defaults
-            if not self.JWT_SECRET_KEY:
-                self.JWT_SECRET_KEY = "b7b577539d29ac3348a3db06598626e4c150f2e350fd9da90fc77471801dc9ca"
-            if not self.RAZORPAY_KEY_ID:
-                self.RAZORPAY_KEY_ID = "rzp_test_RFxhjAiTxwrpAJ"
-            if not self.RAZORPAY_KEY_SECRET:
-                self.RAZORPAY_KEY_SECRET = "f7jSae5XJ4V6EfZIYTUpWB7q"
-            if not self.RAZORPAY_WEBHOOK_SECRET:
-                self.RAZORPAY_WEBHOOK_SECRET = "rzp_test_webhook_secret"
-
         return self
 
 settings = Settings()

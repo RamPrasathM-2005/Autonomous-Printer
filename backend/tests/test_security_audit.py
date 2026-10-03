@@ -34,7 +34,7 @@ def test_task1_production_startup_validation():
         JWT_SECRET_KEY="",
         DATABASE_URL="sqlite:///:memory:"
     )
-    assert dev_settings.JWT_SECRET_KEY != ""
+    assert dev_settings.ENVIRONMENT == "development"
 
 def test_task2_otp_kiosk_brute_force_lockout_and_reset(client, test_print_server, db_session):
     # Create order and OTP
