@@ -69,8 +69,22 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [i
         }
     }
     $listener = $null
-    if ($Port) { $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue }
-    if ($listener) { throw "Port $Port is occupied by another process. Stop it before starting $Name." }
+    if ($Port) {
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
+        if ($listener) { throw "Port $Port is occupied by another process. Stop it before starting $Name." }
+        try {
+            $testSock = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+            $testSock.Start()
+            $testSock.Stop()
+        } catch {
+            $inner = $_.Exception.InnerException
+            if ($inner -and $inner.ErrorCode -eq 10013) {
+                Write-Host "`n[!] Port $Port is blocked by Windows excluded port range (WinNAT / Hyper-V)." -ForegroundColor Red
+                Write-Host "    Run .\fix_ports.bat to reset excluded port ranges and release port $Port.`n" -ForegroundColor Yellow
+                throw "Port $Port is blocked by Windows port exclusion range (WinError 10013). Run .\fix_ports.bat to fix."
+            }
+        }
+    }
     $proc = Start-Process -FilePath $python -ArgumentList $Arguments -WorkingDirectory $Directory `
         -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $runtime "$Name.out.log") `
@@ -80,7 +94,17 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [i
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     do {
         $proc.Refresh()
-        if ($proc.HasExited) { throw "$Name exited. Check .runtime\$Name.err.log and .runtime\$Name.out.log." }
+        if ($proc.HasExited) {
+            $errFile = Join-Path $runtime "$Name.err.log"
+            if (Test-Path -LiteralPath $errFile) {
+                $errContent = Get-Content -LiteralPath $errFile -Raw
+                if ($errContent -match 'WinError 10013|forbidden by its access permissions') {
+                    Write-Host "`n[!] $Name failed to bind port: blocked by Windows port exclusion (WinNAT / Hyper-V)." -ForegroundColor Red
+                    Write-Host "    Run .\fix_ports.bat to release port $Port.`n" -ForegroundColor Yellow
+                }
+            }
+            throw "$Name exited. Check .runtime\$Name.err.log and .runtime\$Name.out.log."
+        }
         try {
             if (-not $HealthUrl) { Start-Sleep -Seconds 2; $proc.Refresh(); if ($proc.HasExited) { throw "$Name exited." }; Write-Host "$Name started."; return }
             $null = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 2
