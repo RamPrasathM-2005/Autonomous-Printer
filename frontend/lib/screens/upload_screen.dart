@@ -1,5 +1,6 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
+import '../widgets/print_illustration.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -185,7 +186,9 @@ class _UploadScreenState extends State<UploadScreen>
     }
   }
 
-  Future<void> _checkAndRestoreExistingOrder({bool forceNavigate = true}) async {
+  Future<void> _checkAndRestoreExistingOrder({
+    bool forceNavigate = true,
+  }) async {
     if (_isCheckingOrderRecovery) return;
     setState(() => _isCheckingOrderRecovery = true);
 
@@ -210,7 +213,7 @@ class _UploadScreenState extends State<UploadScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not reach the server. Check your connection — any active orders will resume once you reconnect.',
+              'Server unavailable. Your orders are saved; reconnect to resume.',
             ),
             backgroundColor: AppTheme.warning,
             behavior: SnackBarBehavior.floating,
@@ -270,7 +273,8 @@ class _UploadScreenState extends State<UploadScreen>
             if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
           });
         }
-      } else if (recovery.stage == RecoveryStage.waitingOtp && recovery.order != null) {
+      } else if (recovery.stage == RecoveryStage.waitingOtp &&
+          recovery.order != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -282,7 +286,8 @@ class _UploadScreenState extends State<UploadScreen>
         ).then((_) {
           if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
         });
-      } else if (recovery.stage == RecoveryStage.printing && recovery.order != null) {
+      } else if (recovery.stage == RecoveryStage.printing &&
+          recovery.order != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -295,7 +300,8 @@ class _UploadScreenState extends State<UploadScreen>
         ).then((_) {
           if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
         });
-      } else if (recovery.stage == RecoveryStage.completed && recovery.order != null) {
+      } else if (recovery.stage == RecoveryStage.completed &&
+          recovery.order != null) {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -330,9 +336,7 @@ class _UploadScreenState extends State<UploadScreen>
             child: const Text('Keep Order'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.danger,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Cancel Order'),
           ),
@@ -432,7 +436,10 @@ class _UploadScreenState extends State<UploadScreen>
     final apkUrl = '${ApiConfig.baseUrl}/api/downloads/apk';
     try {
       final uri = Uri.parse(apkUrl);
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) {
         await launchUrl(
           Uri.parse('/downloads/achuppori.apk'),
@@ -443,7 +450,9 @@ class _UploadScreenState extends State<UploadScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Starting APK download... Check your browser downloads.'),
+            content: Text(
+              'Starting APK download... Check your browser downloads.',
+            ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppTheme.primary,
           ),
@@ -462,9 +471,7 @@ class _UploadScreenState extends State<UploadScreen>
 
   void _processRawFile({required String name, required Uint8List rawBytes}) {
     if (rawBytes.isEmpty) {
-      setState(
-        () => _uploadError = 'Cannot read "$name" — please try again.',
-      );
+      setState(() => _uploadError = 'Cannot read "$name" — please try again.');
       return;
     }
 
@@ -481,15 +488,10 @@ class _UploadScreenState extends State<UploadScreen>
     )) {
       _uploadError = null;
       _selectedFiles.add(
-        SelectedDocItem(
-          name: name,
-          size: fileBytes.length,
-          bytes: fileBytes,
-        ),
+        SelectedDocItem(name: name, size: fileBytes.length, bytes: fileBytes),
       );
     }
   }
-
 
   Future<void> _pickFiles() async {
     if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
@@ -668,10 +670,13 @@ class _UploadScreenState extends State<UploadScreen>
             // Scrollable body
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
+                    constraints: const BoxConstraints(maxWidth: 960),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -682,15 +687,26 @@ class _UploadScreenState extends State<UploadScreen>
                         ],
 
                         // Order Recovery banner
-                        if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) ...[
+                        if (_activeRecovery != null &&
+                            _activeRecovery!.hasActiveUnfinishedOrder) ...[
                           _buildActiveOrderBanner(),
                           const SizedBox(height: 16),
-                        ] else if (_activeRecovery != null && _activeRecovery!.stage == RecoveryStage.completed) ...[
+                        ] else if (_activeRecovery != null &&
+                            _activeRecovery!.stage ==
+                                RecoveryStage.completed) ...[
                           _buildCompletedOrderBanner(),
                           const SizedBox(height: 16),
                         ],
 
-
+                        if (_selectedFiles.isEmpty) ...[
+                          const Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: PrintIllustration(),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
                         // Upload zone
                         _buildDropzone(),
                         const SizedBox(height: 20),
@@ -703,7 +719,17 @@ class _UploadScreenState extends State<UploadScreen>
                           const SizedBox(height: 16),
                           _buildUploadProgress(),
                         ],
-
+                        if (_selectedFiles.isEmpty) ...[
+                          const Center(
+                            child: Text(
+                              'Achuppori · Self-service printing',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -713,7 +739,7 @@ class _UploadScreenState extends State<UploadScreen>
             ),
 
             // Bottom bar
-            _buildBottomBar(),
+            if (_selectedFiles.isNotEmpty) _buildBottomBar(),
           ],
         ),
       ),
@@ -777,7 +803,11 @@ class _UploadScreenState extends State<UploadScreen>
         if (kIsWeb)
           IconButton(
             onPressed: _downloadApk,
-            icon: const Icon(Icons.android_rounded, size: 20, color: Color(0xFF059669)),
+            icon: const Icon(
+              Icons.android_rounded,
+              size: 20,
+              color: Color(0xFF059669),
+            ),
             tooltip: 'Download Android App',
           ),
         const HelpAction(),
@@ -901,8 +931,8 @@ class _UploadScreenState extends State<UploadScreen>
     final statusText = isUnpaid
         ? 'Awaiting Payment'
         : isWaitingOtp
-            ? 'Ready to Release (OTP)'
-            : 'Printing in Progress';
+        ? 'Ready to Release (OTP)'
+        : 'Printing in Progress';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -950,7 +980,10 @@ class _UploadScreenState extends State<UploadScreen>
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.danger,
                 side: const BorderSide(color: AppTheme.dangerBorder),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1041,7 +1074,10 @@ class _UploadScreenState extends State<UploadScreen>
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Receipt', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Receipt',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
           ),
           const SizedBox(width: 6),
           FilledButton(
@@ -1058,13 +1094,15 @@ class _UploadScreenState extends State<UploadScreen>
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Print Again', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Print Again',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildErrorBanner() {
     return Container(
@@ -1141,15 +1179,19 @@ class _UploadScreenState extends State<UploadScreen>
           duration: const Duration(milliseconds: 180),
           padding: EdgeInsets.all(isNarrow ? 20 : 28),
           decoration: BoxDecoration(
-            color: _isDragging ? AppTheme.primarySurface : AppTheme.surfaceWhite,
-            borderRadius: BorderRadius.circular(24),
+            color: _isDragging
+                ? AppTheme.primarySurface
+                : AppTheme.surfaceWhite,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: _isDragging ? AppTheme.primary : AppTheme.border,
               width: _isDragging ? 2.0 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primary.withValues(alpha: _isDragging ? 0.12 : 0.04),
+                color: AppTheme.primary.withValues(
+                  alpha: _isDragging ? 0.12 : 0.04,
+                ),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -1167,20 +1209,26 @@ class _UploadScreenState extends State<UploadScreen>
                   color: _isDragging ? AppTheme.primary : AppTheme.textPrimary,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: _isUploading ? null : _pickFiles,
                 icon: Icon(
-                  _isDragging ? Icons.file_download_rounded : Icons.file_upload_outlined,
+                  _isDragging
+                      ? Icons.file_download_rounded
+                      : Icons.file_upload_outlined,
                   size: 22,
                 ),
                 label: Text(_isDragging ? 'Drop to Upload' : 'Upload File'),
                 style: OutlinedButton.styleFrom(
-                  minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
-                  backgroundColor: _isDragging ? Colors.white : AppTheme.primarySurface,
+                  minimumSize: const Size.fromHeight(54),
+                  backgroundColor: _isDragging
+                      ? Colors.white
+                      : AppTheme.primarySurface,
                   foregroundColor: AppTheme.primary,
                   side: BorderSide(
-                    color: _isDragging ? AppTheme.primary : AppTheme.primaryBorder,
+                    color: _isDragging
+                        ? AppTheme.primary
+                        : AppTheme.primaryBorder,
                     width: _isDragging ? 1.5 : 1.0,
                   ),
                   shape: RoundedRectangleBorder(
@@ -1200,7 +1248,9 @@ class _UploadScreenState extends State<UploadScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: _isDragging ? AppTheme.primary : AppTheme.textSecondary,
+                  color: _isDragging
+                      ? AppTheme.primary
+                      : AppTheme.textSecondary,
                   fontWeight: _isDragging ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),

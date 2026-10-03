@@ -1,28 +1,30 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
 import 'dart:typed_data';
 
+import 'package:web/web.dart' as web;
+
 Future<void> downloadFileUniversal(Uint8List bytes, String filename) async {
-  final blob = html.Blob([bytes], 'application/pdf');
-  final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.document.createElement('a') as html.AnchorElement
-    ..href = url
-    ..style.display = 'none'
-    ..download = filename;
-  html.document.body?.children.add(anchor);
-  anchor.click();
-  html.document.body?.children.remove(anchor);
-  html.Url.revokeObjectUrl(url);
+  final blob = web.Blob(
+    [bytes.toJS].toJS,
+    web.BlobPropertyBag(type: 'application/pdf'),
+  );
+  final url = web.URL.createObjectURL(blob);
+  try {
+    triggerUrlDownloadUniversal(url, filename: filename);
+  } finally {
+    // Allow the browser to start consuming the Blob before revoking its URL.
+    await Future<void>.delayed(const Duration(seconds: 1));
+    web.URL.revokeObjectURL(url);
+  }
 }
 
 void triggerUrlDownloadUniversal(String url, {String? filename}) {
-  final anchor = html.document.createElement('a') as html.AnchorElement
+  final anchor = web.HTMLAnchorElement()
     ..href = url
     ..download = filename ?? ''
     ..target = '_blank'
     ..style.display = 'none';
-  html.document.body?.children.add(anchor);
+  web.document.body?.appendChild(anchor);
   anchor.click();
-  html.document.body?.children.remove(anchor);
+  anchor.remove();
 }
-

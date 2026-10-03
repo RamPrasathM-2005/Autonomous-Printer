@@ -2,7 +2,33 @@
 
 Flutter web frontend, FastAPI backend, MySQL, and a local CUPS print agent. Payments use Razorpay Standard Checkout with server verification. The currently configured Windows installation uses **Razorpay test mode and simulated printing**.
 
-## Run this installation
+## Setup on Windows and Ubuntu
+
+Use **Flutter 3.47.5 (Dart 3.13.4)** and **Python 3.14** to match the tested build. Put Flutter/Python on PATH. Web/mobile setup disables desktop plugin generation in this project's pubspec, so Windows web builds do not require Developer Mode. Ubuntu requires `python3-venv`; physical printing additionally requires CUPS and `pycups`.
+
+Run from the repository root after cloning:
+
+```powershell
+# Windows
+python scripts/project.py setup
+start_all.bat
+```
+
+```bash
+# Ubuntu
+python3 scripts/project.py setup
+bash start_all.sh
+```
+
+Open http://127.0.0.1:3000/. Setup installs pinned Python dependencies and the committed Flutter lockfile. Fresh installations use SQLite, random local secrets and a simulated print station. Existing configuration and database records are preserved. Configure your Razorpay test keys in `backend/.env` before testing checkout; placeholder keys cannot process payments. MySQL and physical printing require your own database/station configuration.
+
+After pulling, repeat setup if dependencies changed and restart. Launchers automatically rebuild when web sources, assets, dependencies or the Flutter SDK change. Force rebuild with `start_all.bat -Build` or `bash start_all.sh --build`; use `-Hot` or `--hot` for development. Stop Windows services with `stop_all.bat`, or the Ubuntu launcher with Ctrl+C. Logs are in `.runtime/`. Launchers check service readiness; Ubuntu includes the payment reconciliation worker and stops only its own processes.
+
+Build only: `python scripts/project.py build` (use `python3` on Ubuntu). Direct Flutter builds work after `flutter pub get --enforce-lockfile`; generated `active_tunnel.dart` is no longer required. APK scripts use the `ACTIVE_TUNNEL_URL` build definition. Start `bash start_tunnel.sh` separately when needed. Hosted web builds use a same-origin API unless `API_BASE_URL` is specified at build time; configure matching CORS/CSP for a separate API.
+
+The default agent health/keypad are http://127.0.0.1:5001/health and http://127.0.0.1:5001/kiosk; agent `PORT` overrides this. `.gitattributes` keeps shell scripts on LF across operating systems. GitHub CI checks Windows and Ubuntu and uploads release web bundles.
+
+## Existing Windows installation
 
 Double-click `start_all.bat`, then open http://127.0.0.1:3000/. The launcher starts four background processes: API, reconciliation worker, print agent, and frontend. MySQL80 must be running.
 
@@ -11,8 +37,8 @@ Double-click `start_all.bat`, then open http://127.0.0.1:3000/. The launcher sta
 - Logs: `.runtime/`.
 - Backend health: http://127.0.0.1:8000/health.
 - Local API reference: http://127.0.0.1:8000/docs.
-- Agent health: http://127.0.0.1:5000/health.
-- Local station keypad: http://127.0.0.1:5000/kiosk (open on the station computer).
+- Agent health: http://127.0.0.1:5001/health.
+- Local station keypad: http://127.0.0.1:5001/kiosk (open on the station computer).
 
 The installed Flutter SDK is at `D:\flutter_windows_3.47.5-stable\flutter`. Python dependencies are in `.venv`. Configuration belongs in `backend/.env` and `print-agent/.env`; Flutter does not consume `frontend/.env`. Never place payment secrets or agent tokens in Flutter.
 

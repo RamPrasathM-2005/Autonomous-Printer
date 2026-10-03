@@ -58,11 +58,17 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       if (s == 'COMPLETED' || s == 'SUCCESS') {
         OrderRecoveryService().markCompleted(_currentOrder!.id);
       } else if (['WAITING_FOR_OTP', 'PAID', 'JOB_QUEUED'].contains(s)) {
-        OrderRecoveryService().setActiveOrder(_currentOrder!.id, stage: 'WAITING_FOR_OTP');
+        OrderRecoveryService().setActiveOrder(
+          _currentOrder!.id,
+          stage: 'WAITING_FOR_OTP',
+        );
       } else if (['PRINTING', 'RELEASED'].contains(s)) {
         OrderRecoveryService().updateActiveStage('PRINTING');
       } else {
-        OrderRecoveryService().setActiveOrder(_currentOrder!.id, stage: 'UNPAID');
+        OrderRecoveryService().setActiveOrder(
+          _currentOrder!.id,
+          stage: 'UNPAID',
+        );
       }
     }
     _loadCapabilities();
@@ -172,7 +178,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       );
 
       final confirmedOrder = await _api.getOrder(order.id);
-      OrderRecoveryService().setActiveOrder(confirmedOrder.id, stage: 'WAITING_FOR_OTP');
+      OrderRecoveryService().setActiveOrder(
+        confirmedOrder.id,
+        stage: 'WAITING_FOR_OTP',
+      );
 
       if (!mounted) return;
 
@@ -223,7 +232,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
       final s = order.status.toUpperCase();
       if (['WAITING_FOR_OTP', 'PAID', 'JOB_QUEUED'].contains(s)) {
-        OrderRecoveryService().setActiveOrder(order.id, stage: 'WAITING_FOR_OTP');
+        OrderRecoveryService().setActiveOrder(
+          order.id,
+          stage: 'WAITING_FOR_OTP',
+        );
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -291,9 +303,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             child: const Text('Keep Order'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.danger,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Cancel Order'),
           ),
@@ -319,7 +329,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _message = userError(e, fallback: 'Could not cancel order. Please try again.');
+          _message = userError(
+            e,
+            fallback: 'Could not cancel order. Please try again.',
+          );
         });
       }
     }
@@ -332,7 +345,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         : '₹${_totalEstimatedTotal.toStringAsFixed(2)}';
 
     if (_currentOrder != null &&
-        ['COMPLETED', 'SUCCESS'].contains(_currentOrder!.status.toUpperCase())) {
+        [
+          'COMPLETED',
+          'SUCCESS',
+        ].contains(_currentOrder!.status.toUpperCase())) {
       return AppScaffold(
         appBar: AppBar(
           actions: const [HelpAction()],
@@ -725,7 +741,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   ),
 
                 if (_currentOrder != null &&
-                    ['COMPLETED', 'SUCCESS'].contains(_currentOrder!.status.toUpperCase()))
+                    [
+                      'COMPLETED',
+                      'SUCCESS',
+                    ].contains(_currentOrder!.status.toUpperCase()))
                   FilledButton(
                     onPressed: () {
                       OrderRecoveryService().printAgain();
@@ -771,11 +790,15 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
-                          'Pay & Continue',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
+                        const Flexible(
+                          child: Text(
+                            'Pay & Continue',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -800,7 +823,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   const SizedBox(height: 6),
                   TextButton.icon(
                     onPressed: _busy ? null : _handleCancelOrder,
-                    icon: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: AppTheme.danger,
+                    ),
                     label: const Text(
                       'Cancel Order',
                       style: TextStyle(

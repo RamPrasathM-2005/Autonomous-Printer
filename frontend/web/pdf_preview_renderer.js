@@ -37,7 +37,7 @@
         }
 
         try {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', document.baseURI).href;
         } catch (_) {}
 
         var canvas = findElementInDomOrShadow(canvasId);
@@ -59,6 +59,7 @@
 
             var loadingTask = pdfjsLib.getDocument({
                 data: uint8Array,
+                isEvalSupported: false,
                 disableRange: true,
                 disableStream: true
             });

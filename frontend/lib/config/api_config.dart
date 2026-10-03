@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/session_store.dart';
-import 'active_tunnel.dart';
+
+const String kActiveTunnelUrl = String.fromEnvironment('ACTIVE_TUNNEL_URL');
 
 class ApiConfig {
   static const String _keyBackendUrl = 'backend_base_url';
+  static const String _keyBackendOrigin = 'backend_override_origin';
   static const String _keyAgentUrl = 'agent_base_url';
   static const String _keySelectedStationId = 'selected_station_id';
 
@@ -16,8 +19,13 @@ class ApiConfig {
       return Uri.base.origin;
     }
     // On physical mobile devices, if active Cloudflare tunnel is known, prefer it so remote/cellular works!
-    if (!kIsWeb && kActiveTunnelUrl.isNotEmpty && kActiveTunnelUrl.startsWith('http')) {
+    if (!kIsWeb &&
+        kActiveTunnelUrl.isNotEmpty &&
+        kActiveTunnelUrl.startsWith('http')) {
       return kActiveTunnelUrl;
+    }
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000';
     }
     return 'http://127.0.0.1:8000';
   }
@@ -25,7 +33,7 @@ class ApiConfig {
   static String get defaultAgentUrl {
     const configured = String.fromEnvironment('AGENT_BASE_URL');
     if (configured.isNotEmpty) return configured;
-    return 'http://127.0.0.1:5000';
+    return 'http://127.0.0.1:5001';
   }
 
   static String backendUrl = defaultBackendUrl;
@@ -37,10 +45,8 @@ class ApiConfig {
     if (kActiveTunnelUrl.isNotEmpty && kActiveTunnelUrl.startsWith('http'))
       kActiveTunnelUrl,
     'http://127.0.0.1:8000',
-    'http://10.11.14.85:8000',
-    'http://172.17.3.5:8000',
-    'http://10.1.100.250:8000',
-    'http://10.0.2.2:8000',
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+      'http://10.0.2.2:8000',
   ];
 
   static Future<void> init() async {
@@ -51,17 +57,26 @@ class ApiConfig {
     // Smart Cloudflare Tunnel & Web Origin synchronization
     if (kIsWeb) {
       final host = Uri.base.host.toLowerCase();
-      final queryBackend = Uri.base.queryParameters['backend'] ?? Uri.base.queryParameters['tunnel'];
+      final queryBackend =
+          Uri.base.queryParameters['backend'] ??
+          Uri.base.queryParameters['tunnel'];
       if (queryBackend != null && queryBackend.trim().isNotEmpty) {
         storedBackend = queryBackend.trim().replaceAll(RegExp(r'/+$'), '');
         await prefs.setString(_keyBackendUrl, storedBackend);
+        await prefs.setString(_keyBackendOrigin, Uri.base.origin);
+      } else if (const String.fromEnvironment('API_BASE_URL') != '') {
+        storedBackend = defaultBackendUrl;
       } else if (!['localhost', '127.0.0.1'].contains(host)) {
         // When accessed via Cloudflare Tunnel or remote hostname on mobile browser,
         // ALWAYS use the origin to avoid Mixed Content / unreachable localhost!
         storedBackend = Uri.base.origin;
         await prefs.setString(_keyBackendUrl, storedBackend);
-      } else if (storedBackend == null || storedBackend.contains('10.0.2.2')) {
-        storedBackend = defaultBackendUrl;
+      } else {
+        // A local checkout must not inherit another machine's saved LAN/tunnel URL.
+        if (prefs.getString(_keyBackendOrigin) != Uri.base.origin ||
+            storedBackend == null) {
+          storedBackend = defaultBackendUrl;
+        }
         await prefs.setString(_keyBackendUrl, storedBackend);
       }
     } else {
@@ -89,6 +104,7 @@ class ApiConfig {
     backendUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyBackendUrl, backendUrl);
+    if (kIsWeb) await prefs.setString(_keyBackendOrigin, Uri.base.origin);
   }
 
   static Future<void> setBackendUrl(String url) => updateBackendUrl(url);

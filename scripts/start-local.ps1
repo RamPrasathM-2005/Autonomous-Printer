@@ -12,13 +12,8 @@ foreach ($argument in $args) {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runtime = Join-Path $projectRoot '.runtime'
 $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $python)) { throw 'Create .venv and install requirements.txt first.' }
+if (-not (Test-Path -LiteralPath $python)) { throw 'Run python scripts/project.py setup first.' }
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
-$webRoot = Join-Path $projectRoot 'frontend\build\web'
-$tunnelDart = Join-Path $projectRoot 'frontend\lib\config\active_tunnel.dart'
-if (-not (Test-Path -LiteralPath $tunnelDart)) {
-    Copy-Item -LiteralPath "$tunnelDart.example" -Destination $tunnelDart
-}
 $flutter = Get-Command flutter -ErrorAction SilentlyContinue
 if (-not $flutter) {
     $flutterCandidates = @(
@@ -31,18 +26,22 @@ if (-not $flutter) {
         $flutter = Get-Command flutter
     }
 }
-if ($Hot -or $Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))) {
-    if (-not $flutter) { throw 'Flutter is not installed or available on PATH.' }
-    Push-Location (Join-Path $projectRoot 'frontend')
-    try {
-        & $flutter.Source packages pub get
-        if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency installation failed.' }
-        if (-not $Hot) {
-            & $flutter.Source build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
-            if ($LASTEXITCODE -ne 0) { throw 'Flutter web build failed.' }
-        }
-    } finally { Pop-Location }
-}
+if (-not $flutter) { throw 'Flutter is not installed or available on PATH.' }
+Push-Location $projectRoot
+try {
+    if ($Hot) {
+        Push-Location (Join-Path $projectRoot 'frontend')
+        try {
+            & $flutter.Source pub get --enforce-lockfile
+            if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency installation failed.' }
+        } finally { Pop-Location }
+    } else {
+        $buildArgs = @('scripts/project.py', 'build')
+        if ($Build) { $buildArgs += '--build' }
+        & $python @buildArgs
+        if ($LASTEXITCODE -ne 0) { throw 'Flutter web build failed.' }
+    }
+} finally { Pop-Location }
 function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [int]$TimeoutSec = 45) {
     $stateFile = Join-Path $runtime "$Name.json"
     if (Test-Path -LiteralPath $stateFile) {

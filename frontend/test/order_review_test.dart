@@ -34,11 +34,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Review Your Order'), findsOneWidget);
-      expect(find.text('Pay \u20b924.00'), findsOneWidget);
+      expect(find.text('Pay & Continue'), findsOneWidget);
+      expect(find.text('\u20b924.00'), findsWidgets);
 
       await tester.tap(find.byTooltip('Remove file').first);
       await tester.pumpAndSettle();
-      expect(find.text('Pay \u20b912.00'), findsOneWidget);
+      expect(find.text('Pay & Continue'), findsOneWidget);
+      expect(find.text('\u20b912.00'), findsWidgets);
       expect(find.text(docs.first.filename), findsNothing);
       final remove = tester.widget<IconButton>(
         find.byWidgetPredicate(

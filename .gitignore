@@ -63,8 +63,7 @@ bin/
 .runtime/
 print-agent/state/
 
-# Markdown documentation
-*.md
+# Documentation is versioned with the source.
 
 # Downloads and local builds
 downloads/
