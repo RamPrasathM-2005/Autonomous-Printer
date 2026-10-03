@@ -1,6 +1,7 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
 import '../widgets/user_action.dart';
+import '../widgets/print_illustration.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -696,6 +697,16 @@ class _UploadScreenState extends State<UploadScreen>
                                 RecoveryStage.completed) ...[
                           _buildCompletedOrderBanner(),
                           const SizedBox(height: 16),
+                        ],
+
+                        if (_selectedFiles.isEmpty) ...[
+                          const Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: PrintIllustration(),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
                         ],
 
                         // Upload zone
