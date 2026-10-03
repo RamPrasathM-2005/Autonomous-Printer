@@ -21,6 +21,7 @@ import 'otp_release_screen.dart';
 import 'payment_screen.dart';
 import 'print_options_screen.dart';
 import 'print_progress_screen.dart';
+import '../widgets/ui_state.dart';
 
 // ---------------------------------------------------------------------------
 // Security: dangerous extensions that must never be uploaded
@@ -635,60 +636,66 @@ class _UploadScreenState extends State<UploadScreen>
   Widget build(BuildContext context) {
     return AppScaffold(
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          // Station status bar
-          _buildStatusBar(),
-          // Scrollable body
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Error banner
-                      if (_uploadError != null) ...[
-                        _buildErrorBanner(),
-                        const SizedBox(height: 16),
+      body: UiProcessingOverlay(
+        isProcessing: _isUploading,
+        title: 'Uploading Files',
+        message: _uploadStatusText,
+        progress: _uploadProgress,
+        child: Column(
+          children: [
+            // Station status bar
+            _buildStatusBar(),
+            // Scrollable body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Error banner
+                        if (_uploadError != null) ...[
+                          _buildErrorBanner(),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Order Recovery banner
+                        if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) ...[
+                          _buildActiveOrderBanner(),
+                          const SizedBox(height: 16),
+                        ] else if (_activeRecovery != null && _activeRecovery!.stage == RecoveryStage.completed) ...[
+                          _buildCompletedOrderBanner(),
+                          const SizedBox(height: 16),
+                        ],
+
+
+                        // Upload zone
+                        _buildDropzone(),
+                        const SizedBox(height: 20),
+
+                        // File list
+                        if (_selectedFiles.isNotEmpty) ...[_buildFileList()],
+
+                        // Upload progress
+                        if (_isUploading) ...[
+                          const SizedBox(height: 16),
+                          _buildUploadProgress(),
+                        ],
+
+                        const SizedBox(height: 32),
                       ],
-
-                      // Order Recovery banner
-                      if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) ...[
-                        _buildActiveOrderBanner(),
-                        const SizedBox(height: 16),
-                      ] else if (_activeRecovery != null && _activeRecovery!.stage == RecoveryStage.completed) ...[
-                        _buildCompletedOrderBanner(),
-                        const SizedBox(height: 16),
-                      ],
-
-
-                      // Upload zone
-                      _buildDropzone(),
-                      const SizedBox(height: 20),
-
-                      // File list
-                      if (_selectedFiles.isNotEmpty) ...[_buildFileList()],
-
-                      // Upload progress
-                      if (_isUploading) ...[
-                        const SizedBox(height: 16),
-                        _buildUploadProgress(),
-                      ],
-
-                      const SizedBox(height: 32),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Bottom bar
-          _buildBottomBar(),
-        ],
+            // Bottom bar
+            _buildBottomBar(),
+          ],
+        ),
       ),
     );
   }

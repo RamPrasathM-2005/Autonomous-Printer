@@ -14,6 +14,7 @@ import '../services/document_bytes_cache.dart';
 import '../widgets/real_document_preview.dart';
 import 'document_editor_screen.dart';
 import 'order_summary_screen.dart';
+import '../widgets/ui_state.dart';
 
 class PrintOptionsScreen extends StatefulWidget {
   final List<UploadedDocument> documents;
@@ -273,7 +274,11 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           child: Divider(height: 1, color: AppTheme.border),
         ),
       ),
-      body: LayoutBuilder(
+      body: UiProcessingOverlay(
+        isProcessing: _isUploadingMore,
+        title: 'Uploading Document',
+        message: 'Adding file to print job...',
+        child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -358,6 +363,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           );
         },
       ),
+    ),
       // Bottom bar
       bottomNavigationBar: _buildBottomBar(),
     );

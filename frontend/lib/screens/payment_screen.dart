@@ -14,6 +14,7 @@ import '../services/razorpay_web_service.dart';
 import 'otp_release_screen.dart';
 import 'upload_screen.dart';
 import '../widgets/payment_failed_dialog.dart';
+import '../widgets/ui_state.dart';
 
 class PaymentScreen extends StatefulWidget {
   final PrintOrder order;
@@ -229,6 +230,42 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
+    final statusUpper = order.status.toUpperCase();
+    if (['COMPLETED', 'SUCCESS'].contains(statusUpper)) {
+      return AppScaffold(
+        appBar: AppBar(
+          actions: const [HelpAction()],
+          title: const Text('Payment'),
+        ),
+        body: UiSuccessView(
+          title: 'Order Paid',
+          message: 'This order has already been paid.',
+          actionLabel: 'View Order',
+          onAction: () => _showConfirmedOrder(),
+        ),
+      );
+    }
+    if (['CANCELLED', 'REFUNDED'].contains(statusUpper)) {
+      return AppScaffold(
+        appBar: AppBar(
+          actions: const [HelpAction()],
+          title: const Text('Payment'),
+        ),
+        body: UiDisabledView(
+          title: 'Order Cancelled',
+          message: 'This order was cancelled and cannot be paid.',
+          actionLabel: 'New Print Job',
+          onAction: () {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const UploadScreen()),
+              (route) => false,
+            );
+          },
+        ),
+      );
+    }
+
     final settings = order.printSettings;
     final amount = '${order.currency} ${order.amount.toStringAsFixed(2)}';
     final items = settings.items;
@@ -244,38 +281,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
           child: Divider(height: 1, color: AppTheme.border),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 700;
+      body: UiProcessingOverlay(
+        isProcessing: _busy,
+        title: 'Processing Payment',
+        message: 'Verifying payment with gateway...',
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 700;
 
-                final detailsCard = _buildDetailsCard(order, settings, items);
-                final summaryCard = _buildSummaryCard(order, amount, items);
+                  final detailsCard = _buildDetailsCard(order, settings, items);
+                  final summaryCard = _buildSummaryCard(order, amount, items);
 
-                if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  if (isWide) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 3, child: detailsCard),
+                        const SizedBox(width: 16),
+                        Expanded(flex: 2, child: summaryCard),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(flex: 3, child: detailsCard),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: summaryCard),
+                      detailsCard,
+                      const SizedBox(height: 14),
+                      summaryCard,
                     ],
                   );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    detailsCard,
-                    const SizedBox(height: 14),
-                    summaryCard,
-                  ],
-                );
-              },
+                },
+              ),
             ),
           ),
         ),

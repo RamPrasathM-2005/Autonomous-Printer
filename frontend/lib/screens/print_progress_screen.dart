@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../services/api_service.dart';
 import '../services/order_recovery_service.dart';
+import '../widgets/ui_state.dart';
 import 'upload_screen.dart';
 
 class PrintProgressScreen extends StatefulWidget {
@@ -159,29 +160,10 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 const Text('No paper printed.'),
                               ],
                             ] else if (_errorMessage != null) ...[
-                              Container(
-                                width: 84,
-                                height: 84,
-                                decoration: const BoxDecoration(
-                                  color: AppTheme.dangerSurface,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.error_outline_rounded,
-                                  size: 56,
-                                  color: AppTheme.danger,
-                                ),
+                              UiErrorView(
+                                message: _errorMessage!,
+                                onRetry: _startStatusPolling,
                               ),
-                              const SizedBox(height: 20),
-                              Text(
-                                _errorMessage!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
                             ] else ...[
                               RotationTransition(
                                 turns: _animController,

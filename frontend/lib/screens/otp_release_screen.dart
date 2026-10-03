@@ -12,6 +12,7 @@ import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/invoice_service.dart';
 import '../services/order_recovery_service.dart';
+import '../widgets/ui_state.dart';
 import 'upload_screen.dart';
 
 class OtpReleaseScreen extends StatefulWidget {
@@ -482,71 +483,92 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Error
-                      if (_errorMessage != null) ...[
-                        _buildErrorBanner(),
-                        const SizedBox(height: 14),
-                      ],
+          ? const UiLoadingView(message: 'Loading order details...')
+          : _order == null && _errorMessage != null
+              ? UiErrorView(
+                  message: _errorMessage!,
+                  onRetry: _fetchOtpAndOrder,
+                )
+              : _order != null && ['CANCELLED', 'REFUNDED'].contains(_order!.status.toUpperCase())
+                  ? UiDisabledView(
+                      title: 'Order ${_order!.status.toUpperCase()}',
+                      message: 'This order has been cancelled and refunded.',
+                      onAction: _printAnotherDocument,
+                      actionLabel: 'New Print Job',
+                    )
+                  : UiProcessingOverlay(
+                      isProcessing: _isCancelling || _isGeneratingInvoice || _isSubmittingPrinter,
+                      title: _isCancelling
+                          ? 'Cancelling Order'
+                          : (_isGeneratingInvoice ? 'Downloading Invoice' : 'Connecting Printer'),
+                      message: _isCancelling
+                          ? 'Processing cancellation...'
+                          : (_isGeneratingInvoice ? 'Preparing PDF receipt...' : 'Connecting to station...'),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Error
+                                if (_errorMessage != null) ...[
+                                  _buildErrorBanner(),
+                                  const SizedBox(height: 14),
+                                ],
 
-                      // 1. Payment confirmation
-                      _buildPaymentSummary(),
-                      const SizedBox(height: 14),
+                                // 1. Payment confirmation
+                                _buildPaymentSummary(),
+                                const SizedBox(height: 14),
 
-                      // 2. Printer selection (before lock - only when awaiting release)
-                      if (!_isPrinterLocked && !_otpRevealed && _printStatus == 'WAITING') ...[
-                        _buildPrinterSelector(),
-                        const SizedBox(height: 14),
-                      ],
+                                // 2. Printer selection (before lock - only when awaiting release)
+                                if (!_isPrinterLocked && !_otpRevealed && _printStatus == 'WAITING') ...[
+                                  _buildPrinterSelector(),
+                                  const SizedBox(height: 14),
+                                ],
 
-                      // 3. OTP section (after lock - only when awaiting release, never when printing or completed)
-                      if ((_otpRevealed || _isPrinterLocked) && _printStatus == 'WAITING') ...[
-                        _buildOtpSection(),
-                        const SizedBox(height: 14),
-                      ],
+                                // 3. OTP section (after lock - only when awaiting release, never when printing or completed)
+                                if ((_otpRevealed || _isPrinterLocked) && _printStatus == 'WAITING') ...[
+                                  _buildOtpSection(),
+                                  const SizedBox(height: 14),
+                                ],
 
-                      // Cancel & Refund (only while waiting for release)
-                      if (_printStatus == 'WAITING') ...[
-                        Center(
-                          child: TextButton.icon(
-                            onPressed: _isCancelling ? null : _handleCancelAndRefund,
-                            icon: const Icon(Icons.cancel_outlined, size: 16, color: AppTheme.danger),
-                            label: Text(
-                              _isCancelling ? 'Cancelling...' : 'Cancel Order & Request Refund',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.danger,
-                              ),
+                                // Cancel & Refund (only while waiting for release)
+                                if (_printStatus == 'WAITING') ...[
+                                  Center(
+                                    child: TextButton.icon(
+                                      onPressed: _isCancelling ? null : _handleCancelAndRefund,
+                                      icon: const Icon(Icons.cancel_outlined, size: 16, color: AppTheme.danger),
+                                      label: Text(
+                                        _isCancelling ? 'Cancelling...' : 'Cancel Order & Request Refund',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.danger,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                ],
+
+                                // 4. Print progress (when printing/completed)
+                                if (_printStatus != 'WAITING') ...[
+                                  _buildProgressSection(),
+                                  const SizedBox(height: 14),
+                                ],
+
+                                // 5. Steps guide
+                                _buildStepsGuide(),
+
+                                const SizedBox(height: 24),
+                              ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 14),
-                      ],
-
-                      // 4. Print progress (when printing/completed)
-                      if (_printStatus != 'WAITING') ...[
-                        _buildProgressSection(),
-                        const SizedBox(height: 14),
-                      ],
-
-                      // 5. Steps guide
-                      _buildStepsGuide(),
-
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+                      ),
+                    ),
     );
   }
 

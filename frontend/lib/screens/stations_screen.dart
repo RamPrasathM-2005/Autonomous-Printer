@@ -9,6 +9,7 @@ import '../config/theme.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../widgets/station_card.dart';
+import '../widgets/ui_state.dart';
 
 class StationsScreen extends StatefulWidget {
   final Function(String stationId)? onStationSelected;
@@ -218,75 +219,19 @@ class _StationsScreenState extends State<StationsScreen> {
             ),
             const SizedBox(height: 8),
             if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: CircularProgressIndicator(),
-                ),
-              )
+              const UiLoadingView(message: 'Searching print stations...')
             else if (_errorMessage != null)
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 20),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppTheme.danger.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.error_outline_rounded,
-                      color: AppTheme.danger,
-                      size: 36,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppTheme.danger),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: _loadServers,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ),
+              UiErrorView(
+                message: _errorMessage!,
+                onRetry: _loadServers,
               )
             else if (_servers.isEmpty)
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 20),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppTheme.primarySurface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.print_disabled_rounded,
-                      size: 48,
-                      color: AppTheme.textSecondary,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'No Print Stations Found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton(
-                      onPressed: _loadServers,
-                      child: const Text('Check Again'),
-                    ),
-                  ],
-                ),
+              UiEmptyView(
+                icon: Icons.print_disabled_rounded,
+                title: 'No Print Stations Found',
+                message: 'No print stations are currently registered.',
+                onAction: _loadServers,
+                actionLabel: 'Check Again',
               )
             else
               ..._servers.map(

@@ -17,6 +17,7 @@ import 'otp_release_screen.dart';
 import 'print_progress_screen.dart';
 import 'upload_screen.dart';
 import '../widgets/payment_failed_dialog.dart';
+import '../widgets/ui_state.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
   final PrintOrder? order;
@@ -330,6 +331,30 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         ? '₹${_currentOrder!.amount.toStringAsFixed(2)}'
         : '₹${_totalEstimatedTotal.toStringAsFixed(2)}';
 
+    if (_currentOrder != null &&
+        ['COMPLETED', 'SUCCESS'].contains(_currentOrder!.status.toUpperCase())) {
+      return AppScaffold(
+        appBar: AppBar(
+          actions: const [HelpAction()],
+          title: const Text('Order Summary'),
+        ),
+        body: Center(
+          child: UiSuccessView(
+            title: 'Order Completed',
+            message: 'This order has already been completed.',
+            actionLabel: 'Print Another Document',
+            onAction: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const UploadScreen()),
+                (route) => false,
+              );
+            },
+          ),
+        ),
+      );
+    }
+
     return AppScaffold(
       appBar: AppBar(
         actions: const [HelpAction()],
@@ -345,36 +370,41 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           child: Divider(height: 1, color: AppTheme.border),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'Review Your Order',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.7,
+      body: UiProcessingOverlay(
+        isProcessing: _busy,
+        title: 'Processing Order',
+        message: 'Preparing your print job...',
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Review Your Order',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.7,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _buildDocumentItemsList(),
-                const SizedBox(height: 24),
-                const Text(
-                  'Order Summary',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                _buildSummaryPanel(finalAmount),
-              ],
+                  const SizedBox(height: 12),
+                  _buildDocumentItemsList(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Order Summary',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSummaryPanel(finalAmount),
+                ],
+              ),
             ),
           ),
         ),
