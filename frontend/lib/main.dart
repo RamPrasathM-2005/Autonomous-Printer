@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'config/api_config.dart';
 import 'config/theme.dart';
 import 'screens/upload_screen.dart';
+import 'screens/admin_login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ class PrintApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: const UploadScreen(),
+      routes: {'/admin/login': (_) => const AdminLoginScreen()},
     );
   }
 }
