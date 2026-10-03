@@ -54,6 +54,14 @@ fi
 mkdir -p "$SCRIPT_DIR/storage"
 mkdir -p "$SCRIPT_DIR/storage/documents/public"
 mkdir -p "$SCRIPT_DIR/storage/printed_outputs"
+mkdir -p "$SCRIPT_DIR/downloads"
+
+# Ensure active_tunnel.dart exists (ignored by git; created from example on fresh clone)
+TUNNEL_DART="$SCRIPT_DIR/frontend/lib/config/active_tunnel.dart"
+TUNNEL_DART_EXAMPLE="$SCRIPT_DIR/frontend/lib/config/active_tunnel.dart.example"
+if [ ! -f "$TUNNEL_DART" ] && [ -f "$TUNNEL_DART_EXAMPLE" ]; then
+    cp "$TUNNEL_DART_EXAMPLE" "$TUNNEL_DART"
+fi
 
 # Process tracking for clean termination
 PIDS=()

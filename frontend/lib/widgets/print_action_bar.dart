@@ -62,7 +62,7 @@ class PrintActionBar extends StatelessWidget {
                   ),
                   child: Text(action),
                 );
-                if (constraints.maxWidth < 360 ||
+                if (constraints.maxWidth < 480 ||
                     MediaQuery.textScalerOf(context).scale(14) > 18) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

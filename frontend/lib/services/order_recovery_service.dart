@@ -44,6 +44,9 @@ class OrderRecoveryService {
   static const String _kActiveOrderId = 'autonomous_printer_active_order_id';
   static const String _kLastCompletedOrderId = 'autonomous_printer_last_completed_order_id';
   static const String _kActiveOrderStage = 'autonomous_printer_active_order_stage';
+  /// Tracks the last completed order that the user explicitly dismissed via
+  /// "Print Another Document". Recovery will never resurface this order ID.
+  static const String _kDismissedCompletedOrderId = 'autonomous_printer_dismissed_completed_id';
 
   static final OrderRecoveryService _instance = OrderRecoveryService._internal();
   factory OrderRecoveryService() => _instance;
@@ -54,6 +57,7 @@ class OrderRecoveryService {
   String? get activeOrderId => readSessionValue(_kActiveOrderId);
   String? get lastCompletedOrderId => readSessionValue(_kLastCompletedOrderId);
   String? get activeOrderStage => readSessionValue(_kActiveOrderStage);
+  String? get dismissedCompletedOrderId => readSessionValue(_kDismissedCompletedOrderId);
 
   void setActiveOrder(String orderId, {String? stage}) {
     writeSessionValue(_kActiveOrderId, orderId);
@@ -78,14 +82,24 @@ class OrderRecoveryService {
     clearSessionValue(_kLastCompletedOrderId);
   }
 
-  /// Print Again clears completed order and prepares clean state for a new order.
+  /// Print Again: dismisses the completed order so recovery never re-shows
+  /// OtpReleaseScreen for it, even if the backend still reports it as COMPLETED.
   void printAgain() {
+    final completedId = lastCompletedOrderId ?? activeOrderId;
+    if (completedId != null) {
+      writeSessionValue(_kDismissedCompletedOrderId, completedId);
+    }
     clearAll();
   }
 
   void clearActiveOrder() {
     clearSessionValue(_kActiveOrderId);
     clearSessionValue(_kActiveOrderStage);
+  }
+
+  /// Explicitly dismiss a completed order so it is never surfaced by recovery.
+  void dismissCompletedOrder(String orderId) {
+    writeSessionValue(_kDismissedCompletedOrderId, orderId);
   }
 
   /// Single source of truth backend check.
@@ -141,8 +155,17 @@ class OrderRecoveryService {
         }
       }
 
-      // Completed receipt reload
+      // Completed receipt reload — only resurface if user hasn't dismissed it.
       if (stageStr == 'COMPLETED' && order != null) {
+        final dismissed = dismissedCompletedOrderId;
+        if (dismissed != null && dismissed == order.id) {
+          // User already pressed "Print Another Document" for this order.
+          // Never re-show OtpReleaseScreen for it.
+          return const OrderRecoveryResult(
+            stage: RecoveryStage.none,
+            canUploadNew: true,
+          );
+        }
         markCompleted(order.id);
         return OrderRecoveryResult(
           stage: RecoveryStage.completed,

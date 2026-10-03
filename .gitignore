@@ -23,6 +23,8 @@ frontend/.pub/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+# Auto-generated at runtime by start_tunnel.sh — contains live Cloudflare URL
+frontend/lib/config/active_tunnel.dart
 
 # Python Virtual Environments
 venv/

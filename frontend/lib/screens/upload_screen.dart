@@ -814,7 +814,8 @@ class _UploadScreenState extends State<UploadScreen>
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const Icon(Icons.expand_more, size: 16),
@@ -847,7 +848,8 @@ class _UploadScreenState extends State<UploadScreen>
                     child: Text(
                       '${ApiConfig.isTunneled ? 'Cloud' : 'Local'} connection',
                       style: const TextStyle(fontSize: 12),
-                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1101,58 +1103,63 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Widget _buildDropzone() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Ready to Print?',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.6,
-            ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: _isUploading ? null : _pickFiles,
-            icon: const Icon(Icons.file_upload_outlined, size: 22),
-            label: const Text('Upload File'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(64),
-              backgroundColor: AppTheme.primarySurface,
-              foregroundColor: AppTheme.primary,
-              side: const BorderSide(color: AppTheme.primaryBorder),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 400;
+        return Container(
+          padding: EdgeInsets.all(isNarrow ? 20 : 28),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceWhite,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppTheme.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withValues(alpha: 0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              textStyle: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Ready to Print?',
+                style: TextStyle(
+                  fontSize: isNarrow ? 20 : 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
               ),
-            ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: _isUploading ? null : _pickFiles,
+                icon: const Icon(Icons.file_upload_outlined, size: 22),
+                label: const Text('Upload File'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
+                  backgroundColor: AppTheme.primarySurface,
+                  foregroundColor: AppTheme.primary,
+                  side: const BorderSide(color: AppTheme.primaryBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Supported formats: PDF, JPG, PNG',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Supported formats: PDF, JPG, PNG',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1386,63 +1393,57 @@ class _UploadScreenState extends State<UploadScreen>
               constraints: const BoxConstraints(maxWidth: 560),
               child: Row(
                 children: [
+                  // Status label — always shrinks, never wraps
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          hasFiles
-                              ? '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'file' : 'files'} ready'
-                              : 'No files selected',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: hasFiles
-                                ? AppTheme.textPrimary
-                                : AppTheme.textMuted,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      hasFiles
+                          ? '${_selectedFiles.length} ${_selectedFiles.length == 1 ? 'file' : 'files'} ready'
+                          : 'No files selected',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: hasFiles
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  // Cancel button — only when there are files
                   if (hasFiles && !_isUploading) ...[
-                    const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed: _clearAllFiles,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.textSecondary,
-                        side: const BorderSide(color: AppTheme.border),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 13,
-                        ),
-                        shape: RoundedRectangleBorder(
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _clearAllFiles,
+                      child: Container(
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppTheme.border),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
                         ),
                       ),
                     ),
                   ],
                   const SizedBox(width: 8),
+                  // Continue / Upload button
                   GestureDetector(
                     onTap: (_selectedFiles.isEmpty || _isUploading)
                         ? null
                         : _handleNext,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 13,
-                      ),
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       decoration: BoxDecoration(
                         color: hasFiles && !_isUploading
                             ? AppTheme.primary

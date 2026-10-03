@@ -20,6 +20,7 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF3F7FE),
+    resizeToAvoidBottomInset: true,
     appBar: appBar,
     bottomNavigationBar: bottomNavigationBar,
     body: Stack(
@@ -32,7 +33,7 @@ class AppScaffold extends StatelessWidget {
             ),
           ),
         ),
-        if (body != null) SafeArea(top: false, child: body!),
+        if (body != null) SafeArea(top: false, bottom: false, child: body!),
       ],
     ),
   );
