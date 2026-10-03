@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Trigger Instant Hot Reload
+# Achuppori - Trigger Instant Hot Reload
 # ==============================================================================
 if [ -f /tmp/flutter_web.pid ]; then
     PID=$(cat /tmp/flutter_web.pid 2>/dev/null)

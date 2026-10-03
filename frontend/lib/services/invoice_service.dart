@@ -114,7 +114,7 @@ class InvoiceService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'AUTONOMOUS PRINTER',
+                        'ACHUPPORI',
                         style: pw.TextStyle(
                           color: primaryColor,
                           fontSize: 20,
@@ -472,7 +472,7 @@ class InvoiceService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Thank you for using Autonomous Printer.',
+                    'Thank you for using Achuppori.',
                     style: pw.TextStyle(fontSize: 8, color: secondaryColor),
                   ),
                   pw.Text(

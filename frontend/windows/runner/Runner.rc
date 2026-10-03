@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.autonomous.printer" "\0"
-            VALUE "FileDescription", "frontend" "\0"
+            VALUE "CompanyName", "Achuppori" "\0"
+            VALUE "FileDescription", "Achuppori" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "frontend" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.autonomous.printer. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Achuppori. All rights reserved." "\0"
             VALUE "OriginalFilename", "frontend.exe" "\0"
-            VALUE "ProductName", "frontend" "\0"
+            VALUE "ProductName", "Achuppori" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

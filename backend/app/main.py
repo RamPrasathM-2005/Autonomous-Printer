@@ -196,13 +196,13 @@ from fastapi.responses import FileResponse
 downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
 
 @app.get("/api/downloads/apk", tags=["Downloads"])
-@app.get("/downloads/autonomous-printer.apk", tags=["Downloads"])
-def download_autonomous_printer_apk():
-    apk_file = downloads_dir / "autonomous-printer.apk"
+@app.get("/downloads/achuppori.apk", tags=["Downloads"])
+def download_achuppori_apk():
+    apk_file = downloads_dir / "achuppori.apk"
     if apk_file.exists():
         return FileResponse(
             path=str(apk_file),
-            filename="autonomous-printer.apk",
+            filename="achuppori.apk",
             media_type="application/vnd.android.package-archive"
         )
     raise AppException(

@@ -2,7 +2,7 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    APP_NAME: str = "PrintPlatform"
+    APP_NAME: str = "Achuppori"
     ENVIRONMENT: str = "development"
     HOST: str = "127.0.0.1"
     PORT: int = 8000

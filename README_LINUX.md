@@ -1,6 +1,6 @@
-# Running Autonomous Printer on Ubuntu / Linux 🐧
+# Running Achuppori on Ubuntu / Linux 🐧
 
-This guide documents the setup and runtime configuration for running the complete Autonomous Self-Service Printing Platform on Ubuntu with live desktop console windows and physical HP printer integration.
+This guide documents the setup and runtime configuration for running the complete Achuppori on Ubuntu with live desktop console windows and physical HP printer integration.
 
 ---
 

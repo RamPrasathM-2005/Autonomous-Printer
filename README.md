@@ -1,4 +1,4 @@
-# Autonomous Printer
+# Achuppori
 
 Flutter web frontend, FastAPI backend, MySQL, and a local CUPS print agent. Payments use Razorpay Standard Checkout with server verification. The currently configured Windows installation uses **Razorpay test mode and simulated printing**.
 

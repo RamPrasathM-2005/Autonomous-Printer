@@ -1,4 +1,4 @@
-# 🖨️ Autonomous Printer - Flask Print Agent
+# 🖨️ Achuppori - Flask Print Agent
 
 Lightweight local daemon built with **Python 3.12+** and **Flask**. Designed to run on the kiosk controller (Ubuntu Linux, Raspberry Pi, or local Windows machine). It connects directly to the physical printer via **CUPS (Common Unix Printing System)** or standard `lp` commands, sends heartbeats to the central FastAPI backend, and releases print jobs upon OTP verification.
 

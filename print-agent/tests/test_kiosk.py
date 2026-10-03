@@ -7,7 +7,7 @@ def test_kiosk_html_rendering(agent_client):
     res = agent_client.get("/kiosk")
     assert res.status_code == 200
     html = res.get_data(as_text=True)
-    assert "AUTONOMOUS PRINT STATION" in html
+    assert "ACHUPPORI" in html
     assert "Enter your 6-digit OTP" in html
     assert "PRINT DOCUMENT" in html
     assert config.PRINTER_NAME in html
