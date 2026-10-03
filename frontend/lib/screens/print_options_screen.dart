@@ -15,8 +15,7 @@ import '../widgets/real_document_preview.dart';
 import 'document_editor_screen.dart';
 import 'order_summary_screen.dart';
 import '../widgets/ui_state.dart';
-import 'package:desktop_drop/desktop_drop.dart';
-import 'package:cross_file/cross_file.dart';
+import '../services/web_drag_drop_service.dart';
 
 class PrintOptionsScreen extends StatefulWidget {
   final List<UploadedDocument> documents;
@@ -83,6 +82,25 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           ),
         )
         .toList();
+
+    WebDragDropService.register(
+      onDragStateChange: (dragging) {
+        if (mounted && _isDragging != dragging) {
+          setState(() => _isDragging = dragging);
+        }
+      },
+      onFileDropped: (name, bytes) {
+        if (mounted) {
+          _handleDroppedFile(name, bytes);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    WebDragDropService.unregister();
+    super.dispose();
   }
 
   void _applyGlobalSettingsToDefaults() {
@@ -244,8 +262,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     }
   }
 
-  Future<void> _handleDroppedFiles(List<XFile> files) async {
-    if (_isUploadingMore || files.isEmpty) return;
+  Future<void> _handleDroppedFile(String filename, Uint8List rawBytes) async {
+    if (_isUploadingMore) return;
 
     setState(() {
       _isUploadingMore = true;
@@ -253,41 +271,37 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
     });
 
     try {
-      for (final file in files) {
-        final Uint8List rawBytes = await file.readAsBytes();
-        if (rawBytes.isEmpty) {
-          throw Exception('File "${file.name}" is empty or unreadable.');
-        }
-
-        final filename = file.name;
-        final ext = filename.split('.').last.toLowerCase();
-
-        if (_blockedExtensions.contains(ext)) {
-          throw Exception('Executable or script files are strictly blocked.');
-        }
-
-        if (!_isMagicBytesValid(rawBytes, filename)) {
-          throw Exception('File content for "$filename" does not match its format header.');
-        }
-
-        final uploadedDoc = await _apiService.uploadDocumentBytes(
-          bytes: rawBytes,
-          filename: filename,
-        );
-        DocumentBytesCache.put(uploadedDoc.id, rawBytes);
-
-        _configs.add(
-          DocumentPrintConfig(
-            document: uploadedDoc,
-            copies: _globalCopies,
-            isColor: _globalIsColor,
-            paperSize: _globalPaperSize,
-            orientation: _globalOrientation,
-            sides: _globalSides,
-            hasCustomSettings: false,
-          ),
-        );
+      if (rawBytes.isEmpty) {
+        throw Exception('File "$filename" is empty or unreadable.');
       }
+
+      final ext = filename.split('.').last.toLowerCase();
+
+      if (_blockedExtensions.contains(ext)) {
+        throw Exception('Executable or script files are strictly blocked.');
+      }
+
+      if (!_isMagicBytesValid(rawBytes, filename)) {
+        throw Exception('File content for "$filename" does not match its format header.');
+      }
+
+      final uploadedDoc = await _apiService.uploadDocumentBytes(
+        bytes: rawBytes,
+        filename: filename,
+      );
+      DocumentBytesCache.put(uploadedDoc.id, rawBytes);
+
+      _configs.add(
+        DocumentPrintConfig(
+          document: uploadedDoc,
+          copies: _globalCopies,
+          isColor: _globalIsColor,
+          paperSize: _globalPaperSize,
+          orientation: _globalOrientation,
+          sides: _globalSides,
+          hasCustomSettings: false,
+        ),
+      );
 
       if (mounted) setState(() {});
     } catch (e) {
@@ -338,15 +352,8 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
         isProcessing: _isUploadingMore,
         title: 'Uploading Document',
         message: 'Adding file to print job...',
-        child: DropTarget(
-          onDragEntered: (detail) => setState(() => _isDragging = true),
-          onDragExited: (detail) => setState(() => _isDragging = false),
-          onDragDone: (detail) async {
-            setState(() => _isDragging = false);
-            await _handleDroppedFiles(detail.files);
-          },
-          child: LayoutBuilder(
-        builder: (context, constraints) {
+        child: LayoutBuilder(
+          builder: (context, constraints) {
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             child: Center(
@@ -458,7 +465,6 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           );
         },
       ),
-    ),
     ),
       // Bottom bar
       bottomNavigationBar: _buildBottomBar(),
