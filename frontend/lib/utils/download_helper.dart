@@ -9,3 +9,6 @@ Future<void> downloadFile(Uint8List bytes, String filename) =>
 void triggerUrlDownload(String url, {String? filename}) =>
     triggerUrlDownloadUniversal(url, filename: filename);
 
+void openPdfInNewTab(Uint8List bytes) =>
+    openPdfInNewTabUniversal(bytes);
+

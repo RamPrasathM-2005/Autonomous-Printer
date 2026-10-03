@@ -28,3 +28,12 @@ void triggerUrlDownloadUniversal(String url, {String? filename}) {
   anchor.click();
   anchor.remove();
 }
+
+void openPdfInNewTabUniversal(Uint8List bytes) {
+  final blob = web.Blob(
+    [bytes.toJS].toJS,
+    web.BlobPropertyBag(type: 'application/pdf'),
+  );
+  final url = web.URL.createObjectURL(blob);
+  web.window.open(url, '_blank');
+}

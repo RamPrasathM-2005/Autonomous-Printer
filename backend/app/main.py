@@ -33,10 +33,32 @@ from app.api.routes.maintenance import router as maintenance_router
 from app.api.routes.kiosk import router as kiosk_router
 from app.api.routes.sessions import router as sessions_router
 
+def _sync_missing_columns():
+    from sqlalchemy import inspect, text
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    try:
+        insp = inspect(engine)
+        with engine.begin() as conn:
+            for table_name, table in Base.metadata.tables.items():
+                if not insp.has_table(table_name):
+                    continue
+                db_cols = {c['name'] for c in insp.get_columns(table_name)}
+                for col in table.columns:
+                    if col.name not in db_cols:
+                        col_type = col.type.compile(engine.dialect)
+                        nullable = "NULL" if col.nullable else "NOT NULL"
+                        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} {nullable}"
+                        logger.info("Auto-migrating column: %s", sql)
+                        conn.execute(text(sql))
+    except Exception as e:
+        logger.warning("Schema column sync warning: %s", e)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: ensure tables and storage dirs exist
     Base.metadata.create_all(bind=engine)
+    _sync_missing_columns()
     storage_service._ensure_directories()
     yield
     # Shutdown

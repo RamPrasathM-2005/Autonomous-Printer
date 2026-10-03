@@ -13,6 +13,7 @@ import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/invoice_service.dart';
 import '../services/order_recovery_service.dart';
+import '../widgets/invoice_preview_dialog.dart';
 import '../widgets/ui_state.dart';
 import 'upload_screen.dart';
 
@@ -53,6 +54,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _otpRevealed = false;
   bool _isGeneratingInvoice = false;
   bool _isCancelling = false;
+  bool _hasAutoTriggeredInvoice = false;
 
   // 'WAITING', 'PRINTING', 'COMPLETED'
   String _printStatus = 'WAITING';
@@ -155,6 +157,15 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
       _startCountdown();
       _startPolling();
+
+      if (!_hasAutoTriggeredInvoice) {
+        _hasAutoTriggeredInvoice = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _autoGenerateAndPreviewInvoice();
+          }
+        });
+      }
     } catch (e) {
       setState(() {
         _errorMessage = userError(e);
@@ -327,16 +338,42 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     }
   }
 
+  Future<void> _autoGenerateAndPreviewInvoice() async {
+    // 1. Auto download invoice PDF
+    await _downloadInvoice();
+
+    // 2. Open invoice preview dialog
+    if (mounted) {
+      _showInvoicePreview();
+    }
+  }
+
+  void _showInvoicePreview() {
+    final order = _order;
+    if (order == null) return;
+    final otpCode = _getResolvedOtpCode();
+    InvoicePreviewDialog.show(
+      context,
+      order: order,
+      configs: widget.configs,
+      documents: widget.documents,
+      paymentId: widget.paymentId,
+      otp: otpCode.isNotEmpty ? otpCode : null,
+    );
+  }
+
   Future<void> _downloadInvoice() async {
     final order = _order;
     if (order == null) return;
     setState(() => _isGeneratingInvoice = true);
     try {
+      final otpCode = _getResolvedOtpCode();
       await InvoiceService.generateAndDownloadInvoice(
         order: order,
         configs: widget.configs,
         documents: widget.documents,
         paymentId: widget.paymentId,
+        otp: otpCode.isNotEmpty ? otpCode : null,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1090,7 +1127,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: GestureDetector(
-                        onTap: _isGeneratingInvoice ? null : _downloadInvoice,
+                        onTap: _showInvoicePreview,
                         child: Container(
                           height: 42,
                           alignment: Alignment.center,
@@ -1098,31 +1135,22 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                             color: AppTheme.primary,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: _isGeneratingInvoice
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.download_rounded,
-                                        size: 14, color: Colors.white),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Invoice',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.receipt_long_rounded,
+                                  size: 14, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text(
+                                'Invoice',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
                                 ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

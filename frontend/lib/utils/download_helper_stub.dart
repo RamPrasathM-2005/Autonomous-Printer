@@ -8,3 +8,7 @@ void triggerUrlDownloadUniversal(String url, {String? filename}) {
   // Stub for non-web environments
 }
 
+void openPdfInNewTabUniversal(Uint8List bytes) {
+  // Stub for non-web environments
+}
+
