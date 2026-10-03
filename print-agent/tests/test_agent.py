@@ -87,8 +87,8 @@ def test_kiosk_page_endpoint(agent_client):
     res = agent_client.get("/kiosk")
     assert res.status_code == 200
     html = res.get_data(as_text=True)
-    assert "AUTONOMOUS PRINT" in html
-    assert "PRINT STATION" in html
+    assert "ACHUPPORI" in html
+    assert '/static/achuppori-logo.png' in html
     assert "Enter your 6-digit OTP" in html
     assert "pressDigit" in html
     assert "submitOTP" in html

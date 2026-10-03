@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Build and Package Mobile APK
+# Achuppori - Build and Package Mobile APK
 # ==============================================================================
 set -e
 
@@ -36,13 +36,13 @@ fi
 
 if [ -f "$SOURCE_APK" ]; then
     echo -e "\033[1;32m[*] Copying updated APK to distribution targets...\033[0m"
-    cp -f "$SOURCE_APK" "$DOWNLOADS_DIR/autonomous-printer.apk"
-    cp -f "$SOURCE_APK" "$STATIC_DIR/autonomous-printer.apk"
+    cp -f "$SOURCE_APK" "$DOWNLOADS_DIR/achuppori.apk"
+    cp -f "$SOURCE_APK" "$STATIC_DIR/achuppori.apk"
     
-    APK_SIZE=$(ls -lh "$DOWNLOADS_DIR/autonomous-printer.apk" | awk '{print $5}')
+    APK_SIZE=$(ls -lh "$DOWNLOADS_DIR/achuppori.apk" | awk '{print $5}')
     echo -e "\033[1;32m[✓] Updated APK ready for download! ($APK_SIZE)\033[0m"
-    echo -e "    - $DOWNLOADS_DIR/autonomous-printer.apk"
-    echo -e "    - $STATIC_DIR/autonomous-printer.apk"
+    echo -e "    - $DOWNLOADS_DIR/achuppori.apk"
+    echo -e "    - $STATIC_DIR/achuppori.apk"
 else
     echo -e "\033[1;31m[!] APK output file not found.\033[0m"
     exit 1

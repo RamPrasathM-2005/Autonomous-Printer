@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Services Stopper
+# Achuppori - Services Stopper
 # Stops all running platform services, background servers, and processes:
 #   * Port 8000: FastAPI Central Backend & REST API
 #   * Port 5001: Flask Hardware Print Agent & Physical Station Kiosk Terminal
@@ -11,7 +11,7 @@
 # ==============================================================================
 
 echo ""
-echo -e "\033[1;33m[*] Stopping all Autonomous Printer services...\033[0m"
+echo -e "\033[1;33m[*] Stopping all Achuppori services...\033[0m"
 
 # 1. Kill listeners on project ports
 for port in 8000 5001 5000 3000 3100; do

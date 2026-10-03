@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Cloudflare Quick Tunnel Launcher
+# Achuppori - Cloudflare Quick Tunnel Launcher
 # Exposes the local backend API (port 8000) over a secure public HTTPS URL
 # without needing a Cloudflare account or static domain.
 # ==============================================================================
@@ -111,7 +111,7 @@ echo -e "   \033[1mSWAGGER API DOCS:\033[0m    \033[1;36m$TUNNEL_URL/docs\033[0m
 echo -e "   \033[1mSAVED TO FILE:\033[0m       \033[2m$TUNNEL_URL_FILE\033[0m"
 echo ""
 echo -e "\033[1;35m--- HOW TO CONNECT YOUR MOBILE FLUTTER APP ---\033[0m"
-echo -e "  1. Open the Autonomous Printer Mobile App on your phone."
+echo -e "  1. Open the Achuppori Mobile App on your phone."
 echo -e "  2. Tap the \033[1mServer Settings\033[0m icon (top right corner of the Upload screen)."
 echo -e "  3. Tap '\033[1mPaste Tunnel URL from Clipboard\033[0m' or enter: \033[1;33m$TUNNEL_URL\033[0m"
 echo -e "  4. Tap '\033[1mSave & Connect\033[0m'. The mobile app is now connected over the internet!"

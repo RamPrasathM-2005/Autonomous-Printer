@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Master Services Launcher
+# Achuppori - Master Services Launcher
 # Runs the entire project across all ports & pages in a single command:
 #   * Port 8000: FastAPI Central Backend & REST API
 #   * Port 5001: Flask Hardware Print Agent & Physical Station Kiosk Terminal
@@ -18,7 +18,7 @@ fi
 
 echo ""
 echo -e "\033[1;36m====================================================================\033[0m"
-echo -e "\033[1;36m       AUTONOMOUS SELF-SERVICE PRINTING PLATFORM (ALL SERVICES)     \033[0m"
+echo -e "\033[1;36m       ACHUPPORI (ALL SERVICES)     \033[0m"
 echo -e "\033[1;36m====================================================================\033[0m"
 echo ""
 
@@ -68,7 +68,7 @@ PIDS=()
 
 cleanup() {
     echo ""
-    echo -e "\033[1;33m[!] Stopping all Autonomous Print services...\033[0m"
+    echo -e "\033[1;33m[!] Stopping all Achuppori services...\033[0m"
     for pid in "${PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null || true
