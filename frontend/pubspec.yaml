@@ -42,6 +42,8 @@ dependencies:
   razorpay_flutter: ^1.4.7
   pdf: ^3.13.1
   url_launcher: ^6.3.2
+  desktop_drop: ^0.8.0
+  cross_file: ^0.3.5+5
 dev_dependencies:
   flutter_test:
     sdk: flutter

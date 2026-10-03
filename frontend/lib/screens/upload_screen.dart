@@ -22,6 +22,8 @@ import 'payment_screen.dart';
 import 'print_options_screen.dart';
 import 'print_progress_screen.dart';
 import '../widgets/ui_state.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:cross_file/cross_file.dart';
 
 // ---------------------------------------------------------------------------
 // Security: dangerous extensions that must never be uploaded
@@ -131,6 +133,7 @@ class _UploadScreenState extends State<UploadScreen>
 
   final List<SelectedDocItem> _selectedFiles = [];
   bool _isUploading = false;
+  bool _isDragging = false;
   String _uploadStatusText = '';
   String? _uploadError;
   double _uploadProgress = 0.0;
@@ -444,6 +447,50 @@ class _UploadScreenState extends State<UploadScreen>
 
   int get _totalSizeBytes => _selectedFiles.fold(0, (sum, f) => sum + f.size);
 
+  void _processRawFile({required String name, required Uint8List rawBytes}) {
+    if (rawBytes.isEmpty) {
+      setState(
+        () => _uploadError = 'Cannot read "$name" — please try again.',
+      );
+      return;
+    }
+
+    final List<int> fileBytes = rawBytes;
+
+    final secError = _validateFileBytes(name, fileBytes);
+    if (secError != null) {
+      setState(() => _uploadError = secError);
+      return;
+    }
+
+    if (!_selectedFiles.any(
+      (f) => f.name == name && f.size == fileBytes.length,
+    )) {
+      _selectedFiles.add(
+        SelectedDocItem(
+          name: name,
+          size: fileBytes.length,
+          bytes: fileBytes,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleDroppedFiles(List<XFile> files) async {
+    if (_isUploading || files.isEmpty) return;
+    setState(() => _uploadError = null);
+
+    for (final file in files) {
+      try {
+        final bytes = await file.readAsBytes();
+        _processRawFile(name: file.name, rawBytes: bytes);
+      } catch (e) {
+        setState(() => _uploadError = 'Unable to read "${file.name}".');
+      }
+    }
+    setState(() {});
+  }
+
   Future<void> _pickFiles() async {
     if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
       if (_activeRecovery!.stage == RecoveryStage.unpaid) {
@@ -510,34 +557,7 @@ class _UploadScreenState extends State<UploadScreen>
 
       for (final file in files) {
         final Uint8List rawBytes = await file.readAsBytes();
-
-        if (rawBytes.isEmpty) {
-          setState(
-            () => _uploadError =
-                'Cannot read "${file.name}" — please try again.',
-          );
-          continue;
-        }
-
-        final List<int> fileBytes = rawBytes;
-
-        final secError = _validateFileBytes(file.name, fileBytes);
-        if (secError != null) {
-          setState(() => _uploadError = secError);
-          continue;
-        }
-
-        if (!_selectedFiles.any(
-          (f) => f.name == file.name && f.size == fileBytes.length,
-        )) {
-          _selectedFiles.add(
-            SelectedDocItem(
-              name: file.name,
-              size: fileBytes.length,
-              bytes: fileBytes,
-            ),
-          );
-        }
+        _processRawFile(name: file.name, rawBytes: rawBytes);
       }
       setState(() {});
     } catch (e) {
@@ -1110,63 +1130,88 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Widget _buildDropzone() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 400;
-        return Container(
-          padding: EdgeInsets.all(isNarrow ? 20 : 28),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceWhite,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.border),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withValues(alpha: 0.04),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Ready to Print?',
-                style: TextStyle(
-                  fontSize: isNarrow ? 20 : 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                ),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: _isUploading ? null : _pickFiles,
-                icon: const Icon(Icons.file_upload_outlined, size: 22),
-                label: const Text('Upload File'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
-                  backgroundColor: AppTheme.primarySurface,
-                  foregroundColor: AppTheme.primary,
-                  side: const BorderSide(color: AppTheme.primaryBorder),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Supported formats: PDF, JPG, PNG',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
-        );
+    return DropTarget(
+      onDragEntered: (detail) => setState(() => _isDragging = true),
+      onDragExited: (detail) => setState(() => _isDragging = false),
+      onDragDone: (detail) async {
+        setState(() => _isDragging = false);
+        await _handleDroppedFiles(detail.files);
       },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 400;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: EdgeInsets.all(isNarrow ? 20 : 28),
+            decoration: BoxDecoration(
+              color: _isDragging ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: _isDragging ? AppTheme.primary : AppTheme.border,
+                width: _isDragging ? 2.0 : 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: _isDragging ? 0.12 : 0.04),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _isDragging ? 'Drop Files Here' : 'Ready to Print?',
+                  style: TextStyle(
+                    fontSize: isNarrow ? 20 : 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.6,
+                    color: _isDragging ? AppTheme.primary : AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: _isUploading ? null : _pickFiles,
+                  icon: Icon(
+                    _isDragging ? Icons.file_download_rounded : Icons.file_upload_outlined,
+                    size: 22,
+                  ),
+                  label: Text(_isDragging ? 'Drop to Upload' : 'Upload File'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
+                    backgroundColor: _isDragging ? Colors.white : AppTheme.primarySurface,
+                    foregroundColor: AppTheme.primary,
+                    side: BorderSide(
+                      color: _isDragging ? AppTheme.primary : AppTheme.primaryBorder,
+                      width: _isDragging ? 1.5 : 1.0,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _isDragging
+                      ? 'Release mouse to add files'
+                      : 'Supported formats: PDF, JPG, PNG',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _isDragging ? AppTheme.primary : AppTheme.textSecondary,
+                    fontWeight: _isDragging ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
