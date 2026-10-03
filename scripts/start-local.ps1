@@ -48,7 +48,17 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [i
     if (Test-Path -LiteralPath $stateFile) {
         $saved = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
         $existing = Get-Process -Id $saved.Id -ErrorAction SilentlyContinue
-        if ($existing -and $existing.StartTime.ToUniversalTime().Ticks.ToString() -eq $saved.StartTicks) {
+        $isSameProcess = $false
+        if ($existing) {
+            try {
+                if ($existing.StartTime -and $existing.StartTime.ToUniversalTime().Ticks.ToString() -eq $saved.StartTicks) {
+                    $isSameProcess = $true
+                }
+            } catch {
+                $isSameProcess = $false
+            }
+        }
+        if ($isSameProcess) {
             if ($HealthUrl) {
                 try { $null = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 5 }
                 catch { throw "$Name is running but unhealthy. Check .runtime logs and run stop_all.bat." }
@@ -56,6 +66,7 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [i
             Write-Host "$Name already running."
             return
         }
+        Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
     }
     if ($Port) {
         $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
