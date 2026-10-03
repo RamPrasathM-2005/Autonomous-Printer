@@ -129,3 +129,35 @@ def test_local_release_backend_unavailable(agent_client):
         data = res.get_json()
         assert data["error"] == "BACKEND_UNAVAILABLE"
 
+def test_direct_print_job_internal_authentication(agent_client):
+    # 1. Missing token -> 401 Unauthorized
+    res_no_tok = agent_client.post("/local/print-job", json={"job_id": "job_auth_test_1"})
+    assert res_no_tok.status_code == 401
+    assert res_no_tok.get_json()["error"] == "UNAUTHORIZED"
+
+    # 2. Invalid token -> 401 Unauthorized
+    res_bad_tok = agent_client.post(
+        "/local/print-job",
+        headers={"Authorization": "Bearer bad-token-value"},
+        json={"job_id": "job_auth_test_2"}
+    )
+    assert res_bad_tok.status_code == 401
+    assert res_bad_tok.get_json()["error"] == "UNAUTHORIZED"
+
+    # 3. Valid Bearer token -> 200 OK
+    res_bearer = agent_client.post(
+        "/local/print-job",
+        headers={"Authorization": f"Bearer {config.INTERNAL_AGENT_TOKEN}"},
+        json={"job_id": "job_auth_test_3"}
+    )
+    assert res_bearer.status_code == 200
+    assert res_bearer.get_json()["status"] in ["PRINTING", "ALREADY_ACTIVE"]
+
+    # 4. Valid X-Internal-Token header -> 200 OK
+    res_header = agent_client.post(
+        "/local/print-job",
+        headers={"X-Internal-Token": config.INTERNAL_AGENT_TOKEN},
+        json={"job_id": "job_auth_test_4"}
+    )
+    assert res_header.status_code == 200
+

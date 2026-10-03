@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from app.db.models.order import OrderStatus
 
 class PrintSettingsSchema(BaseModel):
@@ -84,6 +84,22 @@ class OrderCreateRequest(BaseModel):
             data["settings"] = settings_dict
         return data
 
+import copy
+
+def sanitize_print_settings(settings: Any) -> Dict[str, Any]:
+    """
+    Strips plaintext OTP values from printer_otps structure while preserving
+    otp_hash, active state, cups_printer_name, and other configuration fields.
+    """
+    if not settings or not isinstance(settings, dict):
+        return {}
+    clean = copy.deepcopy(settings)
+    if "printer_otps" in clean and isinstance(clean["printer_otps"], dict):
+        for _, p_val in clean["printer_otps"].items():
+            if isinstance(p_val, dict):
+                p_val.pop("otp", None)
+    return clean
+
 class OrderResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
@@ -101,6 +117,11 @@ class OrderResponse(BaseModel):
     errorMessage: Optional[str] = Field(default=None, alias="errorMessage", serialization_alias="errorMessage")
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
 
+    @field_validator("printSettings", mode="before")
+    @classmethod
+    def strip_plaintext_otp_validator(cls, v: Any) -> Dict[str, Any]:
+        return sanitize_print_settings(v)
+
     def __init__(self, **data):
         if "user_id" in data and "userId" not in data:
             data["userId"] = data.pop("user_id")
@@ -110,6 +131,8 @@ class OrderResponse(BaseModel):
             data["printServerId"] = data.pop("print_server_id")
         if "print_settings" in data and "printSettings" not in data:
             data["printSettings"] = data.pop("print_settings")
+        if "printSettings" in data:
+            data["printSettings"] = sanitize_print_settings(data["printSettings"])
         if "total_pages" in data and "totalPages" not in data:
             data["totalPages"] = data.pop("total_pages")
         if "error_code" in data and "errorCode" not in data:

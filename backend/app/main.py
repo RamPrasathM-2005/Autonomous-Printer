@@ -40,22 +40,35 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
+is_production = settings.ENVIRONMENT.lower() in ("production", "prod")
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="Smart Self-Service Printing Platform FastAPI Backend",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
 )
 
-# CORS configuration: Allow all origins and headers for local & Cloudflare Quick Tunnel access
+# CORS configuration: Restrict to configured origins, localhost, LAN, and Cloudflare tunnel
+cors_origins = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else [settings.ALLOWED_ORIGINS]
+
+cors_origin_regex = (
+    r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
+    r"|^https://[a-zA-Z0-9-]+\.trycloudflare\.com$"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=r"https?://.*",
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 import time
 import subprocess
@@ -102,9 +115,9 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 @app.post("/agent/release-kiosk", include_in_schema=False)
-def alias_release_kiosk(req: AgentReleaseRequest, db: Session = Depends(get_db)):
+def alias_release_kiosk(req: AgentReleaseRequest, request: Request, db: Session = Depends(get_db)):
     from app.api.routes.agent import release_job_kiosk
-    return release_job_kiosk(req, db)
+    return release_job_kiosk(req, request, db)
 
 @app.get("/health", tags=["Health"])
 def health_check():
