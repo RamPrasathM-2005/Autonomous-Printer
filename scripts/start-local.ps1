@@ -1,110 +1,102 @@
 param(
-    [switch]$Build
+    [switch]$Build,
+    [switch]$NoBrowser,
+    [Alias('dev', 'hotreload', 'hot_reload', 'd')][switch]$Hot
 )
-
 $ErrorActionPreference = 'Stop'
+foreach ($argument in $args) {
+    if ($argument -match '^--?(hot|dev|hotreload|hot_reload|d)$') { $Hot = $true }
+    if ($argument -match '^--?build$') { $Build = $true }
+    if ($argument -match '^--?nobrowser$') { $NoBrowser = $true }
+}
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runtime = Join-Path $projectRoot '.runtime'
-$frontendBuild = Join-Path $projectRoot 'frontend\build\web'
-$pythonVenv = Join-Path $projectRoot '.venv\Scripts\python.exe'
-$pythonExe = if (Test-Path -LiteralPath $pythonVenv) { $pythonVenv } else { 'python' }
-$flutterInstall = 'D:\flutter_windows_3.47.5-stable\flutter\bin\flutter.bat'
-$flutterCommand = Get-Command flutter -ErrorAction SilentlyContinue
-$flutterExe = if (Test-Path -LiteralPath $flutterInstall) {
-    $flutterInstall
-} elseif ($flutterCommand) {
-    $flutterCommand.Source
-} else {
-    $null
+$python = Join-Path $projectRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $python)) { throw 'Create .venv and install requirements.txt first.' }
+New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+$webRoot = Join-Path $projectRoot 'frontend\build\web'
+$tunnelDart = Join-Path $projectRoot 'frontend\lib\config\active_tunnel.dart'
+if (-not (Test-Path -LiteralPath $tunnelDart)) {
+    Copy-Item -LiteralPath "$tunnelDart.example" -Destination $tunnelDart
 }
-
-if (-not (Test-Path -LiteralPath $runtime)) {
-    New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+$flutter = Get-Command flutter -ErrorAction SilentlyContinue
+if (-not $flutter) {
+    $flutterCandidates = @(
+        'D:\flutter_windows_3.47.5-stable\flutter\bin\flutter.bat',
+        (Join-Path (Split-Path -Parent $projectRoot) '.tools\flutter\bin\flutter.bat')
+    )
+    $localFlutter = $flutterCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($localFlutter) {
+        $env:Path = (Split-Path -Parent $localFlutter) + ';' + $env:Path
+        $flutter = Get-Command flutter
+    }
 }
-
-# Refuse to start a second managed set of services over a still-running one.
-foreach ($name in @('frontend', 'agent', 'reconciliation', 'backend')) {
-    $stateFile = Join-Path $runtime "$name.json"
-    if (-not (Test-Path -LiteralPath $stateFile)) { continue }
+if ($Hot -or $Build -or -not (Test-Path -LiteralPath (Join-Path $webRoot 'main.dart.js'))) {
+    if (-not $flutter) { throw 'Flutter is not installed or available on PATH.' }
+    Push-Location (Join-Path $projectRoot 'frontend')
     try {
+        & $flutter.Source packages pub get
+        if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency installation failed.' }
+        if (-not $Hot) {
+            & $flutter.Source build web --release --no-pub --no-web-resources-cdn --no-wasm-dry-run
+            if ($LASTEXITCODE -ne 0) { throw 'Flutter web build failed.' }
+        }
+    } finally { Pop-Location }
+}
+function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [int]$TimeoutSec = 45) {
+    $stateFile = Join-Path $runtime "$Name.json"
+    if (Test-Path -LiteralPath $stateFile) {
         $saved = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
         $existing = Get-Process -Id $saved.Id -ErrorAction SilentlyContinue
         if ($existing -and $existing.StartTime.ToUniversalTime().Ticks.ToString() -eq $saved.StartTicks) {
-            throw "Achuppori services are already running ($name, PID $($saved.Id)). Run stop_all.bat first."
+            if ($HealthUrl) {
+                try { $null = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 5 }
+                catch { throw "$Name is running but unhealthy. Check .runtime logs and run stop_all.bat." }
+            }
+            Write-Host "$Name already running."
+            return
         }
-    } catch {
-        if ($_.Exception.Message -like 'Achuppori services are already running*') { throw }
     }
-    Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
+    if ($Port) {
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
+        if ($listener) { throw "Port $Port is occupied. Stop its service before starting $Name." }
+    }
+    $proc = Start-Process -FilePath $python -ArgumentList $Arguments -WorkingDirectory $Directory `
+        -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput (Join-Path $runtime "$Name.out.log") `
+        -RedirectStandardError (Join-Path $runtime "$Name.err.log")
+    @{ Id = $proc.Id; StartTicks = $proc.StartTime.ToUniversalTime().Ticks.ToString() } |
+        ConvertTo-Json | Set-Content -LiteralPath $stateFile
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    do {
+        $proc.Refresh()
+        if ($proc.HasExited) { throw "$Name exited. Check .runtime\$Name.err.log." }
+        if (-not $HealthUrl) { Write-Host "$Name started."; return }
+        try {
+            $null = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 3
+            Write-Host "$Name ready: $HealthUrl"
+            return
+        } catch { Start-Sleep -Milliseconds 500 }
+    } while ((Get-Date) -lt $deadline)
+    throw "$Name did not become ready. Check .runtime logs."
 }
-
-if ($Build -or -not (Test-Path -LiteralPath $frontendBuild)) {
-    if (-not $flutterExe) {
-        throw 'Flutter was not found. Install Flutter or add it to PATH, then retry.'
-    }
-    Write-Host 'Building Flutter web release...' -ForegroundColor Cyan
-    Push-Location (Join-Path $projectRoot 'frontend')
-    try {
-        & $flutterExe build web --release --no-wasm-dry-run
-        if ($LASTEXITCODE -ne 0) { throw "Flutter web build failed with exit code $LASTEXITCODE." }
-    } finally {
-        Pop-Location
-    }
-}
-
-if (-not (Test-Path -LiteralPath $frontendBuild)) {
-    throw "Flutter web output was not found at $frontendBuild."
-}
-
-$started = [System.Collections.Generic.List[object]]::new()
-
-function Start-LocalService {
-    param(
-        [string]$Name,
-        [string]$WorkingDirectory,
-        [string[]]$Arguments
-    )
-
-    $stdout = Join-Path $runtime "$Name.out.log"
-    $stderr = Join-Path $runtime "$Name.err.log"
-    $stateFile = Join-Path $runtime "$Name.json"
-    $process = Start-Process -FilePath $pythonExe -ArgumentList $Arguments `
-        -WorkingDirectory $WorkingDirectory -RedirectStandardOutput $stdout `
-        -RedirectStandardError $stderr -PassThru
-    Start-Sleep -Milliseconds 700
-    $process.Refresh()
-    if ($process.HasExited) {
-        $details = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { '' }
-        throw "$Name failed to start. $details"
-    }
-
-    $record = [pscustomobject]@{
-        Id = $process.Id
-        StartTicks = $process.StartTime.ToUniversalTime().Ticks.ToString()
-    }
-    $record | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
-    $started.Add([pscustomobject]@{ Name = $Name; Id = $process.Id; StateFile = $stateFile })
-    Write-Host "Started $Name (PID $($process.Id))." -ForegroundColor Green
-}
-
+$backendArgs = '-u -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-proxy-headers'
+if ($Hot) { $backendArgs += ' --reload' }
+Start-LocalService 'backend' (Join-Path $projectRoot 'backend') $backendArgs 8000 'http://127.0.0.1:8000/health'
+Start-LocalService 'reconciliation' (Join-Path $projectRoot 'backend') '-u -m app.worker' 0 $null
+Push-Location $projectRoot
 try {
-    $backend = Join-Path $projectRoot 'backend'
-    $agent = Join-Path $projectRoot 'print-agent'
-    Start-LocalService -Name 'backend' -WorkingDirectory $backend -Arguments @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000')
-    Start-LocalService -Name 'reconciliation' -WorkingDirectory $backend -Arguments @('-m', 'app.worker')
-    Start-LocalService -Name 'agent' -WorkingDirectory $agent -Arguments @('app/main.py')
-    Start-LocalService -Name 'frontend' -WorkingDirectory $projectRoot -Arguments @('scripts/serve_frontend.py')
-} catch {
-    foreach ($service in $started) {
-        & taskkill.exe /PID $service.Id /T /F 2>$null | Out-Null
-        Remove-Item -LiteralPath $service.StateFile -Force -ErrorAction SilentlyContinue
-    }
-    throw
+    $agentPortOutput = & $python -c "from dotenv import dotenv_values; print(dotenv_values('print-agent/.env').get('PORT') or '5001')"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read agent port.' }
+} finally { Pop-Location }
+$agentPort = [int]($agentPortOutput | Select-Object -Last 1)
+Start-LocalService 'agent' (Join-Path $projectRoot 'print-agent') '-u -m app.main' $agentPort "http://127.0.0.1:$agentPort/health"
+if ($Hot) {
+    Start-LocalService 'frontend' $projectRoot '-u scripts/flutter_hot_watcher.py --serve --port 3000' 3000 'http://127.0.0.1:3000/' 180
+} else {
+    Start-LocalService 'frontend' $projectRoot '-u scripts/serve_frontend.py' 3000 'http://127.0.0.1:3000/'
 }
-
-Write-Host ''
-Write-Host 'Achuppori services are running:' -ForegroundColor Cyan
-Write-Host '  Website:       http://127.0.0.1:3000/'
-Write-Host '  Backend docs:  http://127.0.0.1:8000/docs'
-Write-Host '  Print agent:   http://127.0.0.1:5000/health'
-Write-Host 'Stop services with stop_all.bat.'
+Write-Host 'App: http://127.0.0.1:3000/'
+Write-Host "Station keypad: http://127.0.0.1:$agentPort/kiosk"
+Write-Host 'Logs: .runtime | Stop: stop_all.bat | Rebuild: start_all.bat -Build'
+if (-not $NoBrowser) { Start-Process 'http://127.0.0.1:3000/' }

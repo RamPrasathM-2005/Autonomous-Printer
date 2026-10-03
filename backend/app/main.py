@@ -23,6 +23,7 @@ from app.utils.errors import (
     general_exception_handler,
 )
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.print_servers import router as print_servers_router
 from app.api.routes.orders import router as orders_router
@@ -100,6 +101,7 @@ if settings.ENVIRONMENT != "development":
     app.add_exception_handler(Exception, general_exception_handler)
 
 # Routers
+app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(print_servers_router)
 app.include_router(orders_router)

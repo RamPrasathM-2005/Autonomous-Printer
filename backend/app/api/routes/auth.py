@@ -6,7 +6,7 @@ from app.db.models.user import User
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshTokenRequest, UserResponse
 from app.schemas.common import MessageResponse
 from app.services.auth_service import auth_service
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -42,4 +42,13 @@ def logout_user(req: RefreshTokenRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_profile(user: User = Depends(get_current_user)):
+    return user
+
+@router.post("/admin/login", response_model=TokenResponse)
+def login_admin(req: LoginRequest, db: Session = Depends(get_db)):
+    _, access_token, refresh_token, expires_in = auth_service.login(db, req, admin_only=True)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, expires_in=expires_in)
+
+@router.get("/admin/me", response_model=UserResponse)
+def get_admin_profile(user: User = Depends(get_current_admin)):
     return user
