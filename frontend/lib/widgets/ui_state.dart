@@ -361,10 +361,6 @@ class UiProcessingView extends StatelessWidget {
               const SizedBox(height: 16),
               OutlinedButton(
                 onPressed: onCancel,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  minimumSize: Size.zero,
-                ),
                 child: const Text('Cancel'),
               ),
             ],
@@ -577,10 +573,6 @@ class UiEmptyView extends StatelessWidget {
               const SizedBox(height: 16),
               OutlinedButton(
                 onPressed: onAction,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  minimumSize: Size.zero,
-                ),
                 child: Text(actionLabel ?? 'Refresh'),
               ),
             ],
@@ -750,10 +742,6 @@ class UiDisabledView extends StatelessWidget {
               const SizedBox(height: 16),
               OutlinedButton(
                 onPressed: onAction,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  minimumSize: Size.zero,
-                ),
                 child: Text(actionLabel ?? 'Back'),
               ),
             ],

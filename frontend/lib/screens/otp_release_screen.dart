@@ -805,9 +805,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                               Text(
                                 _selectedPrinterName == null
                                     ? 'Select a printer first'
-                                    : (_isPrinterLocked
-                                        ? 'View OTP'
-                                        : 'Lock & View OTP'),
+                                    : 'Lock OTP',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,

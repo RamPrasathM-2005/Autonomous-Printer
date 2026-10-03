@@ -756,7 +756,7 @@ class _UploadScreenState extends State<UploadScreen>
           const SizedBox(width: 10),
           const Flexible(
             child: Text(
-              'Autonomous Printer',
+              'Achuppori',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
