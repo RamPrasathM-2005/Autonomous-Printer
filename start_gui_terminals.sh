@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Print Hub - Desktop Terminal Consoles Launcher (Ubuntu)
+# Achuppori - Desktop Terminal Consoles Launcher (Ubuntu)
 # Opens live visual terminal windows directly on your screen.
 # ==============================================================================
 

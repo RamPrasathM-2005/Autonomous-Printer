@@ -1,5 +1,5 @@
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Combined Python Dependencies
+# Achuppori - Combined Python Dependencies
 # ==============================================================================
 
 # FastAPI Backend Core

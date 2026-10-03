@@ -148,10 +148,36 @@ def get_job_progress(job_id: str):
     state = print_service.get_job_state(job_id)
     return jsonify(state), 200
 
+def _verify_internal_token() -> tuple[bool, str]:
+    """Validates the internal communication token sent by the backend."""
+    auth_header = request.headers.get("Authorization", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif request.headers.get("X-Internal-Token"):
+        token = request.headers.get("X-Internal-Token", "").strip()
+
+    expected = config.INTERNAL_AGENT_TOKEN
+    if not token:
+        agent_logger.warning(f"[SECURITY] Unauthorized request to {request.path}: Missing internal token from {request.remote_addr}")
+        return False, "Missing internal authentication token."
+    if token != expected:
+        agent_logger.warning(f"[SECURITY] Unauthorized request to {request.path}: Invalid token provided from {request.remote_addr}")
+        return False, "Invalid internal authentication token."
+    return True, ""
+
 @local_bp.route("/print-job", methods=["POST", "OPTIONS"])
 def direct_print_job():
     if request.method == "OPTIONS":
         return "", 200
+
+    is_valid, err_msg = _verify_internal_token()
+    if not is_valid:
+        return jsonify({
+            "error": "UNAUTHORIZED",
+            "message": err_msg
+        }), 401
+
     data = request.get_json(silent=True) or {}
     job_id = data.get("jobId") or data.get("job_id")
     if not job_id:

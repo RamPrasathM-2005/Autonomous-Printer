@@ -1,4 +1,4 @@
-// HTML5 Native Drag & Drop Bridge for Autonomous Printer
+// HTML5 Native Drag & Drop Bridge for Achuppori
 (function() {
   let activeDropCallback = null;
   let activeStateCallback = null;

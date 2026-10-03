@@ -17,7 +17,7 @@ class PrintApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Autonomous Printer',
+      title: 'Achuppori',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: const UploadScreen(),

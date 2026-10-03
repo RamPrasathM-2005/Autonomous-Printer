@@ -96,7 +96,7 @@ class RazorpayWebService {
             'order_id': orderId,
             'amount': (amount * 100).round(),
             'currency': 'INR',
-            'name': 'Autonomous Printer',
+            'name': 'Achuppori',
             'description': 'Print order',
             'theme': {'color': '#2563EB'},
           });

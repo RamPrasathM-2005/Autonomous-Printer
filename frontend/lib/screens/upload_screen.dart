@@ -435,7 +435,7 @@ class _UploadScreenState extends State<UploadScreen>
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched) {
         await launchUrl(
-          Uri.parse('/downloads/autonomous-printer.apk'),
+          Uri.parse('/downloads/achuppori.apk'),
           mode: LaunchMode.externalApplication,
         );
       }
@@ -731,39 +731,43 @@ class _UploadScreenState extends State<UploadScreen>
       titleSpacing: 16,
       title: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              'assets/images/logo.jpg',
-              width: 28,
-              height: 28,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppTheme.primary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.print_rounded,
-                  color: Colors.white,
-                  size: 16,
-                ),
+          Image.asset(
+            'assets/images/achuppori-logo.png',
+            width: 42,
+            height: 42,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppTheme.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.print_rounded,
+                color: Colors.white,
+                size: 24,
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          const Flexible(
-            child: Text(
-              'Autonomous Printer',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-                letterSpacing: -0.3,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Image.asset(
+              'assets/images/achuppori-wordmark.png',
+              width: 156,
+              height: 48,
+              fit: BoxFit.contain,
+              alignment: Alignment.centerLeft,
+              semanticLabel: 'Achuppori',
+              errorBuilder: (context, error, stackTrace) => const Text(
+                'Achuppori',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ),
           ),
