@@ -1,6 +1,6 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
-import '../widgets/print_illustration.dart';
+import '../widgets/user_action.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -676,7 +676,7 @@ class _UploadScreenState extends State<UploadScreen>
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 960),
+                    constraints: const BoxConstraints(maxWidth: 560),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -698,15 +698,6 @@ class _UploadScreenState extends State<UploadScreen>
                           const SizedBox(height: 16),
                         ],
 
-                        if (_selectedFiles.isEmpty) ...[
-                          const Center(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: PrintIllustration(),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                        ],
                         // Upload zone
                         _buildDropzone(),
                         const SizedBox(height: 20),
@@ -719,17 +710,7 @@ class _UploadScreenState extends State<UploadScreen>
                           const SizedBox(height: 16),
                           _buildUploadProgress(),
                         ],
-                        if (_selectedFiles.isEmpty) ...[
-                          const Center(
-                            child: Text(
-                              'Achuppori · Self-service printing',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textMuted,
-                              ),
-                            ),
-                          ),
-                        ],
+
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -739,7 +720,7 @@ class _UploadScreenState extends State<UploadScreen>
             ),
 
             // Bottom bar
-            if (_selectedFiles.isNotEmpty) _buildBottomBar(),
+            _buildBottomBar(),
           ],
         ),
       ),
@@ -811,6 +792,7 @@ class _UploadScreenState extends State<UploadScreen>
             tooltip: 'Download Android App',
           ),
         const HelpAction(),
+        const UserAction(),
         const SizedBox(width: 4),
       ],
     );
@@ -1179,19 +1161,15 @@ class _UploadScreenState extends State<UploadScreen>
           duration: const Duration(milliseconds: 180),
           padding: EdgeInsets.all(isNarrow ? 20 : 28),
           decoration: BoxDecoration(
-            color: _isDragging
-                ? AppTheme.primarySurface
-                : AppTheme.surfaceWhite,
-            borderRadius: BorderRadius.circular(20),
+            color: _isDragging ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: _isDragging ? AppTheme.primary : AppTheme.border,
               width: _isDragging ? 2.0 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primary.withValues(
-                  alpha: _isDragging ? 0.12 : 0.04,
-                ),
+                color: AppTheme.primary.withValues(alpha: _isDragging ? 0.12 : 0.04),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -1209,26 +1187,20 @@ class _UploadScreenState extends State<UploadScreen>
                   color: _isDragging ? AppTheme.primary : AppTheme.textPrimary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               OutlinedButton.icon(
                 onPressed: _isUploading ? null : _pickFiles,
                 icon: Icon(
-                  _isDragging
-                      ? Icons.file_download_rounded
-                      : Icons.file_upload_outlined,
+                  _isDragging ? Icons.file_download_rounded : Icons.file_upload_outlined,
                   size: 22,
                 ),
                 label: Text(_isDragging ? 'Drop to Upload' : 'Upload File'),
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                  backgroundColor: _isDragging
-                      ? Colors.white
-                      : AppTheme.primarySurface,
+                  minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
+                  backgroundColor: _isDragging ? Colors.white : AppTheme.primarySurface,
                   foregroundColor: AppTheme.primary,
                   side: BorderSide(
-                    color: _isDragging
-                        ? AppTheme.primary
-                        : AppTheme.primaryBorder,
+                    color: _isDragging ? AppTheme.primary : AppTheme.primaryBorder,
                     width: _isDragging ? 1.5 : 1.0,
                   ),
                   shape: RoundedRectangleBorder(
@@ -1248,9 +1220,7 @@ class _UploadScreenState extends State<UploadScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: _isDragging
-                      ? AppTheme.primary
-                      : AppTheme.textSecondary,
+                  color: _isDragging ? AppTheme.primary : AppTheme.textSecondary,
                   fontWeight: _isDragging ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),

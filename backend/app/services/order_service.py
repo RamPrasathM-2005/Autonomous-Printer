@@ -29,6 +29,15 @@ class OrderService:
         user_id: Optional[int] = None,
         session_token: Optional[str] = None
     ) -> Order:
+        roll_number = req.rollNumber
+        department = req.department
+        if user_id:
+            from app.db.models.user import User
+            usr = db.query(User).filter(User.id == user_id).first()
+            if usr:
+                roll_number = roll_number or usr.roll_number
+                department = department or usr.department
+
         # Validate print server
         server = db.query(PrintServer).filter(PrintServer.id == req.printServerId).first()
         if not server:
@@ -124,6 +133,8 @@ class OrderService:
             order = Order(
                 id=order_id,
                 user_id=user_id,
+                roll_number=roll_number,
+                department=department,
                 document_id=document.id,
                 print_server_id=server.id,
                 print_settings=single_settings,
@@ -299,6 +310,8 @@ class OrderService:
         order = Order(
             id=order_id,
             user_id=user_id,
+            roll_number=roll_number,
+            department=department,
             document_id=merged_document.id,
             print_server_id=server.id,
             print_settings=combined_settings,
@@ -448,5 +461,9 @@ class OrderService:
             "amount": float(refund.amount),
             "message": "Order cancelled and full refund processed."
         }
+
+    @staticmethod
+    def get_orders_for_user(db: Session, user_id: int) -> List[Order]:
+        return db.query(Order).filter(Order.user_id == user_id).order_by(Order.created_at.desc()).limit(50).all()
 
 order_service = OrderService()

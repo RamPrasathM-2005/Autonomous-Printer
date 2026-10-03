@@ -50,11 +50,36 @@ class LoginRequest(BaseModel):
     def validate_login_email(cls, value: str) -> str:
         return validate_email_address(value)
 
+class SendPhoneOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    purpose: Optional[str] = Field("login", description="Purpose: 'login' or 'signup'")
+
+class VerifyPhoneOtpRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    otp: str = Field(..., min_length=4, max_length=8)
+
+class StudentRegisterRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=100)
+    roll_number: str = Field(..., min_length=2, max_length=50)
+    phone: str = Field(..., min_length=10, max_length=15)
+    department: str = Field(..., min_length=2, max_length=100)
+    otp: str = Field(..., min_length=4, max_length=8)
+
+class StudentLoginRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    otp: str = Field(..., min_length=4, max_length=8)
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "Bearer"
     expires_in: int
+    user: Optional["UserResponse"] = None
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
@@ -63,9 +88,11 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: str
+    email: Optional[str] = None
     phone: Optional[str] = None
     full_name: Optional[str] = None
+    roll_number: Optional[str] = None
+    department: Optional[str] = None
     role: UserRole
     is_active: bool
     created_at: datetime

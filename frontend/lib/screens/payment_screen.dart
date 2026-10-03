@@ -1,5 +1,6 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
+import '../widgets/user_action.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -234,7 +235,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (['COMPLETED', 'SUCCESS'].contains(statusUpper)) {
       return AppScaffold(
         appBar: AppBar(
-          actions: const [HelpAction()],
+          actions: const [HelpAction(), UserAction()],
           title: const Text('Payment'),
         ),
         body: UiSuccessView(
@@ -248,7 +249,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (['CANCELLED', 'REFUNDED'].contains(statusUpper)) {
       return AppScaffold(
         appBar: AppBar(
-          actions: const [HelpAction()],
+          actions: const [HelpAction(), UserAction()],
           title: const Text('Payment'),
         ),
         body: UiDisabledView(
@@ -272,7 +273,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     return AppScaffold(
       appBar: AppBar(
-        actions: const [HelpAction()],
+        actions: const [HelpAction(), UserAction()],
         title: const Text('Payment'),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,

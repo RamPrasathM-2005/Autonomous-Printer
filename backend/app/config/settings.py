@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     PER_PAGE_RATE: float = 2.00
     BASE_FEE: float = 0.00
 
+    # SMS Configuration for Student Phone OTP
+    SMS_PROVIDER: str = "mock"  # "mock", "fast2sms", "twilio"
+    FAST2SMS_API_KEY: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_PHONE: str = ""
+
     # Razorpay Secrets (Loaded strictly from environment variables)
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""

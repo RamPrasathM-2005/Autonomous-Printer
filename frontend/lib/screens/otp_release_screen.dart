@@ -1,5 +1,6 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
+import '../widgets/user_action.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -435,7 +436,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       _pollingTimer?.cancel();
       _countdownTimer?.cancel();
       await _apiService.cancelOrder(widget.orderId);
-      OrderRecoveryService().clearActiveOrder();
+      OrderRecoveryService().clearAll();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -452,6 +453,16 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isCancelling = false);
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('already cancelled') || errStr.contains('already refunded') || errStr.contains('refunded')) {
+          OrderRecoveryService().clearAll();
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const UploadScreen()),
+            (route) => false,
+          );
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -473,7 +484,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       appBar: AppBar(
-        actions: const [HelpAction()],
+        actions: const [HelpAction(), UserAction()],
         title: const Text('Order & Release'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,

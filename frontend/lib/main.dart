@@ -5,9 +5,12 @@ import 'config/theme.dart';
 import 'screens/upload_screen.dart';
 import 'screens/admin_login_screen.dart';
 
+import 'services/customer_auth_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiConfig.init();
+  await CustomerAuthService().init();
   runApp(const PrintApp());
 }
 

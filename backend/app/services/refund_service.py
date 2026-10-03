@@ -63,7 +63,10 @@ class RefundService:
             payment.razorpay_payment_id.startswith("pay_test_")
             or payment.razorpay_payment_id.startswith("pay_simulated_")
             or settings.RAZORPAY_KEY_ID in ["rzp_test_key_id", "test_key"]
+            or settings.RAZORPAY_KEY_ID.startswith("rzp_test_")
+            or settings.ENVIRONMENT == "development"
         )
+
         if payment.razorpay_payment_id and not is_test_payment:
             try:
                 import razorpay
@@ -84,6 +87,20 @@ class RefundService:
                     error_code="REFUND_FAILED",
                     message=f"Razorpay refund processing failed: {str(e)}"
                 )
+        elif is_test_payment and payment.razorpay_payment_id:
+            # Try real refund if key is provided, but don't fail test flow if test account has zero balance
+            try:
+                import razorpay
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                amount_paise = int(Decimal(str(order.amount)) * 100)
+                rzp_resp = client.payment.refund(payment.razorpay_payment_id, {
+                    "amount": amount_paise,
+                    "notes": {"reason": reason, "orderId": order.id}
+                })
+                rzp_refund_id = rzp_resp.get("id", rzp_refund_id)
+            except Exception as test_e:
+                print(f"[TEST REFUND] Razorpay test refund notice: {test_e}. Simulating successful test refund.")
+                rzp_refund_id = f"rfnd_test_{uuid.uuid4().hex[:12]}"
 
         if success:
             validate_refund_transition(refund.status, RefundStatus.COMPLETED)
@@ -92,7 +109,8 @@ class RefundService:
             refund.refund_completed_at = datetime.now(timezone.utc)
 
             payment.status = PaymentStatus.REFUNDED
-            if order.status in [OrderStatus.FAILED, OrderStatus.EXPIRED]:
+            if order.status in [OrderStatus.FAILED, OrderStatus.EXPIRED, OrderStatus.CANCELLED]:
+                validate_order_transition(order.status, OrderStatus.REFUNDED)
                 order.status = OrderStatus.REFUNDED
 
             db.commit()

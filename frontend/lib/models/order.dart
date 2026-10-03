@@ -72,6 +72,8 @@ class PrintSettings {
 class PrintOrder {
   final String id;
   final String? userId;
+  final String? rollNumber;
+  final String? department;
   final String documentId;
   final String printServerId;
   final PrintSettings printSettings;
@@ -85,6 +87,8 @@ class PrintOrder {
   PrintOrder({
     required this.id,
     this.userId,
+    this.rollNumber,
+    this.department,
     required this.documentId,
     required this.printServerId,
     required this.printSettings,
@@ -96,7 +100,7 @@ class PrintOrder {
     required this.createdAt,
   });
 
-  String get formattedAmount => 'â‚¹${amount.toStringAsFixed(2)}';
+  String get formattedAmount => '₹${amount.toStringAsFixed(2)}';
 
   bool get isWaitingOtp => status.toUpperCase() == 'WAITING_FOR_OTP';
   String get statusLabel => switch (status.toUpperCase()) {
@@ -110,6 +114,7 @@ class PrintOrder {
     'FAILED' => 'Needs attention',
     'EXPIRED' => 'Expired',
     'REFUNDED' => 'Refunded',
+    'CANCELLED' => 'Cancelled',
     _ => 'Status unavailable',
   };
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
@@ -125,6 +130,8 @@ class PrintOrder {
     return PrintOrder(
       id: json['id'] ?? '',
       userId: (json['userId'] ?? json['user_id'])?.toString(),
+      rollNumber: json['rollNumber'] ?? json['roll_number'],
+      department: json['department'],
       documentId: json['documentId'] ?? json['document_id'] ?? '',
       printServerId: json['printServerId'] ?? json['print_server_id'] ?? '',
       printSettings: (json['printSettings'] ?? json['print_settings']) != null

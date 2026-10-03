@@ -36,10 +36,22 @@ def create_order(
     elif authorization and authorization.lower().startswith("bearer "):
         session_token = authorization.split(" ", 1)[1].strip()
 
-    order = order_service.create_order(db=db, req=req, user_id=None, session_token=session_token)
+    user_id = None
+    if session_token:
+        from app.config.security import decode_token
+        payload = decode_token(session_token)
+        if payload and payload.get("sub"):
+            try:
+                user_id = int(payload["sub"])
+            except (ValueError, TypeError):
+                pass
+
+    order = order_service.create_order(db=db, req=req, user_id=user_id, session_token=session_token)
     return OrderResponse(
         id=order.id,
         user_id=order.user_id,
+        roll_number=order.roll_number,
+        department=order.department,
         document_id=order.document_id,
         print_server_id=order.print_server_id,
         print_settings=order.print_settings,
@@ -50,6 +62,47 @@ def create_order(
         status=order.status,
         created_at=order.created_at
     )
+
+@router.get("/my", response_model=List[OrderResponse])
+def get_my_orders(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise AppException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            error_code="UNAUTHENTICATED",
+            message="Please log in to view your orders."
+        )
+    token = authorization.split(" ", 1)[1].strip()
+    from app.config.security import decode_token
+    payload = decode_token(token)
+    if not payload or not payload.get("sub"):
+        raise AppException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            error_code="UNAUTHENTICATED",
+            message="Invalid or expired session."
+        )
+    user_id = int(payload["sub"])
+    orders = order_service.get_orders_for_user(db=db, user_id=user_id)
+    return [
+        OrderResponse(
+            id=o.id,
+            user_id=o.user_id,
+            roll_number=o.roll_number,
+            department=o.department,
+            document_id=o.document_id,
+            print_server_id=o.print_server_id,
+            print_settings=o.print_settings,
+            total_pages=o.total_pages,
+            copies=o.copies,
+            amount=float(o.amount),
+            currency=o.currency,
+            status=o.status,
+            created_at=o.created_at
+        )
+        for o in orders
+    ]
 
 @router.get("/active")
 def get_active_order(

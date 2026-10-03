@@ -11,6 +11,7 @@ import '../models/document.dart';
 import '../models/order.dart';
 import '../models/payment.dart';
 import 'session_store.dart';
+import 'customer_auth_service.dart';
 import 'api_error.dart';
 
 class ApiService {
@@ -64,10 +65,19 @@ class ApiService {
     }
   }
 
-  Future<Map<String, String>> _headers() async => {
-    'Authorization': 'Bearer ${await _token()}',
-    'Content-Type': 'application/json',
-  };
+  Future<Map<String, String>> _headers() async {
+    final customerAuth = CustomerAuthService();
+    if (customerAuth.isLoggedIn && customerAuth.accessToken != null) {
+      return {
+        'Authorization': 'Bearer ${customerAuth.accessToken}',
+        'Content-Type': 'application/json',
+      };
+    }
+    return {
+      'Authorization': 'Bearer ${await _token()}',
+      'Content-Type': 'application/json',
+    };
+  }
 
   Future<void> endSession() async {
     try {
@@ -190,7 +200,11 @@ class ApiService {
       'POST',
       Uri.parse('$_baseUrl/api/documents/upload'),
     );
-    request.headers['Authorization'] = 'Bearer ${await _token()}';
+    final customerAuth = CustomerAuthService();
+    final authToken = (customerAuth.isLoggedIn && customerAuth.accessToken != null)
+        ? customerAuth.accessToken!
+        : await _token();
+    request.headers['Authorization'] = 'Bearer $authToken';
     final extension = filename.split('.').last.toLowerCase();
     final mime = extension == 'png'
         ? 'image/png'
@@ -222,12 +236,20 @@ class ApiService {
     required String printServerId,
     required PrintSettings printSettings,
     List<Map<String, dynamic>>? items,
+    String? rollNumber,
+    String? department,
   }) async {
+    final user = CustomerAuthService().currentUser;
+    final rNum = rollNumber ?? user?.rollNumber;
+    final dept = department ?? user?.department;
+
     final payload = {
       'documentId': documentId,
       'printServerId': printServerId,
       'settings': printSettings.toJson(),
       if (items != null && items.isNotEmpty) 'items': items,
+      if (rNum != null && rNum.isNotEmpty) 'rollNumber': rNum,
+      if (dept != null && dept.isNotEmpty) 'department': dept,
     };
     final canonical = jsonEncode(payload);
     final saved = readSessionValue('pending-order:$_baseUrl');

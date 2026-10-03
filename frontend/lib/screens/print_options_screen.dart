@@ -1,6 +1,7 @@
 import '../widgets/print_action_bar.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
+import '../widgets/user_action.dart';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -339,7 +340,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       appBar: AppBar(
-        actions: const [HelpAction()],
+        actions: const [HelpAction(), UserAction()],
         title: const Text('Print Settings'),
         backgroundColor: AppTheme.surfaceWhite,
         elevation: 0,

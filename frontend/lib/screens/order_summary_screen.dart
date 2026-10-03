@@ -18,6 +18,9 @@ import 'print_progress_screen.dart';
 import 'upload_screen.dart';
 import '../widgets/payment_failed_dialog.dart';
 import '../widgets/ui_state.dart';
+import '../services/customer_auth_service.dart';
+import '../widgets/auth_dialog.dart';
+import '../widgets/user_action.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
   final PrintOrder? order;
@@ -136,6 +139,12 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
   }
 
   Future<void> _proceedToPayment() async {
+    final auth = CustomerAuthService();
+    if (!auth.isLoggedIn) {
+      final user = await AuthDialog.show(context);
+      if (user == null || !mounted) return;
+    }
+
     if (_busy) return;
     setState(() {
       _busy = true;
@@ -351,7 +360,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         ].contains(_currentOrder!.status.toUpperCase())) {
       return AppScaffold(
         appBar: AppBar(
-          actions: const [HelpAction()],
+          actions: const [HelpAction(), UserAction()],
           title: const Text('Order Summary'),
         ),
         body: Center(
@@ -373,7 +382,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
     return AppScaffold(
       appBar: AppBar(
-        actions: const [HelpAction()],
+        actions: const [HelpAction(), UserAction()],
         title: const Text(
           'Order Summary',
           overflow: TextOverflow.ellipsis,

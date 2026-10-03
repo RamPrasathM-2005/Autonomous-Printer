@@ -57,6 +57,8 @@ class OrderCreateRequest(BaseModel):
 
     documentId: Optional[str] = Field(default=None, alias="documentId")
     printServerId: str = Field(..., alias="printServerId")
+    rollNumber: Optional[str] = Field(default=None, alias="rollNumber")
+    department: Optional[str] = Field(default=None, alias="department")
     settings: Optional[PrintSettingsSchema] = None
     items: Optional[List[OrderItemConfig]] = None
 
@@ -69,6 +71,8 @@ class OrderCreateRequest(BaseModel):
             data["documentId"] = data.pop("document_id")
         if "print_server_id" in data and "printServerId" not in data:
             data["printServerId"] = data.pop("print_server_id")
+        if "roll_number" in data and "rollNumber" not in data:
+            data["rollNumber"] = data.pop("roll_number")
 
         if "items" in data and isinstance(data["items"], list) and len(data["items"]) > 0:
             if not data.get("documentId"):
@@ -105,6 +109,8 @@ class OrderResponse(BaseModel):
 
     id: str
     userId: Optional[int] = Field(default=None, alias="userId", serialization_alias="userId")
+    rollNumber: Optional[str] = Field(default=None, alias="rollNumber", serialization_alias="rollNumber")
+    department: Optional[str] = Field(default=None, alias="department", serialization_alias="department")
     documentId: str = Field(..., alias="documentId", serialization_alias="documentId")
     printServerId: str = Field(..., alias="printServerId", serialization_alias="printServerId")
     printSettings: Dict[str, Any] = Field(..., alias="printSettings", serialization_alias="printSettings")
@@ -125,6 +131,8 @@ class OrderResponse(BaseModel):
     def __init__(self, **data):
         if "user_id" in data and "userId" not in data:
             data["userId"] = data.pop("user_id")
+        if "roll_number" in data and "rollNumber" not in data:
+            data["rollNumber"] = data.pop("roll_number")
         if "document_id" in data and "documentId" not in data:
             data["documentId"] = data.pop("document_id")
         if "print_server_id" in data and "printServerId" not in data:
