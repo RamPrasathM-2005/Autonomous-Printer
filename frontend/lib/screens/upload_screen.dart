@@ -780,11 +780,6 @@ class _UploadScreenState extends State<UploadScreen>
             icon: const Icon(Icons.android_rounded, size: 20, color: Color(0xFF059669)),
             tooltip: 'Download Android App',
           ),
-        IconButton(
-          tooltip: 'Admin login',
-          icon: const Icon(Icons.admin_panel_settings_outlined),
-          onPressed: () => Navigator.of(context).pushNamed('/admin/login'),
-        ),
         const HelpAction(),
         const SizedBox(width: 4),
       ],
