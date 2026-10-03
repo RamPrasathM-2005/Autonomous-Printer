@@ -1,4 +1,4 @@
-# 🖨️ Autonomous Printer - Backend Service (FastAPI)
+# 🖨️ Achuppori - Backend Service (FastAPI)
 
 Central REST API backend built with **FastAPI (Python 3.12+)**, **SQLAlchemy ORM**, **MySQL**, and **Pydantic v2**. It handles document upload validation, multi-document order management, exact pricing calculation, Razorpay payment processing, and secure OTP release verification.
 

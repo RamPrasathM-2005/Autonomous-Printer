@@ -1,5 +1,5 @@
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Combined Python Dependencies
+# Achuppori - Combined Python Dependencies
 # ==============================================================================
 
 # FastAPI Backend Core
@@ -37,3 +37,5 @@ pytest>=7.3.0
 httpx>=0.24.0
 
 PyMuPDF>=1.26.0,<2.0.0
+
+email-validator>=2.0.0,<3.0.0

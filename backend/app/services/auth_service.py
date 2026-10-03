@@ -52,7 +52,7 @@ class AuthService:
         return user
 
     @staticmethod
-    def login(db: Session, req: LoginRequest) -> Tuple[User, str, str, int]:
+    def login(db: Session, req: LoginRequest, admin_only: bool = False) -> Tuple[User, str, str, int]:
         user = db.query(User).filter(User.email == req.email.lower()).first()
         if not user or not verify_password(req.password, user.password_hash):
             raise AppException(
@@ -68,7 +68,14 @@ class AuthService:
                 message="Account has been deactivated."
             )
 
-        token_data = {"sub": str(user.id), "role": user.role.value}
+        if admin_only and user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            raise AppException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                error_code="FORBIDDEN",
+                message="Administrator privileges required."
+            )
+
+        token_data = {"sub": str(user.id), "role": user.role.value, "jti": uuid.uuid4().hex}
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
 

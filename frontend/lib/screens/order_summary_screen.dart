@@ -619,7 +619,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Bill Details',
+                  'Bill Summary',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -771,9 +771,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'Pay $amount',
-                          style: const TextStyle(
+                        const Text(
+                          'Pay & Continue',
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w600,
                           ),

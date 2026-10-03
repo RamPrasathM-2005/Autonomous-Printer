@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Autonomous Print Station - Kiosk Display Launcher
+# Achuppori - Kiosk Display Launcher
 # Launches the OTP terminal in full-screen kiosk mode
 # ==============================================================================
 

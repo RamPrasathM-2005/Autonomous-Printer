@@ -1,5 +1,5 @@
 # ==============================================================================
-# Autonomous Self-Service Printing Platform - Build and Package Mobile APK (PowerShell)
+# Achuppori - Build and Package Mobile APK (PowerShell)
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -44,15 +44,15 @@ $SourceApk = if (Test-Path $Arm64Apk) { $Arm64Apk } elseif (Test-Path $Universal
 
 if ($SourceApk) {
     Write-Host "[*] Deploying APK to distribution targets..." -ForegroundColor Green
-    Copy-Item -Path $SourceApk -Destination (Join-Path $DownloadsDir "autonomous-printer.apk") -Force
-    Copy-Item -Path $SourceApk -Destination (Join-Path $StaticDir "autonomous-printer.apk") -Force
+    Copy-Item -Path $SourceApk -Destination (Join-Path $DownloadsDir "achuppori.apk") -Force
+    Copy-Item -Path $SourceApk -Destination (Join-Path $StaticDir "achuppori.apk") -Force
 
-    $FileSize = (Get-Item (Join-Path $DownloadsDir "autonomous-printer.apk")).Length / 1MB
+    $FileSize = (Get-Item (Join-Path $DownloadsDir "achuppori.apk")).Length / 1MB
     $FormattedSize = "{0:N2} MB" -f $FileSize
 
     Write-Host "[✓] Release APK successfully built! ($FormattedSize)" -ForegroundColor Green
-    Write-Host "    - $DownloadsDir\autonomous-printer.apk"
-    Write-Host "    - $StaticDir\autonomous-printer.apk"
+    Write-Host "    - $DownloadsDir\achuppori.apk"
+    Write-Host "    - $StaticDir\achuppori.apk"
 } else {
     Write-Host "[!] Build finished but output APK not found." -ForegroundColor Red
     exit 1

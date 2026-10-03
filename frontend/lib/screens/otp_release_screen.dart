@@ -366,7 +366,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     final order = _order;
     if (order == null) return;
     final buffer = StringBuffer();
-    buffer.writeln('=== AUTONOMOUS PRINTER RECEIPT ===');
+    buffer.writeln('=== ACHUPPORI RECEIPT ===');
     buffer.writeln('Order ID: ${order.id}');
     buffer.writeln('Station ID: ${order.printServerId}');
     buffer.writeln('Status: PAID (Verified)');
@@ -805,9 +805,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                               Text(
                                 _selectedPrinterName == null
                                     ? 'Select a printer first'
-                                    : (_isPrinterLocked
-                                        ? 'View OTP'
-                                        : 'Lock & View OTP'),
+                                    : 'Lock OTP',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,

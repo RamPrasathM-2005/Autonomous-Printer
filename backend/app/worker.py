@@ -1,4 +1,4 @@
-"""Background reconciliation worker for Autonomous Printer Platform."""
+"""Background reconciliation worker for Achuppori Platform."""
 import logging
 import time
 from datetime import datetime, timezone

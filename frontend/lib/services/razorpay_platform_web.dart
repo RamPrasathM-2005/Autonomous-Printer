@@ -35,7 +35,7 @@ void _ensureRazorpayBridge() {
           key: safeKey,
           amount: amountPaise,
           currency: "INR",
-          name: "AutosPrint Hub",
+          name: "Achuppori",
           description: "Instant Print Payment",
           order_id: orderId,
           prefill: {
