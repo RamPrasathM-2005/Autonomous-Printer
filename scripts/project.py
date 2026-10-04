@@ -108,7 +108,7 @@ def serve(hot=False, force=False):
     def start(name, cwd, args, health=None, timeout=45):
         output = (RUNTIME / f"{name}.out.log").open("w")
         logs.append(output)
-        process = subprocess.Popen([str(PYTHON), "-u", *args], cwd=cwd,
+        process = subprocess.Popen([str(PYTHON), "-u", *args], executable=str(PYTHON), cwd=cwd,
                                    stdout=output, stderr=subprocess.STDOUT)
         children.append(process)
         if not health:
@@ -165,7 +165,7 @@ def main():
         build(args.build)
     else:
         if PYTHON.exists() and Path(sys.executable).resolve() != PYTHON.resolve():
-            os.execv(str(PYTHON), [str(PYTHON), str(Path(__file__).resolve()), *sys.argv[1:]])
+            os.execv(str(PYTHON), [f'"{PYTHON}"', f'"{Path(__file__).resolve()}"', *sys.argv[1:]])
         serve(args.hot, args.build)
 
 

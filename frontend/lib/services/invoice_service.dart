@@ -10,6 +10,28 @@ import '../services/customer_auth_service.dart';
 import '../utils/download_helper.dart';
 
 class InvoiceService {
+  static String formatInvoiceDateTime(String? raw) {
+    final now = DateTime.now();
+    if (raw == null || raw.trim().isEmpty) {
+      return DateFormat('dd MMM yyyy, hh:mm a').format(now);
+    }
+    final s = raw.trim();
+    DateTime? dt;
+    try {
+      final iso = s.replaceAll(' ', 'T');
+      if (iso.endsWith('Z') ||
+          iso.contains('+') ||
+          (iso.contains('-') && iso.lastIndexOf('-') > 10)) {
+        dt = DateTime.tryParse(iso)?.toLocal();
+      } else {
+        dt = DateTime.tryParse('${iso}Z')?.toLocal() ??
+            DateTime.tryParse(iso)?.toLocal();
+      }
+    } catch (_) {}
+    dt ??= now;
+    return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
+  }
+
   static Future<Uint8List> generateInvoicePdfBytes({
     required PrintOrder order,
     List<DocumentPrintConfig>? configs,
@@ -24,12 +46,7 @@ class InvoiceService {
   }) async {
     final pdf = pw.Document();
 
-    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
-    final formattedDate = order.createdAt.isNotEmpty
-        ? dateFormat.format(
-            DateTime.tryParse(order.createdAt)?.toLocal() ?? DateTime.now(),
-          )
-        : dateFormat.format(DateTime.now());
+    final formattedDate = formatInvoiceDateTime(order.createdAt);
 
     final primaryColor = PdfColor.fromHex('#0B3C95');
     final secondaryColor = PdfColor.fromHex('#64748B');

@@ -124,7 +124,7 @@ class OrderService:
                 is_colour=item.settings.colour
             )
 
-            order_id = f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+            order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
             single_settings = item.settings.model_dump(by_alias=True)
             if session_token:
@@ -218,7 +218,7 @@ class OrderService:
                 "amount": item_price
             })
 
-        order_id = f"ORD-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
         # Combine documents into single unified PDF for physical and autonomous kiosk printing
         combined_doc_id = f"DOC-COMBINED-{uuid.uuid4().hex[:8].upper()}"

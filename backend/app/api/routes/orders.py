@@ -148,6 +148,8 @@ def get_active_order(
     ord_resp = OrderResponse(
         id=order.id,
         user_id=order.user_id,
+        roll_number=order.roll_number,
+        department=order.department,
         document_id=order.document_id,
         print_server_id=order.print_server_id,
         print_settings=order.print_settings,
@@ -266,6 +268,8 @@ def get_order(
     return OrderResponse(
         id=order.id,
         user_id=order.user_id,
+        roll_number=order.roll_number,
+        department=order.department,
         document_id=order.document_id,
         print_server_id=order.print_server_id,
         print_settings=order.print_settings,

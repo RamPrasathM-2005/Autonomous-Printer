@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator, field_serializer
 from app.db.models.order import OrderStatus
 
 class PrintSettingsSchema(BaseModel):
@@ -122,6 +122,12 @@ class OrderResponse(BaseModel):
     errorCode: Optional[str] = Field(default=None, alias="errorCode", serialization_alias="errorCode")
     errorMessage: Optional[str] = Field(default=None, alias="errorMessage", serialization_alias="errorMessage")
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
+
+    @field_serializer("createdAt")
+    def serialize_created_at(self, dt: datetime, _info):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
     @field_validator("printSettings", mode="before")
     @classmethod

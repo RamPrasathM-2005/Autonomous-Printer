@@ -141,13 +141,8 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
-    final formattedDate = widget.order.createdAt.isNotEmpty
-        ? dateFormat.format(
-            DateTime.tryParse(widget.order.createdAt)?.toLocal() ??
-                DateTime.now(),
-          )
-        : dateFormat.format(DateTime.now());
+    final formattedDate =
+        InvoiceService.formatInvoiceDateTime(widget.order.createdAt);
 
     final authUser = CustomerAuthService().currentUser;
     final finalName = (widget.userName != null && widget.userName!.isNotEmpty)

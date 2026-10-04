@@ -104,11 +104,22 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
   Widget build(BuildContext context) {
     return AppScaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back to home',
+          onPressed: () {
+            OrderRecoveryService().clearAll();
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const UploadScreen()),
+              (route) => false,
+            );
+          },
+        ),
         actions: const [HelpAction()],
         title: const Text('Print status'),
         elevation: 0,
         backgroundColor: AppTheme.surfaceWhite,
-        automaticallyImplyLeading: _isCompleted,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -237,12 +248,28 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
 
                       const SizedBox(height: 20),
 
-                      if (!_isCompleted)
+                      if (!_isCompleted) ...[
                         TextButton.icon(
                           onPressed: _startStatusPolling,
                           icon: const Icon(Icons.refresh_rounded),
                           label: const Text('Refresh status'),
                         ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            OrderRecoveryService().clearAll();
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const UploadScreen(),
+                              ),
+                              (route) => false,
+                            );
+                          },
+                          icon: const Icon(Icons.home_outlined),
+                          label: const Text('Print another document / Home'),
+                        ),
+                      ],
                       if (_isCompleted)
                         SizedBox(
                           width: double.infinity,
