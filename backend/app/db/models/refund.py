@@ -1,4 +1,5 @@
 import enum
+import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Numeric, Text
 from app.config.database import Base
@@ -13,7 +14,7 @@ class RefundStatus(str, enum.Enum):
 class Refund(Base):
     __tablename__ = "refunds"
 
-    id = Column(String(64), primary_key=True, index=True)
+    id = Column(String(64), primary_key=True, default=lambda: f"ref_{uuid.uuid4().hex[:12]}", index=True)
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False, unique=True, index=True)
     payment_id = Column(String(64), ForeignKey("payments.id"), nullable=False, index=True)
     razorpay_refund_id = Column(String(128), unique=True, nullable=True, index=True)

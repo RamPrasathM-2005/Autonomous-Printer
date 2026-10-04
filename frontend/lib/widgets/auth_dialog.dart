@@ -126,8 +126,11 @@ class _AuthDialogState extends State<AuthDialog> {
 
     try {
       final purpose = _isSignUp ? 'signup' : 'login';
-      await _auth.sendOtp(phone, purpose: purpose);
+      final devOtp = await _auth.sendOtp(phone, purpose: purpose);
       if (!mounted) return;
+      if (devOtp != null && devOtp.isNotEmpty && _otpController.text.isEmpty) {
+        _otpController.text = devOtp;
+      }
       setState(() {
         _otpSent = true;
         _info = 'Verification code sent to $phone';

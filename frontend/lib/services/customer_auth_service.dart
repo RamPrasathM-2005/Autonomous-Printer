@@ -41,10 +41,42 @@ class CustomerAuthService {
       } catch (_) {}
     }
 
-    if (_accessToken != null) {
-      // Validate or refresh in background
+    if (_accessToken != null || _refreshToken != null) {
+      // Validate or refresh session quietly
       _refreshProfileQuietly();
     }
+  }
+
+  bool _isTokenExpired(String? token) {
+    if (token == null || token.isEmpty) return true;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      String payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(payload))) as Map<String, dynamic>;
+      final exp = decoded['exp'] as int?;
+      if (exp == null) return false;
+      final expiryDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+      return DateTime.now().toUtc().isAfter(expiryDate.subtract(const Duration(seconds: 45)));
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<String?> getValidAccessToken() async {
+    if (_accessToken != null && !_isTokenExpired(_accessToken)) {
+      return _accessToken;
+    }
+    if (_refreshToken != null) {
+      final refreshed = await _tryRefreshToken();
+      if (refreshed) {
+        return _accessToken;
+      }
+    }
+    return null;
   }
 
   Map<String, String> get authHeaders => {
@@ -53,19 +85,38 @@ class CustomerAuthService {
   };
 
   Future<void> _refreshProfileQuietly() async {
-    if (_accessToken == null) return;
+    final token = await getValidAccessToken();
+    if (token == null) return;
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/api/auth/me'),
-        headers: authHeaders,
-      ).timeout(const Duration(seconds: 5));
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         _currentUser = UserProfile.fromJson(data);
         writeSessionValue(_kUserProfileKey, jsonEncode(_currentUser!.toJson()));
         userNotifier.value = _currentUser;
       } else if (res.statusCode == 401 && _refreshToken != null) {
-        await _tryRefreshToken();
+        final refreshed = await _tryRefreshToken();
+        if (refreshed && _accessToken != null) {
+          final retryRes = await http.get(
+            Uri.parse('$_baseUrl/api/auth/me'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_accessToken',
+            },
+          ).timeout(const Duration(seconds: 6));
+          if (retryRes.statusCode == 200) {
+            final data = jsonDecode(retryRes.body) as Map<String, dynamic>;
+            _currentUser = UserProfile.fromJson(data);
+            writeSessionValue(_kUserProfileKey, jsonEncode(_currentUser!.toJson()));
+            userNotifier.value = _currentUser;
+          }
+        }
       }
     } catch (_) {}
   }
@@ -82,14 +133,21 @@ class CustomerAuthService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         _accessToken = data['access_token'];
+        if (data['refresh_token'] != null) {
+          _refreshToken = data['refresh_token'];
+          writeSessionValue(_kRefreshTokenKey, _refreshToken!);
+        }
         writeSessionValue(_kAccessTokenKey, _accessToken!);
         return true;
+      } else if (res.statusCode == 401 || res.statusCode == 403) {
+        // Refresh token permanently expired or revoked
+        logout();
       }
     } catch (_) {}
     return false;
   }
 
-  Future<void> sendOtp(String phone, {String purpose = 'login'}) async {
+  Future<String?> sendOtp(String phone, {String purpose = 'login'}) async {
     final cleanPhone = phone.trim();
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/send-otp'),
@@ -101,6 +159,7 @@ class CustomerAuthService {
     if (res.statusCode >= 400) {
       throw ApiError(data['message'] ?? 'Failed to send OTP code.');
     }
+    return data['dev_otp'] as String?;
   }
 
   Future<void> verifyOtp(String phone, String otp) async {
@@ -235,10 +294,14 @@ class CustomerAuthService {
   }
 
   Future<List<PrintOrder>> fetchMyOrders() async {
-    if (_accessToken == null) return [];
+    final token = await getValidAccessToken();
+    if (token == null) return [];
     final res = await http.get(
       Uri.parse('$_baseUrl/api/orders/my'),
-      headers: authHeaders,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
     ).timeout(const Duration(seconds: 12));
 
     final data = jsonDecode(res.body);

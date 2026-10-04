@@ -82,6 +82,7 @@ class PrintOrder {
   final double amount;
   final String currency;
   final String status;
+  final String? releaseCode;
   final String createdAt;
 
   PrintOrder({
@@ -97,6 +98,7 @@ class PrintOrder {
     required this.amount,
     required this.currency,
     required this.status,
+    this.releaseCode,
     required this.createdAt,
   });
 
@@ -147,6 +149,7 @@ class PrintOrder {
           : 0.0,
       currency: json['currency'] ?? 'INR',
       status: json['status'] ?? 'WAITING_FOR_PAYMENT',
+      releaseCode: json['releaseCode'] ?? json['release_code'],
       createdAt: json['createdAt'] ?? json['created_at'] ?? '',
     );
   }

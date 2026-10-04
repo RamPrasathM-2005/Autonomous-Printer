@@ -39,6 +39,7 @@ def reconcile_expired_otps(db):
                 existing_refund = db.query(Refund).filter(Refund.order_id == order.id).first()
                 if not existing_refund:
                     refund = Refund(
+                        id=f"ref_{uuid.uuid4().hex[:12]}",
                         order_id=order.id,
                         payment_id=payment.id,
                         amount=payment.amount,

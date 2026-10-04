@@ -17,14 +17,18 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.services.auth_service import auth_service
+from app.config.settings import settings
 from app.api.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/send-otp")
 def send_phone_otp(req: SendPhoneOtpRequest, db: Session = Depends(get_db)):
-    auth_service.send_phone_otp(db, req.phone, req.purpose or "login")
-    return {"message": "Verification code sent successfully.", "phone": req.phone}
+    otp = auth_service.send_phone_otp(db, req.phone, req.purpose or "login")
+    resp = {"message": "Verification code sent successfully.", "phone": req.phone}
+    if settings.ENVIRONMENT == "development":
+        resp["dev_otp"] = otp
+    return resp
 
 @router.post("/verify-otp")
 def verify_phone_otp(req: VerifyPhoneOtpRequest):

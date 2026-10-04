@@ -85,24 +85,35 @@ def get_my_orders(
         )
     user_id = int(payload["sub"])
     orders = order_service.get_orders_for_user(db=db, user_id=user_id)
-    return [
-        OrderResponse(
-            id=o.id,
-            user_id=o.user_id,
-            roll_number=o.roll_number,
-            department=o.department,
-            document_id=o.document_id,
-            print_server_id=o.print_server_id,
-            print_settings=o.print_settings,
-            total_pages=o.total_pages,
-            copies=o.copies,
-            amount=float(o.amount),
-            currency=o.currency,
-            status=o.status,
-            created_at=o.created_at
+    result = []
+    for o in orders:
+        release_code = None
+        if o.status in [OrderStatus.WAITING_FOR_OTP, OrderStatus.PAID, OrderStatus.JOB_QUEUED]:
+            try:
+                plaintext, _, _ = otp_service.get_otp_for_order(db, o.id)
+                release_code = plaintext
+            except Exception:
+                pass
+
+        result.append(
+            OrderResponse(
+                id=o.id,
+                user_id=o.user_id,
+                roll_number=o.roll_number,
+                department=o.department,
+                document_id=o.document_id,
+                print_server_id=o.print_server_id,
+                print_settings=o.print_settings,
+                total_pages=o.total_pages,
+                copies=o.copies,
+                amount=float(o.amount),
+                currency=o.currency,
+                status=o.status,
+                releaseCode=release_code,
+                created_at=o.created_at
+            )
         )
-        for o in orders
-    ]
+    return result
 
 @router.get("/active")
 def get_active_order(
@@ -122,9 +133,31 @@ def get_active_order(
     elif authorization and authorization.lower().startswith("bearer "):
         session_token = authorization.split(" ", 1)[1].strip()
 
+    user_id = None
+    if session_token:
+        try:
+            from app.config.security import decode_token
+            token_payload = decode_token(session_token)
+            if token_payload and token_payload.get("sub"):
+                user_id = int(token_payload["sub"])
+        except Exception:
+            pass
+
     order = None
     if order_id and order_id.strip():
         order = db.query(Order).filter(Order.id == order_id.strip()).first()
+
+    # Search active order for logged-in user
+    if not order and user_id:
+        order = db.query(Order).filter(
+            Order.user_id == user_id,
+            Order.status.in_([
+                OrderStatus.CREATED,
+                OrderStatus.PAID,
+                OrderStatus.JOB_QUEUED,
+                OrderStatus.WAITING_FOR_OTP
+            ])
+        ).order_by(Order.created_at.desc()).first()
 
     if not order and session_token:
         # Search recent orders for this session token
@@ -182,6 +215,7 @@ def get_active_order(
             db.commit()
 
         plaintext, expires_at, printer_otps = otp_service.get_otp_for_order(db, order.id)
+        ord_resp.releaseCode = plaintext
         selected_printer = cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer")
         is_locked = cur_settings.get("printer_selection_locked", False)
 

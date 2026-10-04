@@ -11,7 +11,6 @@ import '../models/document.dart';
 import '../models/order.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
-import '../services/invoice_service.dart';
 import '../services/order_recovery_service.dart';
 import '../widgets/invoice_preview_dialog.dart';
 import '../widgets/ui_state.dart';
@@ -52,9 +51,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _isPrinterLocked = false;
   bool _isSubmittingPrinter = false;
   bool _otpRevealed = false;
-  bool _isGeneratingInvoice = false;
   bool _isCancelling = false;
-  bool _hasAutoTriggeredInvoice = false;
 
   // 'WAITING', 'PRINTING', 'COMPLETED'
   String _printStatus = 'WAITING';
@@ -157,15 +154,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
       _startCountdown();
       _startPolling();
-
-      if (!_hasAutoTriggeredInvoice) {
-        _hasAutoTriggeredInvoice = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _autoGenerateAndPreviewInvoice();
-          }
-        });
-      }
     } catch (e) {
       setState(() {
         _errorMessage = userError(e);
@@ -338,16 +326,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     }
   }
 
-  Future<void> _autoGenerateAndPreviewInvoice() async {
-    // 1. Auto download invoice PDF
-    await _downloadInvoice();
-
-    // 2. Open invoice preview dialog
-    if (mounted) {
-      _showInvoicePreview();
-    }
-  }
-
   void _showInvoicePreview() {
     final order = _order;
     if (order == null) return;
@@ -362,43 +340,6 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     );
   }
 
-  Future<void> _downloadInvoice() async {
-    final order = _order;
-    if (order == null) return;
-    setState(() => _isGeneratingInvoice = true);
-    try {
-      final otpCode = _getResolvedOtpCode();
-      await InvoiceService.generateAndDownloadInvoice(
-        order: order,
-        configs: widget.configs,
-        documents: widget.documents,
-        paymentId: widget.paymentId,
-        otp: otpCode.isNotEmpty ? otpCode : null,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invoice downloaded.'),
-            backgroundColor: AppTheme.success,
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to generate invoice: $e'),
-            backgroundColor: AppTheme.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isGeneratingInvoice = false);
-    }
-  }
 
   void _shareReceipt() {
     final order = _order;
@@ -545,13 +486,13 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                       actionLabel: 'New Print Job',
                     )
                   : UiProcessingOverlay(
-                      isProcessing: _isCancelling || _isGeneratingInvoice || _isSubmittingPrinter,
+                      isProcessing: _isCancelling || _isSubmittingPrinter,
                       title: _isCancelling
                           ? 'Cancelling Order'
-                          : (_isGeneratingInvoice ? 'Downloading Invoice' : 'Connecting Printer'),
+                          : 'Connecting Printer',
                       message: _isCancelling
                           ? 'Processing cancellation...'
-                          : (_isGeneratingInvoice ? 'Preparing PDF receipt...' : 'Connecting to station...'),
+                          : 'Connecting to station...',
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         child: Center(

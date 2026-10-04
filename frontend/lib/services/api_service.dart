@@ -67,9 +67,10 @@ class ApiService {
 
   Future<Map<String, String>> _headers() async {
     final customerAuth = CustomerAuthService();
-    if (customerAuth.isLoggedIn && customerAuth.accessToken != null) {
+    final token = await customerAuth.getValidAccessToken();
+    if (token != null) {
       return {
-        'Authorization': 'Bearer ${customerAuth.accessToken}',
+        'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       };
     }

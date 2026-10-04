@@ -119,6 +119,7 @@ class OrderResponse(BaseModel):
     amount: float
     currency: str
     status: OrderStatus
+    releaseCode: Optional[str] = Field(default=None, alias="releaseCode", serialization_alias="releaseCode")
     errorCode: Optional[str] = Field(default=None, alias="errorCode", serialization_alias="errorCode")
     errorMessage: Optional[str] = Field(default=None, alias="errorMessage", serialization_alias="errorMessage")
     createdAt: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
@@ -149,6 +150,8 @@ class OrderResponse(BaseModel):
             data["printSettings"] = sanitize_print_settings(data["printSettings"])
         if "total_pages" in data and "totalPages" not in data:
             data["totalPages"] = data.pop("total_pages")
+        if "release_code" in data and "releaseCode" not in data:
+            data["releaseCode"] = data.pop("release_code")
         if "error_code" in data and "errorCode" not in data:
             data["errorCode"] = data.pop("error_code")
         if "error_message" in data and "errorMessage" not in data:

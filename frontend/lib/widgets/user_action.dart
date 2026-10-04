@@ -4,6 +4,9 @@ import '../config/theme.dart';
 import '../models/order.dart';
 import '../models/user_profile.dart';
 import '../services/customer_auth_service.dart';
+import '../screens/otp_release_screen.dart';
+import '../screens/payment_screen.dart';
+import 'invoice_preview_dialog.dart';
 import 'auth_dialog.dart';
 
 class UserAction extends StatelessWidget {
@@ -23,8 +26,8 @@ class UserAction extends StatelessWidget {
               child: IconButton(
                 onPressed: () => AuthDialog.show(context),
                 icon: const Icon(
-                  Icons.account_circle_outlined,
-                  size: 22,
+                  Icons.person_outline_rounded,
+                  size: 20,
                   color: AppTheme.textPrimary,
                 ),
                 style: IconButton.styleFrom(
@@ -39,46 +42,36 @@ class UserAction extends StatelessWidget {
         }
 
         return Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: InkWell(
-            onTap: () => _showProfileDialog(context, user),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF4FF),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFD0E0FD)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 11,
-                    backgroundColor: AppTheme.primary,
-                    child: Text(
-                      user.initials,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
+          padding: const EdgeInsets.only(right: 8),
+          child: Tooltip(
+            message: user.displayName,
+            child: InkWell(
+              onTap: () => _showProfileDialog(context, user),
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
                     ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  user.initials,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(width: 6),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 90),
-                    child: Text(
-                      user.displayName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -561,20 +554,27 @@ class _OrderHistoryDialogState extends State<_OrderHistoryDialog> {
                                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                                 itemBuilder: (ctx, idx) {
                                   final order = _orders[idx];
+                                  final isWaitingOtp = order.isWaitingOtp || order.status.toUpperCase() == 'PAID' || order.status.toUpperCase() == 'JOB_QUEUED';
+                                  final isUnpaid = order.status.toUpperCase() == 'CREATED';
+                                  final isCompleted = order.isCompleted;
+
                                   return Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.surfaceSubtle,
+                                      color: isWaitingOtp ? const Color(0xFFF8FAFC) : AppTheme.surfaceSubtle,
                                       borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: AppTheme.border),
+                                      border: Border.all(
+                                        color: isWaitingOtp ? const Color(0xFFBFDBFE) : AppTheme.border,
+                                        width: isWaitingOtp ? 1.5 : 1.0,
+                                      ),
                                     ),
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
                                                 order.id,
                                                 style: const TextStyle(
                                                   fontSize: 13,
@@ -582,31 +582,111 @@ class _OrderHistoryDialogState extends State<_OrderHistoryDialog> {
                                                   color: AppTheme.textPrimary,
                                                 ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                '${order.totalPages} pages · ${order.copies} copy · ${order.formattedAmount}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: AppTheme.textSecondary,
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: _statusBg(order.status),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                order.statusLabel,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: _statusColor(order.status),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${order.totalPages} pages · ${order.copies} copy · ${order.formattedAmount}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            if (order.releaseCode != null && order.releaseCode!.isNotEmpty && isWaitingOtp) ...[
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFEFF6FF),
+                                                  borderRadius: BorderRadius.circular(5),
+                                                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                                                ),
+                                                child: Text(
+                                                  'Code: ${order.releaseCode}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppTheme.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                            ],
+                                            const Spacer(),
+                                            if (isWaitingOtp) ...[
+                                              FilledButton.icon(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => OtpReleaseScreen(orderId: order.id, order: order),
+                                                    ),
+                                                  );
+                                                },
+                                                icon: const Icon(Icons.qr_code_rounded, size: 13),
+                                                label: const Text('Release Code'),
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: AppTheme.primary,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ] else if (isUnpaid) ...[
+                                              FilledButton.icon(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => PaymentScreen(order: order),
+                                                    ),
+                                                  );
+                                                },
+                                                icon: const Icon(Icons.payment_rounded, size: 13),
+                                                label: const Text('Pay'),
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: AppTheme.primary,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ] else if (isCompleted) ...[
+                                              OutlinedButton.icon(
+                                                onPressed: () => InvoicePreviewDialog.show(context, order: order),
+                                                icon: const Icon(Icons.receipt_long_rounded, size: 13),
+                                                label: const Text('Invoice'),
+                                                style: OutlinedButton.styleFrom(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                                                 ),
                                               ),
                                             ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: _statusBg(order.status),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            order.statusLabel,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: _statusColor(order.status),
-                                            ),
-                                          ),
+                                          ],
                                         ),
                                       ],
                                     ),

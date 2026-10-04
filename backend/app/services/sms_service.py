@@ -66,6 +66,11 @@ class SmsService:
         except Exception as e:
             logger.exception(f"[SMS] Failed to send OTP via Fast2SMS: {e}")
 
+        # Fallback console log for development and troubleshooting
+        logger.warning(f"[ACHUPPORI SMS OTP FALLBACK] Delivery failed via Fast2SMS. Fallback OTP for {numbers}: {otp}")
+        print(f"\n=======================================================", flush=True)
+        print(f"[ACHUPPORI SMS OTP FALLBACK] Phone: {numbers} | Code: {otp}", flush=True)
+        print(f"=======================================================\n", flush=True)
         return False
 
     @staticmethod
