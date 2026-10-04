@@ -8,6 +8,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from datetime import datetime, timezone
 from app.config.database import SessionLocal, engine
+from app.config.settings import settings
 from app.db.base import Base
 from app.db.models.user import User, UserRole
 from app.db.models.print_server import PrintServer, PrintServerStatus
@@ -23,43 +24,44 @@ def seed():
         print("[INFO] Seeding database...")
 
         # 1. Admin user
-        admin = db.query(User).filter(User.email == "admin@printplatform.local").first()
+        admin = db.query(User).filter(User.email == settings.ADMIN_EMAIL).first()
         if not admin:
             admin = User(
-                email="admin@printplatform.local",
-                phone="1000000000",
-                full_name="Platform Administrator",
-                password_hash=hash_password("AdminPass123!"),
+                email=settings.ADMIN_EMAIL,
+                phone=settings.ADMIN_PHONE,
+                full_name=settings.ADMIN_NAME,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
                 is_active=True
             )
             db.add(admin)
-            print("  - Created admin user: admin@printplatform.local (Password: AdminPass123!)")
+            print(f"  - Created admin user: {settings.ADMIN_EMAIL}")
 
         # 2. Demo student user
-        student = db.query(User).filter(User.email == "student@example.com").first()
+        student = db.query(User).filter(User.email == settings.DEMO_STUDENT_EMAIL).first()
         if not student:
             student = User(
-                email="student@example.com",
-                phone="9876543210",
-                full_name="Demo Student",
-                password_hash=hash_password("Password123!"),
+                email=settings.DEMO_STUDENT_EMAIL,
+                phone=settings.DEMO_STUDENT_PHONE,
+                full_name=settings.DEMO_STUDENT_NAME,
+                password_hash=hash_password(settings.DEMO_STUDENT_PASSWORD),
                 role=UserRole.USER,
                 is_active=True
             )
             db.add(student)
-            print("  - Created student user: student@example.com (Password: Password123!)")
+            print(f"  - Created demo student user: {settings.DEMO_STUDENT_EMAIL}")
 
-        # 3. Print Server Station PRINT-SERVER-001
-        server = db.query(PrintServer).filter(PrintServer.id == "PRINT-SERVER-001").first()
-        default_token = "test-agent-device-token-secret"
-        token_hash = hash_token(default_token)
+        # 3. Print Server Station
+        server_id = settings.DEFAULT_PRINT_SERVER_ID
+        server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
+        agent_token = settings.INTERNAL_AGENT_TOKEN
+        token_hash = hash_token(agent_token)
 
         if not server:
             server = PrintServer(
-                id="PRINT-SERVER-001",
-                name="Central Library Station",
-                location="Main Campus Library Floor 1",
+                id=server_id,
+                name=settings.DEFAULT_PRINT_SERVER_NAME,
+                location=settings.DEFAULT_PRINT_SERVER_LOCATION,
                 device_token_hash=token_hash,
                 status=PrintServerStatus.ONLINE,
                 last_heartbeat=datetime.now(timezone.utc),
@@ -67,7 +69,7 @@ def seed():
                 paper_state="AVAILABLE"
             )
             db.add(server)
-            print(f"  - Created print station: PRINT-SERVER-001 (Device Token: {default_token})")
+            print(f"  - Created print station: {server_id}")
         else:
             # Update token hash if needed
             server.device_token_hash = token_hash
@@ -78,7 +80,7 @@ def seed():
         if not printer:
             printer = Printer(
                 id="printer_central_01",
-                server_id="PRINT-SERVER-001",
+                server_id=server_id,
                 cups_printer_name="HP_LaserJet_400_M401dn_F36EC0",
                 display_name="HP LaserJet 400 M401dn",
                 supports_color=False,
@@ -88,6 +90,7 @@ def seed():
             db.add(printer)
             print("  - Created printer 1: HP_LaserJet_400_M401dn_F36EC0 (Duplex B&W)")
         else:
+            printer.server_id = server_id
             printer.cups_printer_name = "HP_LaserJet_400_M401dn_F36EC0"
             printer.display_name = "HP LaserJet 400 M401dn"
             printer.supports_color = False
@@ -97,7 +100,7 @@ def seed():
         if not printer2:
             printer2 = Printer(
                 id="printer_central_02",
-                server_id="PRINT-SERVER-001",
+                server_id=server_id,
                 cups_printer_name="HP_LaserJet_400_M401dn_E9A0F4",
                 display_name="HP LaserJet 400 M401dn (Unit 2)",
                 supports_color=False,
@@ -107,6 +110,7 @@ def seed():
             db.add(printer2)
             print("  - Created printer 2: HP_LaserJet_400_M401dn_E9A0F4 (Unit 2)")
         else:
+            printer2.server_id = server_id
             printer2.cups_printer_name = "HP_LaserJet_400_M401dn_E9A0F4"
             printer2.display_name = "HP LaserJet 400 M401dn (Unit 2)"
             printer2.supports_color = False
