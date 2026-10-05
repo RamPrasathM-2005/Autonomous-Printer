@@ -33,6 +33,8 @@ from app.api.routes.maintenance import router as maintenance_router
 from app.api.routes.kiosk import router as kiosk_router
 from app.api.routes.sessions import router as sessions_router
 from app.api.routes.admin import router as admin_router
+from app.api.routes.departments import router as departments_router
+from app.api.routes.reports import router as reports_router
 
 def _sync_missing_columns():
     from sqlalchemy import inspect, text
@@ -134,6 +136,8 @@ app.include_router(maintenance_router)
 app.include_router(kiosk_router)
 app.include_router(sessions_router)
 app.include_router(admin_router)
+app.include_router(departments_router)
+app.include_router(reports_router)
 
 from app.schemas.agent import AgentReleaseRequest
 from app.db.session import get_db

@@ -63,14 +63,10 @@ class AdminShell extends StatelessWidget {
         Navigator.of(context).pushReplacementNamed('/admin/dashboard');
         break;
       case AdminNavSection.departments:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Department Management is upcoming in Phase 2.')),
-        );
+        Navigator.of(context).pushReplacementNamed('/admin/departments');
         break;
       case AdminNavSection.reports:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Department Reports are upcoming in Phase 3.')),
-        );
+        Navigator.of(context).pushReplacementNamed('/admin/reports');
         break;
       case AdminNavSection.printers:
         ScaffoldMessenger.of(context).showSnackBar(
@@ -253,21 +249,25 @@ class AdminShell extends StatelessWidget {
             ),
             child: Column(
               children: [
-                ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  leading: const Icon(Icons.logout, size: 20, color: AppTheme.danger),
-                  title: const Text(
-                    'Sign out',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.danger,
+                Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    leading: const Icon(Icons.logout, size: 20, color: AppTheme.danger),
+                    title: const Text(
+                      'Sign out',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.danger,
+                      ),
                     ),
+                    onTap: () {
+                      if (isDrawer) Navigator.of(context).pop();
+                      _handleLogout(context);
+                    },
                   ),
-                  onTap: () {
-                    if (isDrawer) Navigator.of(context).pop();
-                    _handleLogout(context);
-                  },
                 ),
               ],
             ),
@@ -289,16 +289,20 @@ class AdminShell extends StatelessWidget {
         elevation: 0,
         leading: isDesktop ? null : null, // Uses default Drawer hamburger if not desktop
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
+            Flexible(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(

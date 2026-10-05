@@ -230,7 +230,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             crossAxisCount: crossAxisCount,
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
-            childAspectRatio: crossAxisCount == 1 ? 2.5 : 1.7,
+            childAspectRatio: crossAxisCount == 1 ? 2.5 : (crossAxisCount == 2 ? 1.7 : 1.45),
           ),
           itemCount: cards.length,
           itemBuilder: (context, i) => cards[i],
@@ -467,9 +467,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                   ],
                 ),
-                Text(
-                  '${depts.length} departments',
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.w500),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${depts.length} departments',
+                      style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/departments'),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                      label: const Text('Manage', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -485,6 +496,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   DataColumn(label: Text('Printers', style: TextStyle(fontWeight: FontWeight.w700))),
                   DataColumn(label: Text('Print Jobs', style: TextStyle(fontWeight: FontWeight.w700))),
                   DataColumn(label: Text('Pages', style: TextStyle(fontWeight: FontWeight.w700))),
+                  DataColumn(label: Text('Report', style: TextStyle(fontWeight: FontWeight.w700))),
                 ],
                 rows: depts.map((d) {
                   return DataRow(
@@ -523,6 +535,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         Text(
                           d['pages_count']?.toString() ?? '0',
                           style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      DataCell(
+                        IconButton(
+                          icon: const Icon(Icons.assessment_outlined, size: 18, color: AppTheme.primary),
+                          tooltip: 'View Department Report',
+                          onPressed: () {
+                            Navigator.of(context).pushNamed(
+                              '/admin/reports',
+                              arguments: {'department_id': d['id']},
+                            );
+                          },
                         ),
                       ),
                     ],
