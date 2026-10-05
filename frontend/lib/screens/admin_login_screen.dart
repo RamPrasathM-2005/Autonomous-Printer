@@ -53,7 +53,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     try {
       final profile = await AdminAuthService.login(_email.text, _password.text);
       _password.clear();
-      if (mounted) setState(() => _profile = profile);
+      if (mounted) {
+        setState(() => _profile = profile);
+        Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+      }
     } on TimeoutException {
       if (mounted) {
         setState(() => _error = 'Connection timed out. Please try again.');
@@ -151,6 +154,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               : 'Administrator',
                         ),
                         const SizedBox(height: 24),
+                        FilledButton.icon(
+                          icon: const Icon(Icons.dashboard_rounded),
+                          label: const Text('Go to Dashboard'),
+                          onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/dashboard'),
+                        ),
+                        const SizedBox(height: 12),
                         OutlinedButton(
                           onPressed: _busy ? null : _logout,
                           child: const Text('Sign out'),

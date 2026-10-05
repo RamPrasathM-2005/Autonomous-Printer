@@ -4,6 +4,7 @@ import 'config/api_config.dart';
 import 'config/theme.dart';
 import 'screens/upload_screen.dart';
 import 'screens/admin_login_screen.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
 
 import 'services/customer_auth_service.dart';
 
@@ -24,7 +25,10 @@ class PrintApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: const UploadScreen(),
-      routes: {'/admin/login': (_) => const AdminLoginScreen()},
+      routes: {
+        '/admin/login': (_) => const AdminLoginScreen(),
+        '/admin/dashboard': (_) => const AdminDashboardScreen(),
+      },
     );
   }
 }

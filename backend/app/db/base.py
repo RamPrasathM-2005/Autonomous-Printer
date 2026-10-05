@@ -2,6 +2,7 @@
 # Import Base and all models so SQLAlchemy metadata is aware of all models
 
 from app.config.database import Base
+from app.db.models.department import Department
 from app.db.models.user import User, UserRole
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.document import Document, DocumentStatus
@@ -17,6 +18,7 @@ from app.db.models.audit_log import AuditLog
 
 __all__ = [
     "Base",
+    "Department",
     "User",
     "UserRole",
     "RefreshToken",
