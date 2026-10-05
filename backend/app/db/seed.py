@@ -27,7 +27,6 @@ def seed():
         if not admin:
             admin = User(
                 email="admin@printplatform.local",
-                phone="1000000000",
                 full_name="Platform Administrator",
                 password_hash=hash_password("AdminPass123!"),
                 role=UserRole.ADMIN,
@@ -41,8 +40,9 @@ def seed():
         if not student:
             student = User(
                 email="student@example.com",
-                phone="9876543210",
                 full_name="Demo Student",
+                roll_number="STU2026001",
+                department="Computer Science (CSE)",
                 password_hash=hash_password("Password123!"),
                 role=UserRole.USER,
                 is_active=True

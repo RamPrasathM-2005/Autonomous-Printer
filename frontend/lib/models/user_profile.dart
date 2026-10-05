@@ -25,9 +25,11 @@ class UserProfile {
       ? fullName!.trim()
       : (rollNumber?.trim().isNotEmpty == true)
           ? rollNumber!.trim()
-          : (phone?.trim().isNotEmpty == true)
-              ? phone!.trim()
-              : 'User';
+          : (email?.trim().isNotEmpty == true)
+              ? email!.split('@').first
+              : (phone?.trim().isNotEmpty == true)
+                  ? phone!.trim()
+                  : 'User';
 
   String get initials {
     final name = displayName;

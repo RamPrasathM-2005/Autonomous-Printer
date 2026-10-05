@@ -50,29 +50,71 @@ class LoginRequest(BaseModel):
     def validate_login_email(cls, value: str) -> str:
         return validate_email_address(value)
 
-class SendPhoneOtpRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=15)
+class SendOtpRequest(BaseModel):
+    email: Optional[str] = Field(None, description="User email address")
+    phone: Optional[str] = Field(None, description="Legacy phone fallback")
     purpose: Optional[str] = Field("login", description="Purpose: 'login' or 'signup'")
 
-class VerifyPhoneOtpRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=15)
+    @field_validator("email")
+    @classmethod
+    def validate_send_otp_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value.strip():
+            return validate_email_address(value)
+        return value
+
+class VerifyOtpRequest(BaseModel):
+    email: Optional[str] = Field(None, description="User email address")
+    phone: Optional[str] = Field(None, description="Legacy phone fallback")
     otp: str = Field(..., min_length=4, max_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def validate_verify_otp_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value.strip():
+            return validate_email_address(value)
+        return value
+
+# Backwards compatibility aliases
+SendPhoneOtpRequest = SendOtpRequest
+VerifyPhoneOtpRequest = VerifyOtpRequest
 
 class StudentRegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     roll_number: str = Field(..., min_length=2, max_length=50)
-    phone: str = Field(..., min_length=10, max_length=15)
+    email: str = Field(..., min_length=5, max_length=254)
     department: str = Field(..., min_length=2, max_length=100)
     otp: str = Field(..., min_length=4, max_length=8)
+    phone: Optional[str] = Field(None, max_length=15)
+
+    @field_validator("email")
+    @classmethod
+    def validate_student_reg_email(cls, value: str) -> str:
+        return validate_email_address(value)
 
 class StudentLoginRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=15)
+    email: Optional[str] = Field(None, description="Student email address")
     otp: str = Field(..., min_length=4, max_length=8)
+    phone: Optional[str] = Field(None, description="Legacy phone fallback")
+
+    @field_validator("email")
+    @classmethod
+    def validate_student_login_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value.strip():
+            return validate_email_address(value)
+        return value
 
 class UpdateProfileRequest(BaseModel):
     full_name: Optional[str] = None
     department: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_update_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value.strip():
+            return validate_email_address(value)
+        return value
 
 class TokenResponse(BaseModel):
     access_token: str

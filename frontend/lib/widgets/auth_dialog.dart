@@ -40,7 +40,7 @@ class _AuthDialogState extends State<AuthDialog> {
   late bool _isSignUp;
 
   // Controllers
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _otpController = TextEditingController();
   final _nameController = TextEditingController();
   final _rollController = TextEditingController();
@@ -75,7 +75,7 @@ class _AuthDialogState extends State<AuthDialog> {
   void dispose() {
     _cooldownTimer?.cancel();
     _infoDismissTimer?.cancel();
-    _phoneController.dispose();
+    _emailController.dispose();
     _otpController.dispose();
     _nameController.dispose();
     _rollController.dispose();
@@ -85,10 +85,12 @@ class _AuthDialogState extends State<AuthDialog> {
   void _switchTab(bool isSignUp) {
     if (_isSignUp == isSignUp) return;
     _infoDismissTimer?.cancel();
+    _otpController.clear();
     setState(() {
       _isSignUp = isSignUp;
       _error = null;
       _info = null;
+      _otpSent = false;
     });
   }
 
@@ -109,10 +111,11 @@ class _AuthDialogState extends State<AuthDialog> {
   }
 
   Future<void> _handleSendOtp() async {
-    final phone = _phoneController.text.trim();
-    if (phone.length < 10) {
+    final email = _emailController.text.trim().toLowerCase();
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
       setState(() {
-        _error = 'Enter a valid 10-digit mobile number';
+        _error = 'Enter a valid email address';
         _info = null;
       });
       return;
@@ -126,20 +129,18 @@ class _AuthDialogState extends State<AuthDialog> {
 
     try {
       final purpose = _isSignUp ? 'signup' : 'login';
-      final devOtp = await _auth.sendOtp(phone, purpose: purpose);
+      await _auth.sendOtp(email, purpose: purpose);
       if (!mounted) return;
-      if (devOtp != null && devOtp.isNotEmpty && _otpController.text.isEmpty) {
-        _otpController.text = devOtp;
-      }
+      _otpController.clear();
       setState(() {
         _otpSent = true;
-        _info = 'Verification code sent to $phone';
+        _info = 'Verification code sent to $email';
       });
       _startCooldown();
 
-      // Automatically auto-dismiss floating notification after 3.5 seconds
+      // Automatically auto-dismiss floating notification after 4 seconds
       _infoDismissTimer?.cancel();
-      _infoDismissTimer = Timer(const Duration(milliseconds: 3500), () {
+      _infoDismissTimer = Timer(const Duration(milliseconds: 4000), () {
         if (mounted) {
           setState(() => _info = null);
         }
@@ -156,15 +157,16 @@ class _AuthDialogState extends State<AuthDialog> {
   }
 
   Future<void> _handleSubmit() async {
-    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
     final otp = _otpController.text.trim();
 
-    if (phone.length < 10) {
-      setState(() => _error = 'Enter a valid 10-digit mobile number');
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      setState(() => _error = 'Enter a valid email address');
       return;
     }
-    if (otp.length < 4) {
-      setState(() => _error = 'Enter the verification code');
+    if (otp.length != 6) {
+      setState(() => _error = 'Enter the 6-digit verification code');
       return;
     }
 
@@ -196,12 +198,12 @@ class _AuthDialogState extends State<AuthDialog> {
         user = await _auth.studentSignup(
           fullName: name,
           rollNumber: roll,
-          phone: phone,
+          email: email,
           department: _selectedDepartment,
           otp: otp,
         );
       } else {
-        user = await _auth.studentLogin(phone: phone, otp: otp);
+        user = await _auth.studentLogin(email: email, otp: otp);
       }
 
       if (!mounted) return;
@@ -557,13 +559,15 @@ class _AuthDialogState extends State<AuthDialog> {
                           const SizedBox(height: 12),
                         ],
 
-                        // Phone Number with prominent Get OTP button
+                        // Email Address with prominent Get OTP button
                         TextField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: _googleStyleInputDecoration(
-                            label: 'Phone number',
-                            prefixIcon: const Icon(Icons.phone_outlined, size: 20),
+                            label: 'Email address',
+                            prefixIcon: const Icon(Icons.email_outlined, size: 20),
                             suffix: Padding(
                               padding: const EdgeInsets.only(right: 6),
                               child: OutlinedButton(

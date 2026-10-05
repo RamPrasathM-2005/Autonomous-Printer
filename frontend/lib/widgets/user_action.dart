@@ -104,7 +104,7 @@ class _UserProfileModalState extends State<_UserProfileModal> {
   String? _error;
 
   late TextEditingController _nameController;
-  late TextEditingController _phoneController;
+  late TextEditingController _emailController;
   late String _department;
 
   static const List<String> _departments = [
@@ -122,7 +122,7 @@ class _UserProfileModalState extends State<_UserProfileModal> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.user.fullName ?? '');
-    _phoneController = TextEditingController(text: widget.user.phone ?? '');
+    _emailController = TextEditingController(text: widget.user.email ?? '');
     _department = widget.user.department ?? _departments.first;
     if (!_departments.contains(_department)) {
       _department = _departments.first;
@@ -132,7 +132,7 @@ class _UserProfileModalState extends State<_UserProfileModal> {
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -145,7 +145,7 @@ class _UserProfileModalState extends State<_UserProfileModal> {
     try {
       await _auth.updateProfile(
         fullName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
         department: _department,
       );
       if (!mounted) return;
@@ -277,7 +277,7 @@ class _UserProfileModalState extends State<_UserProfileModal> {
                       ),
                       const SizedBox(height: 18),
 
-                      _detailRow(Icons.phone_outlined, 'Phone', user.phone ?? 'Not provided'),
+                      _detailRow(Icons.email_outlined, 'Email', user.email ?? 'Not provided'),
                       const SizedBox(height: 10),
                       _detailRow(
                         Icons.account_balance_outlined,
@@ -350,11 +350,11 @@ class _UserProfileModalState extends State<_UserProfileModal> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
-                          labelText: 'Phone number',
-                          prefixIcon: Icon(Icons.phone_outlined, size: 18),
+                          labelText: 'Email address',
+                          prefixIcon: Icon(Icons.email_outlined, size: 18),
                         ),
                       ),
                       const SizedBox(height: 12),
