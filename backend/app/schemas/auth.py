@@ -15,8 +15,9 @@ def validate_email_address(value: str) -> str:
     value = value.strip().lower()
     if not value or len(value) > 254:
         raise ValueError("Email length must be between 1 and 254 characters")
-    # The local seed account uses a reserved, non-deliverable domain.
-    if value == "admin@printplatform.local":
+    # Allow local seed account or configured admin email
+    from app.config.settings import settings
+    if value == "admin@printplatform.local" or (hasattr(settings, "ADMIN_EMAIL") and value == settings.ADMIN_EMAIL.strip().lower()):
         return value
     try:
         from email_validator import validate_email, EmailNotValidError

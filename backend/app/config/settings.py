@@ -72,6 +72,23 @@ class Settings(BaseSettings):
     AGENT_REQUEST_TIMEOUT_SECONDS: int = 10
     HEARTBEAT_TIMEOUT_SECONDS: int = 60
 
+    # Initial Admin & Seed Credentials
+    ADMIN_EMAIL: str = "admin@printplatform.local"
+    ADMIN_PASSWORD: str = "AdminPass123!"
+    ADMIN_PHONE: str = "1000000000"
+    ADMIN_NAME: str = "Platform Administrator"
+
+    # Demo Student Credentials
+    DEMO_STUDENT_EMAIL: str = "student@example.com"
+    DEMO_STUDENT_PASSWORD: str = "Password123!"
+    DEMO_STUDENT_PHONE: str = "9876543210"
+    DEMO_STUDENT_NAME: str = "Demo Student"
+
+    # Print Server Station Defaults
+    DEFAULT_PRINT_SERVER_ID: str = "PRINT-SERVER-001"
+    DEFAULT_PRINT_SERVER_NAME: str = "Central Library Station"
+    DEFAULT_PRINT_SERVER_LOCATION: str = "Main Campus Library Floor 1"
+
     model_config = SettingsConfigDict(
         env_file=(
             str(Path(__file__).resolve().parent.parent.parent / ".env"),

@@ -10,6 +10,13 @@ class AdminAuthService {
   static String? _refreshToken;
   static String? _origin;
 
+  static String? get accessToken => _accessToken;
+  static bool get isAuthenticated => _accessToken != null;
+  static Map<String, String> get authHeaders => {
+    'Content-Type': 'application/json',
+    if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
+  };
+
   static Future<Map<String, dynamic>> _decode(http.Response response) async {
     if (response.statusCode >= 400) {
       switch (response.statusCode) {
