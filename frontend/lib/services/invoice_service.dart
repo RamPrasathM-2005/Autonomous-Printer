@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -24,7 +25,8 @@ class InvoiceService {
           (iso.contains('-') && iso.lastIndexOf('-') > 10)) {
         dt = DateTime.tryParse(iso)?.toLocal();
       } else {
-        dt = DateTime.tryParse('${iso}Z')?.toLocal() ??
+        dt =
+            DateTime.tryParse('${iso}Z')?.toLocal() ??
             DateTime.tryParse(iso)?.toLocal();
       }
     } catch (_) {}
@@ -41,7 +43,6 @@ class InvoiceService {
     String? userName,
     String? userRoll,
     String? userEmail,
-    String? userPhone,
     String? userDept,
     String? location,
   }) async {
@@ -61,14 +62,16 @@ class InvoiceService {
     pw.MemoryImage? logoImage;
     pw.MemoryImage? wordmarkImage;
     try {
-      final logoBytes =
-          await rootBundle.load('assets/images/achuppori-logo.png');
+      final logoBytes = await rootBundle.load(
+        'assets/images/achuppori-logo.png',
+      );
       logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
     } catch (_) {}
 
     try {
-      final wordmarkBytes =
-          await rootBundle.load('assets/images/achuppori-wordmark.png');
+      final wordmarkBytes = await rootBundle.load(
+        'assets/images/achuppori-wordmark.png',
+      );
       wordmarkImage = pw.MemoryImage(wordmarkBytes.buffer.asUint8List());
     } catch (_) {}
 
@@ -83,9 +86,6 @@ class InvoiceService {
     final finalEmail = (userEmail != null && userEmail.isNotEmpty)
         ? userEmail
         : (authUser?.email ?? '');
-    final finalPhone = (userPhone != null && userPhone.isNotEmpty)
-        ? userPhone
-        : (authUser?.phone ?? '');
     final finalDept = (userDept != null && userDept.isNotEmpty)
         ? userDept
         : (order.department ?? authUser?.department ?? 'CSE');
@@ -104,7 +104,9 @@ class InvoiceService {
         tableData.add([
           '${i + 1}',
           c.document.filename,
-          c.pageRangeDescription.toLowerCase() == 'all' ? 'all' : c.pageRangeDescription,
+          c.pageRangeDescription.toLowerCase() == 'all'
+              ? 'all'
+              : c.pageRangeDescription,
           c.colorDescription,
           c.sidesDescription,
           '${c.copies}',
@@ -119,7 +121,9 @@ class InvoiceService {
         tableData.add([
           '${i + 1}',
           item.filename,
-          order.printSettings.pageRange.toLowerCase() == 'all' ? 'all' : order.printSettings.pageRange,
+          order.printSettings.pageRange.toLowerCase() == 'all'
+              ? 'all'
+              : order.printSettings.pageRange,
           item.colour ? 'Full Color' : 'Black & White',
           order.printSettings.sides == 'one-sided'
               ? 'Single-Sided'
@@ -261,7 +265,9 @@ class InvoiceService {
                             ),
                             pw.TextSpan(
                               text: 'ational ',
-                              style: pw.TextStyle(color: PdfColor.fromHex('#1E293B')),
+                              style: pw.TextStyle(
+                                color: PdfColor.fromHex('#1E293B'),
+                              ),
                             ),
                             pw.TextSpan(
                               text: 'E',
@@ -269,7 +275,9 @@ class InvoiceService {
                             ),
                             pw.TextSpan(
                               text: 'ngineering\n',
-                              style: pw.TextStyle(color: PdfColor.fromHex('#1E293B')),
+                              style: pw.TextStyle(
+                                color: PdfColor.fromHex('#1E293B'),
+                              ),
                             ),
                             pw.TextSpan(
                               text: 'C',
@@ -277,7 +285,9 @@ class InvoiceService {
                             ),
                             pw.TextSpan(
                               text: 'ollege,',
-                              style: pw.TextStyle(color: PdfColor.fromHex('#1E293B')),
+                              style: pw.TextStyle(
+                                color: PdfColor.fromHex('#1E293B'),
+                              ),
                             ),
                             pw.TextSpan(
                               text: 'K',
@@ -285,7 +295,9 @@ class InvoiceService {
                             ),
                             pw.TextSpan(
                               text: 'ovilpatti',
-                              style: pw.TextStyle(color: PdfColor.fromHex('#1E293B')),
+                              style: pw.TextStyle(
+                                color: PdfColor.fromHex('#1E293B'),
+                              ),
                             ),
                           ],
                         ),
@@ -551,10 +563,7 @@ class InvoiceService {
 
               // Itemized Table
               pw.Table(
-                border: pw.TableBorder.all(
-                  color: tableBorderColor,
-                  width: 0.8,
-                ),
+                border: pw.TableBorder.all(color: tableBorderColor, width: 0.8),
                 columnWidths: {
                   0: const pw.FixedColumnWidth(22),
                   1: const pw.FlexColumnWidth(3.0),
@@ -590,7 +599,10 @@ class InvoiceService {
                     pw.SizedBox(height: 7),
                     _buildDetailLine('Your ID:', finalRoll),
                     pw.SizedBox(height: 7),
-                    _buildDetailLine('Your Email:', finalEmail.isNotEmpty ? finalEmail : finalPhone),
+                    _buildDetailLine(
+                      'Your Email:',
+                      finalEmail.isNotEmpty ? finalEmail : '—',
+                    ),
                     pw.SizedBox(height: 7),
                     _buildDetailLine('Your Dept:', finalDept),
                   ],
@@ -636,10 +648,7 @@ class InvoiceService {
                     vertical: 6,
                   ),
                   decoration: pw.BoxDecoration(
-                    border: pw.Border.all(
-                      color: coralColor,
-                      width: 1.2,
-                    ),
+                    border: pw.Border.all(color: coralColor, width: 1.2),
                     borderRadius: const pw.BorderRadius.all(
                       pw.Radius.circular(2),
                     ),
@@ -685,10 +694,7 @@ class InvoiceService {
     return pw.Container(
       alignment: alignment,
       padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      child: pw.Text(
-        text,
-        style: const pw.TextStyle(fontSize: 8.5),
-      ),
+      child: pw.Text(text, style: const pw.TextStyle(fontSize: 8.5)),
     );
   }
 
@@ -726,7 +732,6 @@ class InvoiceService {
     String? userName,
     String? userRoll,
     String? userEmail,
-    String? userPhone,
     String? userDept,
     String? location,
   }) async {
@@ -739,7 +744,6 @@ class InvoiceService {
       userName: userName,
       userRoll: userRoll,
       userEmail: userEmail,
-      userPhone: userPhone,
       userDept: userDept,
       location: location,
     );

@@ -231,7 +231,7 @@ def get_active_order(
             "otp": {
                 "orderId": order.id,
                 "otp": plaintext,
-                "expiresAt": expires_at.isoformat(),
+                "expiresAt": None,
                 "printerOtps": printer_otps,
                 "selectedPrinter": selected_printer,
                 "printerSelectionLocked": is_locked

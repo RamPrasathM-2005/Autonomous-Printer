@@ -111,7 +111,6 @@ def client(db_session):
 def test_user(db_session):
     user = User(
         email="student@university.edu",
-        phone="9876543210",
         full_name="Test Student",
         password_hash=hash_password("SecurePass123!"),
         role=UserRole.USER,

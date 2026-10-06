@@ -53,7 +53,7 @@ def test_email_otp_flow_and_student_auth(client, test_print_server, test_agent_t
     assert "access_token" in auth_data
     assert auth_data["user"]["email"] == test_email
     assert auth_data["user"]["roll_number"] == test_roll
-    assert auth_data["user"]["phone"] is None
+    assert "phone" not in auth_data["user"]
 
     token = auth_data["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -62,6 +62,7 @@ def test_email_otp_flow_and_student_auth(client, test_print_server, test_agent_t
     resp = client.get("/api/auth/me", headers=headers)
     assert resp.status_code == 200
     assert resp.json()["email"] == test_email
+    assert "phone" not in resp.json()
 
     # 6. Student login with email: request login OTP
     resp = client.post("/api/auth/send-otp", json={"email": test_email, "purpose": "login"})

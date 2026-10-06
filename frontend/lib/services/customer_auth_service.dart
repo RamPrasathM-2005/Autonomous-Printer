@@ -218,18 +218,13 @@ class CustomerAuthService {
   Future<UserProfile> studentLogin({
     required String email,
     required String otp,
-    String? phone,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     final res = await _client
         .post(
           Uri.parse('$_baseUrl/api/auth/student/login'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'email': cleanEmail,
-            if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
-            'otp': otp.trim(),
-          }),
+          body: jsonEncode({'email': cleanEmail, 'otp': otp.trim()}),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -261,7 +256,6 @@ class CustomerAuthService {
     required String email,
     required String department,
     required String otp,
-    String? phone,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     final res = await _client
@@ -272,7 +266,6 @@ class CustomerAuthService {
             'full_name': fullName.trim(),
             'roll_number': rollNumber.trim().toUpperCase(),
             'email': cleanEmail,
-            if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
             'department': department.trim(),
             'otp': otp.trim(),
           }),
@@ -305,7 +298,6 @@ class CustomerAuthService {
     String? fullName,
     String? department,
     String? email,
-    String? phone,
   }) async {
     final token = await getValidAccessToken();
     if (token == null) {
@@ -315,7 +307,6 @@ class CustomerAuthService {
       if (fullName != null) 'full_name': fullName.trim(),
       if (department != null) 'department': department.trim(),
       if (email != null) 'email': email.trim().toLowerCase(),
-      if (phone != null) 'phone': phone.trim(),
     };
 
     final res = await _client

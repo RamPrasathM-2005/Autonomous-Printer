@@ -15,7 +15,6 @@ class InvoicePreviewDialog extends StatefulWidget {
   final String? userName;
   final String? userRoll;
   final String? userEmail;
-  final String? userPhone;
   final String? userDept;
   final String? location;
 
@@ -29,7 +28,6 @@ class InvoicePreviewDialog extends StatefulWidget {
     this.userName,
     this.userRoll,
     this.userEmail,
-    this.userPhone,
     this.userDept,
     this.location,
   });
@@ -44,7 +42,6 @@ class InvoicePreviewDialog extends StatefulWidget {
     String? userName,
     String? userRoll,
     String? userEmail,
-    String? userPhone,
     String? userDept,
     String? location,
   }) {
@@ -60,7 +57,6 @@ class InvoicePreviewDialog extends StatefulWidget {
         userName: userName,
         userRoll: userRoll,
         userEmail: userEmail,
-        userPhone: userPhone,
         userDept: userDept,
         location: location,
       ),
@@ -86,7 +82,6 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         userName: widget.userName,
         userRoll: widget.userRoll,
         userEmail: widget.userEmail,
-        userPhone: widget.userPhone,
         userDept: widget.userDept,
         location: widget.location,
       );
@@ -125,7 +120,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         otp: widget.otp,
         userName: widget.userName,
         userRoll: widget.userRoll,
-        userPhone: widget.userPhone,
+        userEmail: widget.userEmail,
         userDept: widget.userDept,
         location: widget.location,
       );
@@ -145,8 +140,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final formattedDate =
-        InvoiceService.formatInvoiceDateTime(widget.order.createdAt);
+    final formattedDate = InvoiceService.formatInvoiceDateTime(
+      widget.order.createdAt,
+    );
 
     final authUser = CustomerAuthService().currentUser;
     final finalName = (widget.userName != null && widget.userName!.isNotEmpty)
@@ -155,16 +151,15 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
     final finalRoll = (widget.userRoll != null && widget.userRoll!.isNotEmpty)
         ? widget.userRoll!
         : (widget.order.rollNumber ?? authUser?.rollNumber ?? '');
-    final finalEmail = (widget.userEmail != null && widget.userEmail!.isNotEmpty)
+    final finalEmail =
+        (widget.userEmail != null && widget.userEmail!.isNotEmpty)
         ? widget.userEmail!
         : (authUser?.email ?? '');
-    final finalPhone = (widget.userPhone != null && widget.userPhone!.isNotEmpty)
-        ? widget.userPhone!
-        : (authUser?.phone ?? '');
     final finalDept = (widget.userDept != null && widget.userDept!.isNotEmpty)
         ? widget.userDept!
         : (widget.order.department ?? authUser?.department ?? 'CSE');
-    final finalLocation = (widget.location != null && widget.location!.isNotEmpty)
+    final finalLocation =
+        (widget.location != null && widget.location!.isNotEmpty)
         ? widget.location!
         : (widget.order.department ?? 'CSE');
     final finalOtp = widget.otp ?? '';
@@ -185,7 +180,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         tableData.add([
           '${i + 1}',
           c.document.filename,
-          c.pageRangeDescription.toLowerCase() == 'all' ? 'all' : c.pageRangeDescription,
+          c.pageRangeDescription.toLowerCase() == 'all'
+              ? 'all'
+              : c.pageRangeDescription,
           c.colorDescription,
           c.sidesDescription,
           '${c.copies}',
@@ -200,7 +197,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         tableData.add([
           '${i + 1}',
           item.filename,
-          widget.order.printSettings.pageRange.toLowerCase() == 'all' ? 'all' : widget.order.printSettings.pageRange,
+          widget.order.printSettings.pageRange.toLowerCase() == 'all'
+              ? 'all'
+              : widget.order.printSettings.pageRange,
           item.colour ? 'Full Color' : 'Black & White',
           widget.order.printSettings.sides == 'one-sided'
               ? 'Single-Sided'
@@ -221,7 +220,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         tableData.add([
           '${i + 1}',
           d.filename,
-          widget.order.pageRange.toLowerCase() == 'all' ? 'all' : widget.order.pageRange,
+          widget.order.pageRange.toLowerCase() == 'all'
+              ? 'all'
+              : widget.order.pageRange,
           widget.order.isColor ? 'Full Color' : 'Black & White',
           widget.order.duplex ? 'Double-Sided' : 'Single-Sided',
           '${widget.order.copies}',
@@ -235,7 +236,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
       tableData.add([
         '1',
         'Print Document Order',
-        widget.order.pageRange.toLowerCase() == 'all' ? 'all' : widget.order.pageRange,
+        widget.order.pageRange.toLowerCase() == 'all'
+            ? 'all'
+            : widget.order.pageRange,
         widget.order.isColor ? 'Full Color' : 'Black & White',
         widget.order.duplex ? 'Double-Sided' : 'Single-Sided',
         '${widget.order.copies}',
@@ -267,7 +270,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
             children: [
               // Top Action Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -278,8 +284,11 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.receipt_long_rounded,
-                        color: primaryColor, size: 20),
+                    const Icon(
+                      Icons.receipt_long_rounded,
+                      color: primaryColor,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Tax Invoice / Receipt',
@@ -293,7 +302,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         side: const BorderSide(color: borderColor),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -301,14 +312,19 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                       ),
                       onPressed: _handleOpenPdf,
                       icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                      label: const Text('Open PDF', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Open PDF',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: primaryColor,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -326,7 +342,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                           : const Icon(Icons.download_rounded, size: 15),
                       label: Text(
                         _isDownloading ? 'Downloading...' : 'Download PDF',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -353,7 +372,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
+                        border: Border.all(
+                          color: const Color(0xFFCBD5E1),
+                          width: 0.8,
+                        ),
                         boxShadow: const [
                           BoxShadow(
                             color: Colors.black12,
@@ -375,9 +397,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
-                                       Image.asset(
+                                      Image.asset(
                                         'assets/images/achuppori-logo.png',
                                         width: 38,
                                         height: 38,
@@ -388,14 +411,15 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                       Image.asset(
                                         'assets/images/achuppori-wordmark.png',
                                         height: 26,
-                                        errorBuilder: (ctx, err, stack) => const Text(
-                                          'Achuppori',
-                                          style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w800,
-                                            color: primaryColor,
-                                          ),
-                                        ),
+                                        errorBuilder: (ctx, err, stack) =>
+                                            const Text(
+                                              'Achuppori',
+                                              style: TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w800,
+                                                color: primaryColor,
+                                              ),
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -415,7 +439,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         ),
                                         TextSpan(
                                           text: 'ational ',
-                                          style: TextStyle(color: Color(0xFF1E293B)),
+                                          style: TextStyle(
+                                            color: Color(0xFF1E293B),
+                                          ),
                                         ),
                                         TextSpan(
                                           text: 'E',
@@ -423,7 +449,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         ),
                                         TextSpan(
                                           text: 'ngineering\n',
-                                          style: TextStyle(color: Color(0xFF1E293B)),
+                                          style: TextStyle(
+                                            color: Color(0xFF1E293B),
+                                          ),
                                         ),
                                         TextSpan(
                                           text: 'C',
@@ -431,7 +459,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         ),
                                         TextSpan(
                                           text: 'ollege,',
-                                          style: TextStyle(color: Color(0xFF1E293B)),
+                                          style: TextStyle(
+                                            color: Color(0xFF1E293B),
+                                          ),
                                         ),
                                         TextSpan(
                                           text: 'K',
@@ -439,7 +469,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         ),
                                         TextSpan(
                                           text: 'ovilpatti',
-                                          style: TextStyle(color: Color(0xFF1E293B)),
+                                          style: TextStyle(
+                                            color: Color(0xFF1E293B),
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -504,7 +536,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: borderColor, width: 0.8),
+                              border: Border.all(
+                                color: borderColor,
+                                width: 0.8,
+                              ),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -700,8 +735,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                             },
                             children: [
                               TableRow(
-                                decoration:
-                                    const BoxDecoration(color: primaryColor),
+                                decoration: const BoxDecoration(
+                                  color: primaryColor,
+                                ),
                                 children: [
                                   _tableHeaderCell('#'),
                                   _tableHeaderCell('Document'),
@@ -718,14 +754,20 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                 TableRow(
                                   children: [
                                     _tableDataCell(row[0], Alignment.center),
-                                    _tableDataCell(row[1], Alignment.centerLeft),
+                                    _tableDataCell(
+                                      row[1],
+                                      Alignment.centerLeft,
+                                    ),
                                     _tableDataCell(row[2], Alignment.center),
                                     _tableDataCell(row[3], Alignment.center),
                                     _tableDataCell(row[4], Alignment.center),
                                     _tableDataCell(row[5], Alignment.center),
                                     _tableDataCell(row[6], Alignment.center),
                                     _tableDataCell(row[7], Alignment.center),
-                                    _tableDataCell(row[8], Alignment.centerRight),
+                                    _tableDataCell(
+                                      row[8],
+                                      Alignment.centerRight,
+                                    ),
                                   ],
                                 ),
                             ],
@@ -752,7 +794,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                 const SizedBox(height: 7),
                                 _detailLine('Your ID:', finalRoll),
                                 const SizedBox(height: 7),
-                                _detailLine('Your Email:', finalEmail.isNotEmpty ? finalEmail : finalPhone),
+                                _detailLine(
+                                  'Your Email:',
+                                  finalEmail.isNotEmpty ? finalEmail : '—',
+                                ),
                                 const SizedBox(height: 7),
                                 _detailLine('Your Dept:', finalDept),
                               ],
@@ -870,10 +915,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         ),
         Text(
           value.isNotEmpty ? ' $value' : '',
-          style: const TextStyle(
-            fontSize: 9.5,
-            color: Color(0xFF0F172A),
-          ),
+          style: const TextStyle(fontSize: 9.5, color: Color(0xFF0F172A)),
         ),
       ],
     );

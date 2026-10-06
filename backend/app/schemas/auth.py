@@ -32,9 +32,9 @@ def validate_email_address(value: str) -> str:
     return value
 
 class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: str = Field(..., max_length=254)
     password: str
-    phone: Optional[str] = None
     full_name: Optional[str] = None
 
     @field_validator("email")
@@ -52,40 +52,32 @@ class LoginRequest(BaseModel):
         return validate_email_address(value)
 
 class SendOtpRequest(BaseModel):
-    email: Optional[str] = Field(None, description="User email address")
-    phone: Optional[str] = Field(None, description="Legacy phone fallback")
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(..., max_length=254, description="User email address")
     purpose: Optional[str] = Field("login", description="Purpose: 'login' or 'signup'")
 
     @field_validator("email")
     @classmethod
-    def validate_send_otp_email(cls, value: Optional[str]) -> Optional[str]:
-        if value is not None and value.strip():
-            return validate_email_address(value)
-        return value
+    def validate_send_otp_email(cls, value: str) -> str:
+        return validate_email_address(value)
 
 class VerifyOtpRequest(BaseModel):
-    email: Optional[str] = Field(None, description="User email address")
-    phone: Optional[str] = Field(None, description="Legacy phone fallback")
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(..., max_length=254, description="User email address")
     otp: str = Field(..., min_length=4, max_length=8)
 
     @field_validator("email")
     @classmethod
-    def validate_verify_otp_email(cls, value: Optional[str]) -> Optional[str]:
-        if value is not None and value.strip():
-            return validate_email_address(value)
-        return value
-
-# Backwards compatibility aliases
-SendPhoneOtpRequest = SendOtpRequest
-VerifyPhoneOtpRequest = VerifyOtpRequest
+    def validate_verify_otp_email(cls, value: str) -> str:
+        return validate_email_address(value)
 
 class StudentRegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     full_name: str = Field(..., min_length=2, max_length=100)
     roll_number: str = Field(..., min_length=2, max_length=50)
     email: str = Field(..., min_length=5, max_length=254)
     department: str = Field(..., min_length=2, max_length=100)
     otp: str = Field(..., min_length=4, max_length=8)
-    phone: Optional[str] = Field(None, max_length=15)
 
     @field_validator("email")
     @classmethod
@@ -93,22 +85,20 @@ class StudentRegisterRequest(BaseModel):
         return validate_email_address(value)
 
 class StudentLoginRequest(BaseModel):
-    email: Optional[str] = Field(None, description="Student email address")
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(..., max_length=254, description="Student email address")
     otp: str = Field(..., min_length=4, max_length=8)
-    phone: Optional[str] = Field(None, description="Legacy phone fallback")
 
     @field_validator("email")
     @classmethod
-    def validate_student_login_email(cls, value: Optional[str]) -> Optional[str]:
-        if value is not None and value.strip():
-            return validate_email_address(value)
-        return value
+    def validate_student_login_email(cls, value: str) -> str:
+        return validate_email_address(value)
 
 class UpdateProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     full_name: Optional[str] = None
     department: Optional[str] = None
     email: Optional[str] = None
-    phone: Optional[str] = None
 
     @field_validator("email")
     @classmethod
@@ -132,7 +122,6 @@ class UserResponse(BaseModel):
 
     id: int
     email: Optional[str] = None
-    phone: Optional[str] = None
     full_name: Optional[str] = None
     roll_number: Optional[str] = None
     department: Optional[str] = None

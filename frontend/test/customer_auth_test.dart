@@ -77,21 +77,20 @@ void main() {
     },
   );
 
-  test('An explicitly provided phone is preserved', () async {
+  test('Legacy profile data ignores phone numbers', () async {
     final auth = CustomerAuthService.withClient(
       MockClient((request) async {
-        expect(jsonDecode(request.body)['phone'], '9876543210');
-        return http.Response(jsonEncode(tokenResponse()), 201);
+        final response = tokenResponse();
+        (response['user'] as Map<String, dynamic>)['phone'] = '9876543210';
+        return http.Response(jsonEncode(response), 200);
       }),
     );
-    await auth.studentSignup(
-      fullName: 'Test Student',
-      rollNumber: '24104048',
+    final profile = await auth.studentLogin(
       email: '24104048@nec.edu.in',
-      department: 'CSE',
       otp: '123456',
-      phone: ' 9876543210 ',
     );
+    expect(profile.toJson().containsKey('phone'), isFalse);
+    expect(profile.displayName, 'Test Student');
   });
 
   test(
@@ -136,9 +135,9 @@ void main() {
       final auth = CustomerAuthService.withClient(
         MockClient((request) async {
           if (request.url.path.endsWith('/refresh')) return pending.future;
-            if (request.url.path.endsWith('/logout')) {
+          if (request.url.path.endsWith('/logout')) {
             return http.Response('{}', 200);
-            }
+          }
           return http.Response(jsonEncode(tokenResponse()), 200);
         }),
       );
