@@ -203,19 +203,37 @@ class AuthService:
                 message="An account with this roll number already exists."
             )
 
-        cls.verify_email_otp(clean_email, req.otp)
+        cls.verify_email_otp(clean_email, req.otp, consume=False)
+
+        # Resolve department ID if department exists in catalog
+        dept_id = None
+        if req.department:
+            from app.db.models.department import Department
+            dept_match = db.query(Department).filter(
+                (Department.name == req.department.strip()) | (Department.code == req.department.strip())
+            ).first()
+            if dept_match:
+                dept_id = dept_match.id
 
         user = User(
             email=clean_email,
             roll_number=clean_roll,
             full_name=req.full_name.strip(),
             department=req.department.strip(),
+            department_id=dept_id,
             role=UserRole.USER,
             is_active=True
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            raise
+
+        # User is securely persisted in the database; now consume the one-time verification code
+        cls._email_otps.pop(clean_email, None)
 
         return cls._issue_tokens(db, user)
 
@@ -233,7 +251,7 @@ class AuthService:
                 message="Email address is required."
             )
 
-        cls.verify_email_otp(target_email, req.otp)
+        cls.verify_email_otp(target_email, req.otp, consume=False)
 
         user = db.query(User).filter(User.email == target_email).first()
         if not user:
@@ -250,7 +268,10 @@ class AuthService:
                 message="Account has been deactivated."
             )
 
-        return cls._issue_tokens(db, user)
+        res = cls._issue_tokens(db, user)
+        # Authentication succeeded; consume OTP
+        cls._email_otps.pop(target_email, None)
+        return res
 
     @staticmethod
     def update_profile(

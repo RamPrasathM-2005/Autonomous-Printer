@@ -117,7 +117,7 @@ def get_admin_settings(
     """
     Returns platform runtime configurations, rates, and operational parameters.
     """
-    return admin_service.get_settings(admin.email or "admin@printplatform.local")
+    return admin_service.get_settings(admin.email)
 
 @router.patch("/settings", response_model=AdminSystemSettings)
 def update_admin_settings(
@@ -127,7 +127,7 @@ def update_admin_settings(
     """
     Updates platform operational parameters (pricing rates, quotas, timeouts).
     """
-    return admin_service.update_settings(data, admin.email or "admin@printplatform.local")
+    return admin_service.update_settings(data, admin.email)
  
 # ----------------- DATABASE & PRODUCTION DATA -----------------
 

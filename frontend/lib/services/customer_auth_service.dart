@@ -228,11 +228,21 @@ class CustomerAuthService {
         )
         .timeout(const Duration(seconds: 15));
 
-    final data = jsonDecode(res.body);
+    Map<String, dynamic> data = {};
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic>) {
+        data = decoded;
+      }
+    } catch (_) {}
+
     if (res.statusCode >= 400) {
-      throw ApiError(
-        data['message'] ?? 'Login failed. Please check your verification code.',
-      );
+      final errorMsg = data['message'] ??
+          data['detail'] ??
+          (res.statusCode >= 500
+              ? 'Server error (${res.statusCode}). Please try again.'
+              : 'Login failed. Please check your verification code.');
+      throw ApiError(errorMsg.toString());
     }
 
     _accessToken = data['access_token'];
@@ -272,11 +282,21 @@ class CustomerAuthService {
         )
         .timeout(const Duration(seconds: 15));
 
-    final data = jsonDecode(res.body);
+    Map<String, dynamic> data = {};
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic>) {
+        data = decoded;
+      }
+    } catch (_) {}
+
     if (res.statusCode >= 400) {
-      throw ApiError(
-        data['message'] ?? 'Registration failed. Please check your details.',
-      );
+      final errorMsg = data['message'] ??
+          data['detail'] ??
+          (res.statusCode >= 500
+              ? 'Server error (${res.statusCode}). Please try again.'
+              : 'Registration failed. Please check your details.');
+      throw ApiError(errorMsg.toString());
     }
 
     _accessToken = data['access_token'];

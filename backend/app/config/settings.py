@@ -66,15 +66,10 @@ class Settings(BaseSettings):
     AGENT_REQUEST_TIMEOUT_SECONDS: int = 10
     HEARTBEAT_TIMEOUT_SECONDS: int = 60
 
-    # Initial Admin & Seed Credentials
-    ADMIN_EMAIL: str = "admin@printplatform.local"
-    ADMIN_PASSWORD: str = "AdminPass123!"
+    # Initial Admin & Seed Credentials (loaded from .env)
+    ADMIN_EMAIL: str = "admin@example.com"
+    ADMIN_PASSWORD: str = ""
     ADMIN_NAME: str = "Platform Administrator"
-
-    # Demo Student Credentials
-    DEMO_STUDENT_EMAIL: str = "student@example.com"
-    DEMO_STUDENT_PASSWORD: str = "Password123!"
-    DEMO_STUDENT_NAME: str = "Demo Student"
 
     # Print Server Station Defaults
     DEFAULT_PRINT_SERVER_ID: str = "PRINT-SERVER-001"

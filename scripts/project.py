@@ -83,9 +83,33 @@ def setup():
     print("Setup complete. New installations use SQLite and simulated printing. Configure Razorpay test keys in backend/.env for checkout.")
 
 
+def sync_dependencies():
+    lock_file = ROOT / "requirements.lock"
+    backend_req = ROOT / "backend" / "requirements.txt"
+    stamp_file = RUNTIME / ".requirements-fingerprint"
+    parts = []
+    for path in (lock_file, backend_req):
+        if path.exists():
+            parts.append(hashlib.sha256(path.read_bytes()).hexdigest().upper())
+    current_hash = "".join(parts)
+    if stamp_file.exists() and stamp_file.read_text().strip().upper() == current_hash:
+        return
+    print("Synchronizing Python dependencies...", flush=True)
+    cmd = [PYTHON, "-m", "pip", "install"]
+    if lock_file.exists():
+        cmd.extend(["-r", lock_file])
+    if backend_req.exists():
+        cmd.extend(["-r", backend_req])
+    cmd.append("--quiet")
+    run(cmd)
+    RUNTIME.mkdir(exist_ok=True)
+    stamp_file.write_text(current_hash)
+
+
 def serve(hot=False, force=False):
     if not PYTHON.exists():
         raise RuntimeError("Run python scripts/project.py setup first.")
+    sync_dependencies()
     from dotenv import dotenv_values
     agent_port = int(dotenv_values(ROOT / "print-agent/.env").get("PORT") or 5001)
     for port in (8000, agent_port, 3000):

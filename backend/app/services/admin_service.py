@@ -1,6 +1,7 @@
 import io
 import csv
 import time
+import secrets
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
@@ -614,7 +615,7 @@ class AdminService:
                 existing_user.role = role_val
                 updated_cnt += 1
             else:
-                default_pw = "Password123!"
+                default_pw = secrets.token_urlsafe(16)
                 new_user = User(
                     email=email,
                     full_name=full_name or email.split("@")[0],

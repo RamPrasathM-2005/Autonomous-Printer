@@ -14,6 +14,36 @@ $runtime = Join-Path $projectRoot '.runtime'
 $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) { throw 'Run python scripts/project.py setup first.' }
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+
+$reqLock = Join-Path $projectRoot 'requirements.lock'
+$backendReq = Join-Path $projectRoot 'backend\requirements.txt'
+$stampFile = Join-Path $runtime '.requirements-fingerprint'
+$hashInput = ''
+if (Test-Path -LiteralPath $reqLock) {
+    $hashInput += (Get-FileHash -LiteralPath $reqLock -Algorithm SHA256).Hash
+}
+if (Test-Path -LiteralPath $backendReq) {
+    $hashInput += (Get-FileHash -LiteralPath $backendReq -Algorithm SHA256).Hash
+}
+
+$needSync = $true
+if (Test-Path -LiteralPath $stampFile) {
+    $savedHash = (Get-Content -LiteralPath $stampFile -Raw).Trim()
+    if ($savedHash -eq $hashInput) {
+        $needSync = $false
+    }
+}
+
+if ($needSync) {
+    Write-Host 'Synchronizing Python dependencies...'
+    $pipArgs = @('-m', 'pip', 'install')
+    if (Test-Path -LiteralPath $reqLock) { $pipArgs += @('-r', $reqLock) }
+    if (Test-Path -LiteralPath $backendReq) { $pipArgs += @('-r', $backendReq) }
+    $pipArgs += '--quiet'
+    & $python @pipArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed.' }
+    Set-Content -LiteralPath $stampFile -Value $hashInput -NoNewline
+}
 $flutter = Get-Command flutter -ErrorAction SilentlyContinue
 if (-not $flutter) {
     $flutterCandidates = @(
@@ -80,7 +110,16 @@ function Start-LocalService($Name, $Directory, $Arguments, $Port, $HealthUrl, [i
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     do {
         $proc.Refresh()
-        if ($proc.HasExited) { throw "$Name exited. Check .runtime\$Name.err.log." }
+        if ($proc.HasExited) {
+            $errPath = Join-Path $runtime "$Name.err.log"
+            if (Test-Path -LiteralPath $errPath) {
+                $errContent = Get-Content -LiteralPath $errPath -Tail 15 -ErrorAction SilentlyContinue
+                if ($errContent) {
+                    Write-Host "`n[$Name Error Logs]`n$($errContent -join "`n")`n" -ForegroundColor Red
+                }
+            }
+            throw "$Name exited. Check .runtime\$Name.err.log."
+        }
         if (-not $HealthUrl) { Write-Host "$Name started."; return }
         try {
             $null = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 3

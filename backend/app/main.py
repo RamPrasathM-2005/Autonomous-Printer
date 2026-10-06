@@ -43,6 +43,12 @@ def _sync_missing_columns():
     try:
         insp = inspect(engine)
         with engine.begin() as conn:
+            if insp.has_table("users"):
+                user_cols = {c['name']: c for c in insp.get_columns("users")}
+                if 'password_hash' in user_cols and not user_cols['password_hash'].get('nullable', True):
+                    logger.info("Migrating users.password_hash to nullable for passwordless student auth")
+                    conn.execute(text("ALTER TABLE `users` MODIFY COLUMN `password_hash` VARCHAR(255) NULL"))
+
             for table_name, table in Base.metadata.tables.items():
                 if not insp.has_table(table_name):
                     continue
@@ -57,11 +63,54 @@ def _sync_missing_columns():
     except Exception as e:
         logger.warning("Schema column sync warning: %s", e)
 
+def _ensure_admin_user():
+    if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
+        return
+    from app.config.database import SessionLocal
+    from app.db.models.user import User, UserRole
+    from app.config.security import hash_password, verify_password
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    db = SessionLocal()
+    try:
+        admin_email = settings.ADMIN_EMAIL.strip().lower()
+        admin = db.query(User).filter(User.email == admin_email).first()
+        if not admin:
+            admin = User(
+                email=admin_email,
+                full_name=settings.ADMIN_NAME or "Platform Administrator",
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            db.add(admin)
+            db.commit()
+            logger.info("Initialized administrator account from environment: %s", admin_email)
+        else:
+            changed = False
+            if admin.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+                admin.role = UserRole.ADMIN
+                changed = True
+            if not admin.is_active:
+                admin.is_active = True
+                changed = True
+            if not admin.password_hash or not verify_password(settings.ADMIN_PASSWORD, admin.password_hash):
+                admin.password_hash = hash_password(settings.ADMIN_PASSWORD)
+                changed = True
+            if changed:
+                db.commit()
+                logger.info("Synchronized administrator credentials from environment: %s", admin_email)
+    except Exception as e:
+        logger.warning("Could not auto-sync admin user: %s", e)
+    finally:
+        db.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: ensure tables and storage dirs exist
     Base.metadata.create_all(bind=engine)
     _sync_missing_columns()
+    _ensure_admin_user()
     storage_service._ensure_directories()
     yield
     # Shutdown

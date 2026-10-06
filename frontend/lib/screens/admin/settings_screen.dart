@@ -343,11 +343,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       child: Column(
                         children: [
-                          _buildDetailRow('Active Administrator Email', _settingsData!['current_admin_email'] ?? 'admin@printplatform.local'),
+                          _buildDetailRow('Active Administrator Email', _settingsData!['current_admin_email'] ?? 'Not configured'),
                           const Divider(height: 16),
                           _buildDetailRow('Email OTP Provider', '${_settingsData!['email_provider']} (${_settingsData!['smtp_host']})'),
                           const Divider(height: 16),
-                          _buildDetailRow('Sender Address', _settingsData!['smtp_user'] ?? 'achupporihelpdesk@gmail.com'),
+                          _buildDetailRow('Sender Address', _settingsData!['smtp_user'] ?? 'Not configured'),
                         ],
                       ),
                     ),
