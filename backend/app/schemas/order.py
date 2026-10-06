@@ -165,7 +165,7 @@ class OTPResponse(BaseModel):
 
     orderId: str = Field(..., alias="orderId", serialization_alias="orderId")
     otp: str
-    expiresAt: datetime = Field(..., alias="expiresAt", serialization_alias="expiresAt")
+    expiresAt: Optional[datetime] = Field(default=None, alias="expiresAt", serialization_alias="expiresAt")
     printerOtps: Optional[Dict[str, Any]] = Field(default=None, alias="printerOtps", serialization_alias="printerOtps")
     selectedPrinter: Optional[str] = Field(default=None, alias="selectedPrinter", serialization_alias="selectedPrinter")
     printerSelectionLocked: Optional[bool] = Field(default=False, alias="printerSelectionLocked", serialization_alias="printerSelectionLocked")

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config/theme.dart';
@@ -7,17 +8,25 @@ import '../models/user_profile.dart';
 import '../services/customer_auth_service.dart';
 import '../screens/otp_release_screen.dart';
 import '../screens/payment_screen.dart';
+import '../screens/print_progress_screen.dart';
+import '../services/api_error.dart';
 import 'invoice_preview_dialog.dart';
 
 class UserOrdersDock extends StatefulWidget {
-  const UserOrdersDock({super.key});
+  const UserOrdersDock({super.key, this.auth});
+
+  final CustomerAuthService? auth;
 
   @override
   State<UserOrdersDock> createState() => _UserOrdersDockState();
 }
 
-class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObserver {
-  final CustomerAuthService _auth = CustomerAuthService();
+class _UserOrdersDockState extends State<UserOrdersDock>
+    with WidgetsBindingObserver {
+  late final CustomerAuthService _auth = widget.auth ?? CustomerAuthService();
+  final ValueNotifier<int> _revision = ValueNotifier(0);
+  int _accountVersion = 0;
+  String? _error;
   List<PrintOrder> _orders = [];
   bool _isLoading = false;
   Timer? _pollingTimer;
@@ -26,6 +35,7 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _auth.userNotifier.addListener(_accountChanged);
     _loadOrders();
     _startPolling();
   }
@@ -33,6 +43,8 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _auth.userNotifier.removeListener(_accountChanged);
+    _revision.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -53,57 +65,93 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
     });
   }
 
-  Future<void> _loadOrders({bool quiet = false}) async {
-    if (!_auth.isLoggedIn) {
-      if (_orders.isNotEmpty && mounted) setState(() => _orders = []);
-      return;
-    }
-    if (!quiet) setState(() => _isLoading = true);
+  void _accountChanged() {
+    _accountVersion++;
+    setState(() {
+      _orders = [];
+      _error = null;
+      _isLoading = false;
+    });
+    _revision.value++;
+    _loadOrders();
+  }
 
+  Future<void> _loadOrders({bool quiet = false}) async {
+    if (!mounted || !_auth.isLoggedIn || _isLoading) return;
+    final version = _accountVersion;
+    setState(() {
+      _isLoading = true;
+      if (!quiet) _error = null;
+    });
+    _revision.value++;
     try {
       final list = await _auth.fetchMyOrders();
-      if (!mounted) return;
+      if (!mounted || version != _accountVersion) return;
       setState(() {
         _orders = list;
         _isLoading = false;
+        _error = null;
       });
-    } catch (_) {
-      if (mounted && !quiet) {
-        setState(() => _isLoading = false);
-      }
+    } catch (error) {
+      if (!mounted || version != _accountVersion) return;
+      setState(() {
+        _isLoading = false;
+        _error = userError(
+          error,
+          fallback: 'Unable to load your orders. Refresh to retry.',
+        );
+      });
     }
+    _revision.value++;
   }
 
   void _openOrdersSheet() {
+    _loadOrders(quiet: true);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _OrdersSheetContent(
-        orders: _orders,
-        isLoading: _isLoading,
-        onRefresh: () async => _loadOrders(),
-        onResumeOtp: (order) {
-          Navigator.of(ctx).pop();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => OtpReleaseScreen(orderId: order.id, order: order),
-            ),
-          ).then((_) => _loadOrders());
-        },
-        onResumePayment: (order) {
-          Navigator.of(ctx).pop();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PaymentScreen(order: order),
-            ),
-          ).then((_) => _loadOrders());
-        },
-        onViewInvoice: (order) {
-          InvoicePreviewDialog.show(context, order: order);
-        },
+      builder: (ctx) => ValueListenableBuilder<int>(
+        valueListenable: _revision,
+        builder: (_, revision, child) => _OrdersSheetContent(
+          orders: _orders,
+          isLoading: _isLoading,
+          error: _error,
+          onRefresh: () async => _loadOrders(),
+          onResumeOtp: (order) {
+            Navigator.of(ctx).pop();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    OtpReleaseScreen(orderId: order.id, order: order),
+              ),
+            ).then((_) => _loadOrders());
+          },
+          onResumePayment: (order) {
+            Navigator.of(ctx).pop();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => PaymentScreen(order: order)),
+            ).then((_) => _loadOrders());
+          },
+          onViewProgress: (order) {
+            Navigator.of(ctx).pop();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PrintProgressScreen(
+                  orderId: order.id,
+                  otp: '',
+                  printServerId: order.printServerId,
+                ),
+              ),
+            ).then((_) => _loadOrders());
+          },
+          onViewInvoice: (order) {
+            InvoicePreviewDialog.show(context, order: order);
+          },
+        ),
       ),
     );
   }
@@ -117,13 +165,8 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
           return const SizedBox.shrink();
         }
 
-        final activeOrders = _orders.where((o) {
-          final s = o.status.toUpperCase();
-          return s == 'WAITING_FOR_OTP' || s == 'PAID' || s == 'JOB_QUEUED' || s == 'CREATED';
-        }).toList();
-
+        final activeOrders = _orders.where((order) => order.isPending).toList();
         final hasActive = activeOrders.isNotEmpty;
-        final primaryActive = hasActive ? activeOrders.first : null;
 
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -136,12 +179,19 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                   onTap: _openOrdersSheet,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
-                      color: hasActive ? const Color(0xFFF0F7FF) : AppTheme.surfaceWhite,
+                      color: hasActive
+                          ? const Color(0xFFF0F7FF)
+                          : AppTheme.surfaceWhite,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: hasActive ? const Color(0xFFBFDBFE) : AppTheme.border,
+                        color: hasActive
+                            ? const Color(0xFFBFDBFE)
+                            : AppTheme.border,
                         width: hasActive ? 1.5 : 1.0,
                       ),
                       boxShadow: [
@@ -158,13 +208,19 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: hasActive ? AppTheme.primary : const Color(0xFFF1F5F9),
+                            color: hasActive
+                                ? AppTheme.primary
+                                : const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
-                            hasActive ? Icons.receipt_long_rounded : Icons.shopping_bag_outlined,
+                            hasActive
+                                ? Icons.receipt_long_rounded
+                                : Icons.shopping_bag_outlined,
                             size: 18,
-                            color: hasActive ? Colors.white : AppTheme.textSecondary,
+                            color: hasActive
+                                ? Colors.white
+                                : AppTheme.textSecondary,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -175,18 +231,25 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    'Your Orders',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.textPrimary,
+                                  const Flexible(
+                                    child: Text(
+                                      'Your Orders',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
+                                      ),
                                     ),
                                   ),
                                   if (_orders.isNotEmpty) ...[
                                     const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFE2E8F0),
                                         borderRadius: BorderRadius.circular(10),
@@ -205,17 +268,23 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                               ),
                               const SizedBox(height: 1),
                               Text(
-                                hasActive
-                                    ? (primaryActive!.isWaitingOtp
-                                        ? 'Ready to print · Tap to view release code'
-                                        : 'Order in progress · Tap to resume')
+                                _error != null
+                                    ? 'Unable to load orders · Tap to retry'
+                                    : _isLoading && _orders.isEmpty
+                                    ? 'Loading orders…'
+                                    : hasActive
+                                    ? '${activeOrders.length} pending · View your orders'
                                     : (_orders.isEmpty
-                                        ? 'No pending orders'
-                                        : 'View print history and receipts'),
+                                          ? 'No pending orders'
+                                          : 'View print history and receipts'),
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: hasActive ? AppTheme.primary : AppTheme.textMuted,
-                                  fontWeight: hasActive ? FontWeight.w600 : FontWeight.normal,
+                                  color: hasActive
+                                      ? AppTheme.primary
+                                      : AppTheme.textMuted,
+                                  fontWeight: hasActive
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -225,7 +294,10 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                         ),
                         if (hasActive) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.primary,
                               borderRadius: BorderRadius.circular(7),
@@ -234,7 +306,7 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  primaryActive!.isWaitingOtp ? 'Release Code' : 'Resume',
+                                  'View Orders',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
@@ -242,12 +314,20 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                const Icon(Icons.arrow_forward_rounded, size: 12, color: Colors.white),
+                                const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
                               ],
                             ),
                           ),
                         ] else ...[
-                          const Icon(Icons.keyboard_arrow_up_rounded, size: 20, color: AppTheme.textMuted),
+                          const Icon(
+                            Icons.keyboard_arrow_up_rounded,
+                            size: 20,
+                            color: AppTheme.textMuted,
+                          ),
                         ],
                       ],
                     ),
@@ -262,28 +342,59 @@ class _UserOrdersDockState extends State<UserOrdersDock> with WidgetsBindingObse
   }
 }
 
-class _OrdersSheetContent extends StatelessWidget {
+class _OrdersSheetContent extends StatefulWidget {
   final List<PrintOrder> orders;
   final bool isLoading;
+  final String? error;
   final VoidCallback onRefresh;
   final ValueChanged<PrintOrder> onResumeOtp;
   final ValueChanged<PrintOrder> onResumePayment;
   final ValueChanged<PrintOrder> onViewInvoice;
+  final ValueChanged<PrintOrder> onViewProgress;
 
   const _OrdersSheetContent({
     required this.orders,
     required this.isLoading,
+    this.error,
     required this.onRefresh,
     required this.onResumeOtp,
     required this.onResumePayment,
     required this.onViewInvoice,
+    required this.onViewProgress,
   });
+
+  @override
+  State<_OrdersSheetContent> createState() => _OrdersSheetContentState();
+}
+
+class _OrdersSheetContentState extends State<_OrdersSheetContent> {
+  bool _showPending = true;
+  List<PrintOrder> get orders =>
+      widget.orders.where((order) => order.isPending == _showPending).toList();
+  bool get isLoading => widget.isLoading;
+  VoidCallback get onRefresh => widget.onRefresh;
+  ValueChanged<PrintOrder> get onResumeOtp => widget.onResumeOtp;
+  ValueChanged<PrintOrder> get onResumePayment => widget.onResumePayment;
+  ValueChanged<PrintOrder> get onViewInvoice => widget.onViewInvoice;
 
   String _formatDate(String isoString) {
     if (isoString.isEmpty) return '';
     try {
       final dt = DateTime.parse(isoString).toLocal();
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       final month = months[dt.month - 1];
       final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
       final minute = dt.minute.toString().padLeft(2, '0');
@@ -306,7 +417,11 @@ class _OrdersSheetContent extends StatelessWidget {
         color: AppTheme.surfaceWhite,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -4)),
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 20,
+            offset: Offset(0, -4),
+          ),
         ],
       ),
       child: Column(
@@ -328,27 +443,42 @@ class _OrdersSheetContent extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
             child: Row(
               children: [
-                const Icon(Icons.receipt_long_rounded, size: 20, color: AppTheme.primary),
+                const Icon(
+                  Icons.receipt_long_rounded,
+                  size: 20,
+                  color: AppTheme.primary,
+                ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Your Print Orders',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
+                const Expanded(
+                  child: Text(
+                    'Your Print Orders',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 IconButton(
                   onPressed: onRefresh,
                   tooltip: 'Refresh',
-                  icon: const Icon(Icons.refresh_rounded, size: 20, color: AppTheme.textSecondary),
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   tooltip: 'Close',
-                  icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.textSecondary),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 20,
+                    color: AppTheme.textSecondary,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
@@ -356,165 +486,276 @@ class _OrdersSheetContent extends StatelessWidget {
           ),
           const Divider(height: 1, color: AppTheme.border),
 
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: Text(
+                    'Pending (${widget.orders.where((o) => o.isPending).length})',
+                  ),
+                  selected: _showPending,
+                  onSelected: (_) => setState(() => _showPending = true),
+                ),
+                ChoiceChip(
+                  label: Text(
+                    'History (${widget.orders.where((o) => !o.isPending).length})',
+                  ),
+                  selected: !_showPending,
+                  onSelected: (_) => setState(() => _showPending = false),
+                ),
+              ],
+            ),
+          ),
+          if (widget.error != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                widget.error!,
+                style: const TextStyle(color: AppTheme.danger),
+              ),
+            ),
           // Body
           Expanded(
             child: isLoading && orders.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : orders.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.inbox_outlined, size: 40, color: AppTheme.textMuted),
-                              SizedBox(height: 12),
-                              Text(
-                                'No print orders yet',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Uploaded and paid documents will be listed here.',
-                                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                              ),
-                            ],
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 40,
+                            color: AppTheme.textMuted,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            _showPending
+                                ? 'No pending orders'
+                                : 'No order history yet',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Each order keeps its own payment and print status.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: orders.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (ctx, idx) {
+                      final order = orders[idx];
+                      final isWaitingOtp =
+                          order.isWaitingOtp ||
+                          order.status.toUpperCase() == 'PAID' ||
+                          order.status.toUpperCase() == 'JOB_QUEUED';
+                      final isUnpaid = order.isPendingPayment;
+                      final isCompleted = order.isCompleted;
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isWaitingOtp
+                              ? const Color(0xFFF8FAFC)
+                              : AppTheme.surfaceWhite,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isWaitingOtp
+                                ? const Color(0xFFBFDBFE)
+                                : AppTheme.border,
+                            width: isWaitingOtp ? 1.5 : 1.0,
                           ),
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: orders.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (ctx, idx) {
-                          final order = orders[idx];
-                          final isWaitingOtp = order.isWaitingOtp || order.status.toUpperCase() == 'PAID' || order.status.toUpperCase() == 'JOB_QUEUED';
-                          final isUnpaid = order.status.toUpperCase() == 'CREATED';
-                          final isCompleted = order.isCompleted;
-
-                          return Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: isWaitingOtp ? const Color(0xFFF8FAFC) : AppTheme.surfaceWhite,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isWaitingOtp ? const Color(0xFFBFDBFE) : AppTheme.border,
-                                width: isWaitingOtp ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        order.id,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                      ),
+                                Expanded(
+                                  child: Text(
+                                    order.id,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textPrimary,
                                     ),
-                                    _statusBadge(order.status),
-                                  ],
+                                  ),
                                 ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Text(
-                                      '${order.totalPages} ${order.totalPages == 1 ? 'page' : 'pages'} · ${order.copies} ${order.copies == 1 ? 'copy' : 'copies'} · ${order.formattedAmount}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      _formatDate(order.createdAt),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppTheme.textMuted,
-                                      ),
-                                    ),
-                                  ],
+                                _statusBadge(order.status),
+                              ],
+                            ),
+                            if (order.printSettings.items.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                order.printSettings.items
+                                    .map((item) => item.filename)
+                                    .join(', '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  '${order.totalPages} ${order.totalPages == 1 ? 'page' : 'pages'} · ${order.copies} ${order.copies == 1 ? 'copy' : 'copies'} · ${order.formattedAmount}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textPrimary,
+                                  ),
                                 ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    if (order.releaseCode != null && order.releaseCode!.isNotEmpty && isWaitingOtp) ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF6FF),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                                        ),
-                                        child: Text(
-                                          'Code: ${order.releaseCode}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppTheme.primary,
-                                            letterSpacing: 0.8,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                    const Spacer(),
-                                    if (isWaitingOtp) ...[
-                                      FilledButton.icon(
-                                        onPressed: () => onResumeOtp(order),
-                                        icon: const Icon(Icons.qr_code_rounded, size: 14),
-                                        label: const Text('Release Code'),
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: AppTheme.primary,
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ] else if (isUnpaid) ...[
-                                      FilledButton.icon(
-                                        onPressed: () => onResumePayment(order),
-                                        icon: const Icon(Icons.payment_rounded, size: 14),
-                                        label: const Text('Complete Payment'),
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: AppTheme.primary,
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ] else if (isCompleted) ...[
-                                      OutlinedButton.icon(
-                                        onPressed: () => onViewInvoice(order),
-                                        icon: const Icon(Icons.receipt_long_rounded, size: 14),
-                                        label: const Text('Invoice'),
-                                        style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                                Text(
+                                  _formatDate(order.createdAt),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
+                                  ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.end,
+                              children: [
+                                if (order.releaseCode != null &&
+                                    order.releaseCode!.isNotEmpty &&
+                                    isWaitingOtp) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: const Color(0xFFBFDBFE),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Code: ${order.releaseCode}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.primary,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (isWaitingOtp) ...[
+                                  FilledButton.icon(
+                                    key: ValueKey('release-${order.id}'),
+                                    onPressed: () => onResumeOtp(order),
+                                    icon: const Icon(
+                                      Icons.qr_code_rounded,
+                                      size: 14,
+                                    ),
+                                    label: const Text('Release Code'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppTheme.primary,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ] else if (isUnpaid) ...[
+                                  FilledButton.icon(
+                                    key: ValueKey('payment-${order.id}'),
+                                    onPressed: () => onResumePayment(order),
+                                    icon: const Icon(
+                                      Icons.payment_rounded,
+                                      size: 14,
+                                    ),
+                                    label: const Text('Complete Payment'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppTheme.primary,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ] else if (order.isPrinting ||
+                                    order.status.toUpperCase() ==
+                                        'RELEASED') ...[
+                                  FilledButton.icon(
+                                    key: ValueKey('progress-${order.id}'),
+                                    onPressed: () =>
+                                        widget.onViewProgress(order),
+                                    icon: const Icon(
+                                      Icons.print_rounded,
+                                      size: 14,
+                                    ),
+                                    label: const Text('View progress'),
+                                  ),
+                                ] else if (isCompleted) ...[
+                                  OutlinedButton.icon(
+                                    onPressed: () => onViewInvoice(order),
+                                    icon: const Icon(
+                                      Icons.receipt_long_rounded,
+                                      size: 14,
+                                    ),
+                                    label: const Text('Invoice'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -534,10 +775,19 @@ class _OrdersSheetContent extends StatelessWidget {
         fg = AppTheme.primary;
         label = 'Ready to Print';
         break;
+      case 'WAITING_FOR_PAYMENT':
       case 'CREATED':
         bg = const Color(0xFFFEF3C7);
         fg = const Color(0xFFB45309);
         label = 'Awaiting Payment';
+        break;
+      case 'RELEASED':
+      case 'PRINTING':
+        bg = const Color(0xFFEFF6FF);
+        fg = AppTheme.primary;
+        label = status.toUpperCase() == 'PRINTING'
+            ? 'Printing'
+            : 'Queued for printing';
         break;
       case 'COMPLETED':
         bg = const Color(0xFFDCFCE7);
@@ -569,11 +819,7 @@ class _OrdersSheetContent extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }

@@ -5,9 +5,8 @@ import '../config/theme.dart';
 
 class OtpDisplayCard extends StatelessWidget {
   final String otp;
-  final String? expiresAt;
 
-  const OtpDisplayCard({super.key, required this.otp, this.expiresAt});
+  const OtpDisplayCard({super.key, required this.otp});
 
   @override
   Widget build(BuildContext context) {
@@ -73,13 +72,12 @@ class OtpDisplayCard extends StatelessWidget {
               ),
             ),
           ),
-          if (expiresAt != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Expires: $expiresAt',
-              style: const TextStyle(fontSize: 11, color: Colors.white38),
-            ),
-          ],
+          const SizedBox(height: 10),
+          const Text(
+            'Valid until the order is released or cancelled.',
+            style: TextStyle(fontSize: 11, color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

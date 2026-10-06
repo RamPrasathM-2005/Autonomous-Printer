@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -13,6 +14,11 @@ class CustomerAuthService {
   factory CustomerAuthService() => _instance;
   CustomerAuthService._internal();
 
+  @visibleForTesting
+  CustomerAuthService.withClient(http.Client client) : _client = client;
+
+  http.Client _client = http.Client();
+
   static const String _kAccessTokenKey = 'student_auth_access_token';
   static const String _kRefreshTokenKey = 'student_auth_refresh_token';
   static const String _kUserProfileKey = 'student_auth_user_profile';
@@ -21,7 +27,9 @@ class CustomerAuthService {
   String? _refreshToken;
   UserProfile? _currentUser;
 
-  final ValueNotifier<UserProfile?> userNotifier = ValueNotifier<UserProfile?>(null);
+  final ValueNotifier<UserProfile?> userNotifier = ValueNotifier<UserProfile?>(
+    null,
+  );
 
   bool get isLoggedIn => _currentUser != null && _accessToken != null;
   UserProfile? get currentUser => _currentUser;
@@ -30,6 +38,8 @@ class CustomerAuthService {
   String get _baseUrl => ApiConfig.backendUrl;
 
   Future<void> init() async {
+    _currentUser = null;
+    userNotifier.value = null;
     _accessToken = readSessionValue(_kAccessTokenKey);
     _refreshToken = readSessionValue(_kRefreshTokenKey);
     final rawProfile = readSessionValue(_kUserProfileKey);
@@ -56,11 +66,18 @@ class CustomerAuthService {
       while (payload.length % 4 != 0) {
         payload += '=';
       }
-      final decoded = jsonDecode(utf8.decode(base64Url.decode(payload))) as Map<String, dynamic>;
+      final decoded = jsonDecode(
+        utf8.decode(base64Url.decode(payload)),
+      ) as Map<String, dynamic>;
       final exp = decoded['exp'] as int?;
       if (exp == null) return false;
-      final expiryDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
-      return DateTime.now().toUtc().isAfter(expiryDate.subtract(const Duration(seconds: 45)));
+      final expiryDate = DateTime.fromMillisecondsSinceEpoch(
+        exp * 1000,
+        isUtc: true,
+      );
+      return DateTime.now().toUtc().isAfter(
+        expiryDate.subtract(const Duration(seconds: 45)),
+      );
     } catch (_) {
       return true;
     }
@@ -75,6 +92,8 @@ class CustomerAuthService {
       if (refreshed) {
         return _accessToken;
       }
+    } else {
+      _clearLocalSession();
     }
     return null;
   }
@@ -88,13 +107,16 @@ class CustomerAuthService {
     final token = await getValidAccessToken();
     if (token == null) return;
     try {
-      final res = await http.get(
-        Uri.parse('$_baseUrl/api/auth/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 6));
+      final res = await _client
+          .get(
+            Uri.parse('$_baseUrl/api/auth/me'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+      if (_accessToken != token) return;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         _currentUser = UserProfile.fromJson(data);
@@ -103,32 +125,46 @@ class CustomerAuthService {
       } else if (res.statusCode == 401 && _refreshToken != null) {
         final refreshed = await _tryRefreshToken();
         if (refreshed && _accessToken != null) {
-          final retryRes = await http.get(
-            Uri.parse('$_baseUrl/api/auth/me'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $_accessToken',
-            },
-          ).timeout(const Duration(seconds: 6));
+          final retryRes = await _client
+              .get(
+                Uri.parse('$_baseUrl/api/auth/me'),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer $_accessToken',
+                },
+              )
+              .timeout(const Duration(seconds: 6));
+          if (_accessToken == null) return;
           if (retryRes.statusCode == 200) {
             final data = jsonDecode(retryRes.body) as Map<String, dynamic>;
             _currentUser = UserProfile.fromJson(data);
-            writeSessionValue(_kUserProfileKey, jsonEncode(_currentUser!.toJson()));
+            writeSessionValue(
+              _kUserProfileKey,
+              jsonEncode(_currentUser!.toJson()),
+            );
             userNotifier.value = _currentUser;
+          } else if (retryRes.statusCode == 401 || retryRes.statusCode == 403) {
+            _clearLocalSession();
           }
         }
+      } else if (res.statusCode == 401 || res.statusCode == 403) {
+        _clearLocalSession();
       }
     } catch (_) {}
   }
 
   Future<bool> _tryRefreshToken() async {
-    if (_refreshToken == null) return false;
+    final refreshToken = _refreshToken;
+    if (refreshToken == null) return false;
     try {
-      final res = await http.post(
-        Uri.parse('$_baseUrl/api/auth/refresh'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': _refreshToken}),
-      ).timeout(const Duration(seconds: 8));
+      final res = await _client
+          .post(
+            Uri.parse('$_baseUrl/api/auth/refresh'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (_refreshToken != refreshToken) return false;
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -141,7 +177,7 @@ class CustomerAuthService {
         return true;
       } else if (res.statusCode == 401 || res.statusCode == 403) {
         // Refresh token permanently expired or revoked
-        logout();
+        _clearLocalSession();
       }
     } catch (_) {}
     return false;
@@ -149,14 +185,13 @@ class CustomerAuthService {
 
   Future<void> sendOtp(String email, {String purpose = 'login'}) async {
     final cleanEmail = email.trim().toLowerCase();
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/auth/send-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': cleanEmail,
-        'purpose': purpose,
-      }),
-    ).timeout(const Duration(seconds: 15));
+    final res = await _client
+        .post(
+          Uri.parse('$_baseUrl/api/auth/send-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': cleanEmail, 'purpose': purpose}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
@@ -166,15 +201,13 @@ class CustomerAuthService {
 
   Future<void> verifyOtp(String email, String otp) async {
     final cleanEmail = email.trim().toLowerCase();
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/auth/verify-otp'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': cleanEmail,
-        'phone': cleanEmail,
-        'otp': otp.trim(),
-      }),
-    ).timeout(const Duration(seconds: 15));
+    final res = await _client
+        .post(
+          Uri.parse('$_baseUrl/api/auth/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': cleanEmail, 'otp': otp.trim()}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
@@ -185,22 +218,21 @@ class CustomerAuthService {
   Future<UserProfile> studentLogin({
     required String email,
     required String otp,
-    String? phone,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/auth/student/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': cleanEmail,
-        'phone': (phone ?? cleanEmail).trim(),
-        'otp': otp.trim(),
-      }),
-    ).timeout(const Duration(seconds: 15));
+    final res = await _client
+        .post(
+          Uri.parse('$_baseUrl/api/auth/student/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': cleanEmail, 'otp': otp.trim()}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
-      throw ApiError(data['message'] ?? 'Login failed. Please check your verification code.');
+      throw ApiError(
+        data['message'] ?? 'Login failed. Please check your verification code.',
+      );
     }
 
     _accessToken = data['access_token'];
@@ -224,25 +256,27 @@ class CustomerAuthService {
     required String email,
     required String department,
     required String otp,
-    String? phone,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/auth/student/signup'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'full_name': fullName.trim(),
-        'roll_number': rollNumber.trim().toUpperCase(),
-        'email': cleanEmail,
-        'phone': (phone ?? cleanEmail).trim(),
-        'department': department.trim(),
-        'otp': otp.trim(),
-      }),
-    ).timeout(const Duration(seconds: 15));
+    final res = await _client
+        .post(
+          Uri.parse('$_baseUrl/api/auth/student/signup'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'full_name': fullName.trim(),
+            'roll_number': rollNumber.trim().toUpperCase(),
+            'email': cleanEmail,
+            'department': department.trim(),
+            'otp': otp.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
-      throw ApiError(data['message'] ?? 'Registration failed. Please check your details.');
+      throw ApiError(
+        data['message'] ?? 'Registration failed. Please check your details.',
+      );
     }
 
     _accessToken = data['access_token'];
@@ -264,21 +298,27 @@ class CustomerAuthService {
     String? fullName,
     String? department,
     String? email,
-    String? phone,
   }) async {
-    if (_accessToken == null) throw const ApiError('User not logged in.');
+    final token = await getValidAccessToken();
+    if (token == null) {
+      throw const ApiError('Session expired. Please sign in again.');
+    }
     final payload = <String, dynamic>{
       if (fullName != null) 'full_name': fullName.trim(),
       if (department != null) 'department': department.trim(),
       if (email != null) 'email': email.trim().toLowerCase(),
-      if (phone != null) 'phone': phone.trim(),
     };
 
-    final res = await http.put(
-      Uri.parse('$_baseUrl/api/auth/me'),
-      headers: authHeaders,
-      body: jsonEncode(payload),
-    ).timeout(const Duration(seconds: 10));
+    final res = await _client
+        .put(
+          Uri.parse('$_baseUrl/api/auth/me'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 10));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
@@ -292,16 +332,22 @@ class CustomerAuthService {
   }
 
   Future<void> logout() async {
-    if (_refreshToken != null) {
+    final refreshToken = _refreshToken;
+    _clearLocalSession();
+    if (refreshToken != null) {
       try {
-        await http.post(
-          Uri.parse('$_baseUrl/api/auth/logout'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh_token': _refreshToken}),
-        ).timeout(const Duration(seconds: 5));
+        await _client
+            .post(
+              Uri.parse('$_baseUrl/api/auth/logout'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'refresh_token': refreshToken}),
+            )
+            .timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
+  }
 
+  void _clearLocalSession() {
     _accessToken = null;
     _refreshToken = null;
     _currentUser = null;
@@ -314,13 +360,15 @@ class CustomerAuthService {
   Future<List<PrintOrder>> fetchMyOrders() async {
     final token = await getValidAccessToken();
     if (token == null) return [];
-    final res = await http.get(
-      Uri.parse('$_baseUrl/api/orders/my'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    ).timeout(const Duration(seconds: 12));
+    final res = await _client
+        .get(
+          Uri.parse('$_baseUrl/api/orders/my'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(const Duration(seconds: 12));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
@@ -328,6 +376,8 @@ class CustomerAuthService {
     }
 
     final list = data as List;
-    return list.map((item) => PrintOrder.fromJson(item as Map<String, dynamic>)).toList();
+    return list
+        .map((item) => PrintOrder.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 }

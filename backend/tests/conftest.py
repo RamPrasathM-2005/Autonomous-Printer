@@ -1,4 +1,8 @@
 import pytest
+import hashlib
+import hmac
+import uuid
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -20,6 +24,57 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def gateway(monkeypatch):
+    """Keep gateway I/O isolated while exercising real signature checks."""
+    from app.config.settings import settings
+    from app.services.payment_service import PaymentService
+    orders = {}
+    payments = {}
+
+    def create(data, **kwargs):
+        entity = {**data, "id": f"order_{uuid.uuid4().hex}"}
+        orders[entity["id"]] = entity
+        return entity
+
+    def capture(order_id, payment_id=None):
+        payment_id = payment_id or f"pay_{uuid.uuid4().hex}"
+        order = orders[order_id]
+        entity = {"id": payment_id, "order_id": order_id, "amount": order["amount"],
+                  "currency": order["currency"], "status": "captured", "amount_refunded": 0}
+        payments[payment_id] = entity
+        return entity
+
+    fake = SimpleNamespace(
+        order=SimpleNamespace(create=create, payments=lambda order_id, **kw: {
+            "items": [p for p in payments.values() if p["order_id"] == order_id]
+        }),
+        payment=SimpleNamespace(fetch=lambda payment_id, **kw: payments[payment_id],
+                                refund=lambda *args, **kw: {"id": f"rfnd_{uuid.uuid4().hex}"}),
+        capture=capture, orders=orders, payments=payments,
+    )
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_test_unit")
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "unit-test-secret")
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "unit-webhook-secret")
+    monkeypatch.setattr(PaymentService, "_gateway_client", staticmethod(lambda: fake))
+    monkeypatch.setattr("razorpay.Client", lambda *args, **kwargs: fake)
+    return fake
+
+
+def sign_payload(body, secret="unit-webhook-secret"):
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def checkout_payload(client, gateway, order_id):
+    response = client.post("/api/payments/create", json={"orderId": order_id})
+    assert response.status_code == 201
+    gateway_order = response.json()["razorpayOrderId"]
+    entity = gateway.capture(gateway_order)
+    return {"orderId": order_id, "razorpayOrderId": gateway_order,
+            "razorpayPaymentId": entity["id"],
+            "razorpaySignature": sign_payload(f"{gateway_order}|{entity['id']}".encode(), "unit-test-secret")}
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
@@ -56,7 +111,6 @@ def client(db_session):
 def test_user(db_session):
     user = User(
         email="student@university.edu",
-        phone="9876543210",
         full_name="Test Student",
         password_hash=hash_password("SecurePass123!"),
         role=UserRole.USER,

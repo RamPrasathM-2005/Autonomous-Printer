@@ -2,7 +2,7 @@ import time
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import status
 
@@ -17,6 +17,11 @@ from app.utils.errors import AppException
 from app.utils.state_machine import validate_order_transition, validate_job_transition
 
 logger = logging.getLogger("smartprint.security")
+
+# Keep the legacy NOT NULL database column compatible with existing installations.
+# Order release codes have no time limit; this value is never used for validation
+# or exposed as an expiry in API responses.
+LEGACY_NO_EXPIRY_TIMESTAMP = datetime(9999, 12, 31)
 
 class OTPRateLimiter:
     """Thread-safe in-memory sliding-window rate limiter & cooldown manager for OTP verifications."""
@@ -79,16 +84,40 @@ class OTPService:
         for old in existing:
             old.active = False
 
-        # Generate distinct OTPs for Printer 1 and Printer 2
-        otp_p1 = generate_secure_otp(6)
-        otp_p2 = generate_secure_otp(6)
-        while otp_p2 == otp_p1:
-            otp_p2 = generate_secure_otp(6)
+        # Reserve every active code, including secondary printer codes. Codes
+        # remain valid indefinitely and must not collide with another order.
+        reserved_hashes = set()
+        for active_otp, active_order in db.query(OTP, Order).join(
+            Order, Order.id == OTP.order_id
+        ).filter(OTP.active == True).all():
+            reserved_hashes.add(active_otp.otp_hash)
+            for printer in (active_order.print_settings or {}).get("printer_otps", {}).values():
+                if isinstance(printer, dict) and printer.get("active", True):
+                    if printer.get("otp_hash"):
+                        reserved_hashes.add(printer["otp_hash"])
+                    elif printer.get("otp"):
+                        reserved_hashes.add(hash_sha256(str(printer["otp"])))
+
+        def unused_code():
+            for _ in range(128):
+                code = generate_secure_otp(6)
+                code_hash = hash_sha256(code)
+                if code_hash not in reserved_hashes:
+                    reserved_hashes.add(code_hash)
+                    return code
+            raise AppException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                error_code="CODE_GENERATION_UNAVAILABLE",
+                message="Unable to assign a release code. Please try again.",
+            )
+
+        otp_p1 = unused_code()
+        otp_p2 = unused_code()
 
         hashed_p1 = hash_sha256(otp_p1)
         encrypted_p1 = encrypt_value(otp_p1)
         hashed_p2 = hash_sha256(otp_p2)
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.OTP_TTL_MINUTES)
+        expires_at = LEGACY_NO_EXPIRY_TIMESTAMP
 
         otp_record = OTP(
             order_id=order_id,
@@ -154,7 +183,7 @@ class OTPService:
         return otp_p1
 
     @staticmethod
-    def get_otp_for_order(db: Session, order_id: str) -> tuple[str, datetime, dict]:
+    def get_otp_for_order(db: Session, order_id: str) -> tuple[str, None, dict]:
         otp_record = db.query(OTP).filter(
             OTP.order_id == order_id,
             OTP.active == True
@@ -171,16 +200,6 @@ class OTPService:
                 message="No active OTP found for this order."
             )
 
-        expires = otp_record.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        if expires < datetime.now(timezone.utc):
-            raise AppException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="OTP_EXPIRED",
-                message="OTP has expired."
-            )
-
         plaintext = decrypt_value(otp_record.encrypted_value)
         selected_printer = settings.get("cups_printer_name") or settings.get("selected_printer")
         if selected_printer and printer_otps:
@@ -193,7 +212,7 @@ class OTPService:
             if isinstance(p_data, dict) and p_data.get("otp"):
                 plaintext = str(p_data["otp"])
 
-        return plaintext, otp_record.expires_at, printer_otps
+        return plaintext, None, printer_otps
 
     @staticmethod
     def verify_and_release_job(
@@ -272,7 +291,6 @@ class OTPService:
                     OrderStatus.COMPLETED
                 ]))
                 .order_by(Order.created_at.desc())
-                .limit(50)
                 .all()
             )
 
@@ -293,7 +311,7 @@ class OTPService:
                             otp_rec = OTP(
                                 order_id=ord_row.id,
                                 otp_hash=hashed_input,
-                                expires_at=datetime.now(timezone.utc) + timedelta(minutes=1440),
+                                expires_at=LEGACY_NO_EXPIRY_TIMESTAMP,
                                 active=True
                             )
                             db.add(otp_rec)
@@ -377,7 +395,7 @@ class OTPService:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="ALREADY_PRINTED",
-                message="This print job has already been printed. Both OTPs are expired."
+                message="This print job has already been released. Its release codes are no longer valid."
             )
 
         # 6. Check attempts lockout
@@ -415,20 +433,6 @@ class OTPService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="PAYMENT_NOT_COMPLETED",
                 message="Payment has not been completed for this order."
-            )
-
-        # 8. Check expiration
-        expires = otp_rec.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        if expires < datetime.now(timezone.utc):
-            otp_rec.active = False
-            order_rec.status = OrderStatus.EXPIRED
-            db.commit()
-            raise AppException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="OTP_EXPIRED",
-                message="OTP Expired. Please generate/request a new OTP."
             )
 
         # 9. Successful Verification: Reset attempts & clear rate limiter

@@ -10,7 +10,10 @@ class ApiError implements Exception {
     'UNAUTHENTICATED' => 'Session expired. Refresh to continue.',
     'RATE_LIMITED' => 'Too many attempts. Try again shortly.',
     'NOT_FOUND' => 'This item is no longer available.',
-    'STATION_UNAVAILABLE' => 'Station unavailable. Try again later.',
+    'STATION_UNAVAILABLE' || 'PRINT_SERVER_OFFLINE' =>
+      'Print station offline. Please wait for it to reconnect.',
+    'PRINT_SERVER_DISABLED' =>
+      'This print station is disabled. Select another station.',
     'MISSING_DOCUMENT' => 'Select a document.',
     'UNSUPPORTED_TYPE' => 'Choose a PDF, PNG or JPG file.',
     'INVALID_FILENAME' => 'Rename the file and try again.',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../config/theme.dart';
 
 class StatCard extends StatelessWidget {
@@ -53,7 +54,7 @@ class StatCard extends StatelessWidget {
                     ),
                     child: Icon(icon, color: iconColor, size: 20),
                   ),
-                  if (badge != null) badge!,
+                  ?badge,
                 ],
               ),
               const SizedBox(height: 10),

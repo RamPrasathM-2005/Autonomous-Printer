@@ -2,14 +2,7 @@ import '../models/order.dart';
 import 'api_service.dart';
 import 'session_store.dart';
 
-enum RecoveryStage {
-  none,
-  unpaid,
-  waitingOtp,
-  printing,
-  completed,
-  terminated,
-}
+enum RecoveryStage { none, unpaid, waitingOtp, printing, completed, terminated }
 
 class OrderRecoveryResult {
   final RecoveryStage stage;
@@ -19,6 +12,7 @@ class OrderRecoveryResult {
   final bool printerSelectionLocked;
   final bool canUploadNew;
   final bool isCompletedReceipt;
+
   /// True when the backend was unreachable (network/timeout).
   /// Callers must not silently treat this as "no active order" — show a warning.
   final bool networkError;
@@ -42,13 +36,18 @@ class OrderRecoveryResult {
 
 class OrderRecoveryService {
   static const String _kActiveOrderId = 'autonomous_printer_active_order_id';
-  static const String _kLastCompletedOrderId = 'autonomous_printer_last_completed_order_id';
-  static const String _kActiveOrderStage = 'autonomous_printer_active_order_stage';
+  static const String _kLastCompletedOrderId =
+      'autonomous_printer_last_completed_order_id';
+  static const String _kActiveOrderStage =
+      'autonomous_printer_active_order_stage';
+
   /// Tracks the last completed order that the user explicitly dismissed via
   /// "Print Another Document". Recovery will never resurface this order ID.
-  static const String _kDismissedCompletedOrderId = 'autonomous_printer_dismissed_completed_id';
+  static const String _kDismissedCompletedOrderId =
+      'autonomous_printer_dismissed_completed_id';
 
-  static final OrderRecoveryService _instance = OrderRecoveryService._internal();
+  static final OrderRecoveryService _instance =
+      OrderRecoveryService._internal();
   factory OrderRecoveryService() => _instance;
   OrderRecoveryService._internal();
 
@@ -57,7 +56,8 @@ class OrderRecoveryService {
   String? get activeOrderId => readSessionValue(_kActiveOrderId);
   String? get lastCompletedOrderId => readSessionValue(_kLastCompletedOrderId);
   String? get activeOrderStage => readSessionValue(_kActiveOrderStage);
-  String? get dismissedCompletedOrderId => readSessionValue(_kDismissedCompletedOrderId);
+  String? get dismissedCompletedOrderId =>
+      readSessionValue(_kDismissedCompletedOrderId);
 
   void setActiveOrder(String orderId, {String? stage}) {
     writeSessionValue(_kActiveOrderId, orderId);
@@ -119,8 +119,9 @@ class OrderRecoveryService {
       final hasActive = data['hasActiveOrder'] == true;
       final stageStr = (data['stage'] as String? ?? 'NONE').toUpperCase();
       final orderData = data['order'] as Map<String, dynamic>?;
-      final PrintOrder? order =
-          orderData != null ? PrintOrder.fromJson(orderData) : null;
+      final PrintOrder? order = orderData != null
+          ? PrintOrder.fromJson(orderData)
+          : null;
 
       if (hasActive && order != null) {
         setActiveOrder(order.id, stage: stageStr);
@@ -129,7 +130,7 @@ class OrderRecoveryService {
           return OrderRecoveryResult(
             stage: RecoveryStage.unpaid,
             order: order,
-            canUploadNew: false,
+            canUploadNew: true,
           );
         } else if (stageStr == 'WAITING_FOR_OTP') {
           final otpData = data['otp'] as Map<String, dynamic>?;
@@ -143,14 +144,14 @@ class OrderRecoveryService {
             otp: otp,
             selectedPrinter: selectedPrinter,
             printerSelectionLocked: isLocked,
-            canUploadNew: false,
+            canUploadNew: true,
           );
         } else if (stageStr == 'PRINTING') {
           return OrderRecoveryResult(
             stage: RecoveryStage.printing,
             order: order,
             selectedPrinter: data['selectedPrinter'] as String?,
-            canUploadNew: false,
+            canUploadNew: true,
           );
         }
       }
@@ -171,7 +172,7 @@ class OrderRecoveryService {
           stage: RecoveryStage.completed,
           order: order,
           selectedPrinter: data['selectedPrinter'] as String?,
-          canUploadNew: false,
+          canUploadNew: true,
           isCompletedReceipt: true,
         );
       }

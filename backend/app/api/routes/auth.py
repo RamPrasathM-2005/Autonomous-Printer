@@ -9,8 +9,8 @@ from app.schemas.auth import (
     TokenResponse,
     RefreshTokenRequest,
     UserResponse,
-    SendPhoneOtpRequest,
-    VerifyPhoneOtpRequest,
+    SendOtpRequest,
+    VerifyOtpRequest,
     StudentRegisterRequest,
     StudentLoginRequest,
     UpdateProfileRequest,
@@ -23,8 +23,8 @@ from app.api.dependencies import get_current_user, get_current_admin
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/send-otp")
-def send_otp(req: SendPhoneOtpRequest, db: Session = Depends(get_db)):
-    target = (req.email or req.phone or "").strip()
+def send_otp(req: SendOtpRequest, db: Session = Depends(get_db)):
+    target = req.email.strip()
     if not target:
         from app.utils.errors import AppException
         raise AppException(
@@ -39,8 +39,8 @@ def send_otp(req: SendPhoneOtpRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/verify-otp")
-def verify_otp(req: VerifyPhoneOtpRequest):
-    target = (req.email or req.phone or "").strip()
+def verify_otp(req: VerifyOtpRequest):
+    target = req.email.strip()
     if not target:
         from app.utils.errors import AppException
         raise AppException(

@@ -18,12 +18,8 @@ import '../models/document.dart';
 import '../models/print_server.dart';
 import '../services/api_service.dart';
 import '../services/document_bytes_cache.dart';
-import '../services/order_recovery_service.dart';
 import '../widgets/server_config_dialog.dart';
-import 'otp_release_screen.dart';
-import 'payment_screen.dart';
 import 'print_options_screen.dart';
-import 'print_progress_screen.dart';
 import '../widgets/ui_state.dart';
 import '../services/web_drag_drop_service.dart';
 
@@ -122,16 +118,25 @@ class SelectedDocItem {
 }
 
 class UploadScreen extends StatefulWidget {
-  const UploadScreen({super.key});
+  const UploadScreen({
+    super.key,
+    this.loadStations,
+    this.pickFiles,
+    this.uploadDocument,
+  });
+
+  final Future<List<PrintServer>> Function()? loadStations;
+  final Future<List<PlatformFile>> Function()? pickFiles;
+  final Future<UploadedDocument> Function(Uint8List bytes, String filename)?
+  uploadDocument;
 
   @override
   State<UploadScreen> createState() => _UploadScreenState();
 }
 
 class _UploadScreenState extends State<UploadScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
-  final OrderRecoveryService _orderRecovery = OrderRecoveryService();
 
   final List<SelectedDocItem> _selectedFiles = [];
   bool _isUploading = false;
@@ -144,17 +149,10 @@ class _UploadScreenState extends State<UploadScreen>
   List<PrintServer> _stations = [];
   bool _isLoadingStations = true;
 
-  bool _isCheckingOrderRecovery = false;
-  OrderRecoveryResult? _activeRecovery;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _loadStations();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndRestoreExistingOrder();
-    });
     WebDragDropService.register(
       onDragStateChange: (dragging) {
         if (mounted && _isDragging != dragging) {
@@ -162,7 +160,7 @@ class _UploadScreenState extends State<UploadScreen>
         }
       },
       onFileDropped: (name, bytes) {
-        if (mounted) {
+        if (mounted && !_isUploading) {
           _processRawFile(name: name, rawBytes: bytes);
           setState(() {});
         }
@@ -173,160 +171,15 @@ class _UploadScreenState extends State<UploadScreen>
   @override
   void dispose() {
     WebDragDropService.unregister();
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Force-navigate only when UploadScreen is the topmost route.
-      // If the user is already on PaymentScreen or OtpReleaseScreen, skip to
-      // avoid pushing a duplicate screen on top of the existing one.
-      final isTopRoute = ModalRoute.of(context)?.isCurrent ?? false;
-      _checkAndRestoreExistingOrder(forceNavigate: isTopRoute);
-    }
-  }
-
-  Future<void> _checkAndRestoreExistingOrder({
-    bool forceNavigate = true,
-  }) async {
-    if (_isCheckingOrderRecovery) return;
-    setState(() => _isCheckingOrderRecovery = true);
-
-    try {
-      final recovery = await _orderRecovery.checkRecovery();
-      if (!mounted) return;
-
-      setState(() {
-        // Only update _activeRecovery when we got a real response.
-        // On a network error the result stage is 'none' but canUploadNew is true —
-        // we intentionally do NOT clear _activeRecovery so any previously loaded
-        // order banner stays visible until a successful check confirms the order is gone.
-        if (!recovery.networkError) {
-          _activeRecovery = recovery;
-        }
-        _isCheckingOrderRecovery = false;
-      });
-
-      // Warn the user when the backend is unreachable rather than silently
-      // pretending there is no active order (which could hide a paid order).
-      if (recovery.networkError) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Server unavailable. Your orders are saved; reconnect to resume.',
-            ),
-            backgroundColor: AppTheme.warning,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 5),
-          ),
-        );
-        return;
-      }
-
-      if (!forceNavigate) return;
-
-      if (recovery.stage == RecoveryStage.unpaid && recovery.order != null) {
-        // Before routing to PaymentScreen, reconcile to catch the race condition
-        // where Razorpay captured the payment but the verify API call didn't
-        // complete before the user navigated away. If payment was actually captured,
-        // route directly to OtpReleaseScreen instead of asking to pay again.
-        final orderId = recovery.order!.id;
-        OrderRecoveryResult updatedRecovery = recovery;
-        try {
-          await _apiService.reconcilePayment(orderId);
-          // Re-check backend state after reconcile.
-          final recheckRecovery = await _orderRecovery.checkRecovery();
-          if (!recheckRecovery.networkError) {
-            updatedRecovery = recheckRecovery;
-            if (!recovery.networkError) {
-              setState(() => _activeRecovery = updatedRecovery);
-            }
-          }
-        } catch (_) {
-          // Reconcile failed — proceed with original recovery result.
-        }
-
-        if (!mounted) return;
-
-        if (updatedRecovery.stage == RecoveryStage.waitingOtp &&
-            updatedRecovery.order != null) {
-          // Payment was actually confirmed — go straight to OTP, never show payment again.
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => OtpReleaseScreen(
-                orderId: updatedRecovery.order!.id,
-                order: updatedRecovery.order!,
-              ),
-            ),
-          ).then((_) {
-            if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-          });
-        } else {
-          // Genuinely unpaid — show payment screen.
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PaymentScreen(order: recovery.order!),
-            ),
-          ).then((_) {
-            if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-          });
-        }
-      } else if (recovery.stage == RecoveryStage.waitingOtp &&
-          recovery.order != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OtpReleaseScreen(
-              orderId: recovery.order!.id,
-              order: recovery.order!,
-            ),
-          ),
-        ).then((_) {
-          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-        });
-      } else if (recovery.stage == RecoveryStage.printing &&
-          recovery.order != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PrintProgressScreen(
-              orderId: recovery.order!.id,
-              otp: '',
-              printServerId: recovery.order!.printServerId,
-            ),
-          ),
-        ).then((_) {
-          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-        });
-      } else if (recovery.stage == RecoveryStage.completed &&
-          recovery.order != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OtpReleaseScreen(
-              orderId: recovery.order!.id,
-              order: recovery.order!,
-            ),
-          ),
-        ).then((_) {
-          if (mounted) _checkAndRestoreExistingOrder(forceNavigate: false);
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isCheckingOrderRecovery = false);
-    }
-  }
-
-
 
   Future<void> _loadStations() async {
     setState(() => _isLoadingStations = true);
     try {
-      final stations = await _apiService.fetchPrintServers();
+      final stations =
+          await (widget.loadStations?.call() ??
+              _apiService.fetchPrintServers());
       if (!mounted) return;
       setState(() {
         _stations = stations;
@@ -442,54 +295,7 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Future<void> _pickFiles() async {
-    if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
-      if (_activeRecovery!.stage == RecoveryStage.unpaid) {
-        final choice = await showDialog<String>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Unpaid Order Exists'),
-            content: const Text(
-              'You have an unpaid order in progress. Would you like to resume payment or cancel it to start fresh?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop('cancel'),
-                child: const Text(
-                  'Cancel & Start Fresh',
-                  style: TextStyle(color: AppTheme.danger),
-                ),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop('resume'),
-                child: const Text('Resume Order'),
-              ),
-            ],
-          ),
-        );
-
-        if (choice == 'resume') {
-          _checkAndRestoreExistingOrder(forceNavigate: true);
-          return;
-        } else if (choice == 'cancel') {
-          final order = _activeRecovery?.order;
-          if (order != null) {
-            try {
-              await _apiService.cancelOrder(order.id);
-            } catch (_) {}
-          }
-          OrderRecoveryService().clearActiveOrder();
-          if (mounted) {
-            setState(() => _activeRecovery = null);
-          }
-        } else {
-          return;
-        }
-      } else {
-        _checkAndRestoreExistingOrder(forceNavigate: true);
-        return;
-      }
-    }
-
+    if (_isUploading) return;
     setState(() {
       _uploadError = null;
     });
@@ -497,20 +303,24 @@ class _UploadScreenState extends State<UploadScreen>
     try {
       // file_picker v13: pickFiles() returns List<PlatformFile> directly.
       // An empty list means the user dismissed the picker without selecting.
-      final List<PlatformFile> files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-      );
+      final List<PlatformFile> files =
+          await (widget.pickFiles?.call() ??
+              FilePicker.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+              ));
 
       // User cancelled the picker — nothing to do.
-      if (files.isEmpty) return;
+      if (!mounted || files.isEmpty) return;
 
       for (final file in files) {
         final Uint8List rawBytes = await file.readAsBytes();
+        if (!mounted) return;
         _processRawFile(name: file.name, rawBytes: rawBytes);
       }
       setState(() {});
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _uploadError = 'Unable to open this file. Choose another.';
       });
@@ -532,11 +342,7 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Future<void> _handleNext() async {
-    if (_activeRecovery != null && _activeRecovery!.hasActiveUnfinishedOrder) {
-      _checkAndRestoreExistingOrder(forceNavigate: true);
-      return;
-    }
-
+    if (_isUploading) return;
     if (_selectedFiles.isEmpty) {
       setState(() {
         _uploadError = 'Select a document.';
@@ -564,11 +370,17 @@ class _UploadScreenState extends State<UploadScreen>
           _uploadProgress = (i + 0.5) / total;
         });
 
-        final doc = await _apiService.uploadDocumentBytes(
-          bytes: item.bytes,
-          filename: item.name,
-        );
+        final doc =
+            await (widget.uploadDocument?.call(
+                  Uint8List.fromList(item.bytes),
+                  item.name,
+                ) ??
+                _apiService.uploadDocumentBytes(
+                  bytes: item.bytes,
+                  filename: item.name,
+                ));
         DocumentBytesCache.put(doc.id, Uint8List.fromList(item.bytes));
+        if (!mounted) return;
 
         setState(() {
           item.isCompleted = true;
@@ -595,6 +407,7 @@ class _UploadScreenState extends State<UploadScreen>
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isUploading = false;
         _uploadError = userError(e);
@@ -633,8 +446,6 @@ class _UploadScreenState extends State<UploadScreen>
                           _buildErrorBanner(),
                           const SizedBox(height: 16),
                         ],
-
-
 
                         if (_selectedFiles.isEmpty) ...[
                           const Center(
@@ -855,8 +666,6 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-
-
   Widget _buildErrorBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -932,7 +741,9 @@ class _UploadScreenState extends State<UploadScreen>
           duration: const Duration(milliseconds: 180),
           padding: EdgeInsets.all(isNarrow ? 20 : 28),
           decoration: BoxDecoration(
-            color: _isDragging ? AppTheme.primarySurface : AppTheme.surfaceWhite,
+            color: _isDragging
+                ? AppTheme.primarySurface
+                : AppTheme.surfaceWhite,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: _isDragging ? AppTheme.primary : AppTheme.border,
@@ -940,7 +751,9 @@ class _UploadScreenState extends State<UploadScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primary.withValues(alpha: _isDragging ? 0.12 : 0.04),
+                color: AppTheme.primary.withValues(
+                  alpha: _isDragging ? 0.12 : 0.04,
+                ),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -962,16 +775,22 @@ class _UploadScreenState extends State<UploadScreen>
               OutlinedButton.icon(
                 onPressed: _isUploading ? null : _pickFiles,
                 icon: Icon(
-                  _isDragging ? Icons.file_download_rounded : Icons.file_upload_outlined,
+                  _isDragging
+                      ? Icons.file_download_rounded
+                      : Icons.file_upload_outlined,
                   size: 22,
                 ),
                 label: Text(_isDragging ? 'Drop to Upload' : 'Upload File'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: Size.fromHeight(isNarrow ? 54 : 64),
-                  backgroundColor: _isDragging ? Colors.white : AppTheme.primarySurface,
+                  backgroundColor: _isDragging
+                      ? Colors.white
+                      : AppTheme.primarySurface,
                   foregroundColor: AppTheme.primary,
                   side: BorderSide(
-                    color: _isDragging ? AppTheme.primary : AppTheme.primaryBorder,
+                    color: _isDragging
+                        ? AppTheme.primary
+                        : AppTheme.primaryBorder,
                     width: _isDragging ? 1.5 : 1.0,
                   ),
                   shape: RoundedRectangleBorder(
@@ -991,7 +810,9 @@ class _UploadScreenState extends State<UploadScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: _isDragging ? AppTheme.primary : AppTheme.textSecondary,
+                  color: _isDragging
+                      ? AppTheme.primary
+                      : AppTheme.textSecondary,
                   fontWeight: _isDragging ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),

@@ -1,5 +1,5 @@
 import json
-from tests.conftest import create_sample_pdf
+from tests.conftest import create_sample_pdf, sign_payload
 
 def test_full_payment_otp_and_agent_workflow(client, test_print_server, test_agent_token):
     # 1. Upload Document WITHOUT LOGIN
@@ -39,10 +39,11 @@ def test_full_payment_otp_and_agent_workflow(client, test_print_server, test_age
         "payload": {
             "payment": {
                 "entity": {
-                    "id": "pay_test_rzp_123",
+                    "id": "pay_test123",
                     "order_id": rzp_order_id,
                     "amount": amount_paise,
-                    "status": "captured"
+                    "status": "captured",
+                    "currency": "INR"
                 }
             }
         }
@@ -50,7 +51,7 @@ def test_full_payment_otp_and_agent_workflow(client, test_print_server, test_age
     raw_webhook = json.dumps(webhook_payload).encode('utf-8')
     wh_res = client.post(
         "/api/payments/webhook",
-        headers={"X-Razorpay-Signature": "test_sig", "Content-Type": "application/json"},
+        headers={"X-Razorpay-Signature": sign_payload(raw_webhook), "Content-Type": "application/json"},
         content=raw_webhook
     )
     assert wh_res.status_code == 200
@@ -59,7 +60,7 @@ def test_full_payment_otp_and_agent_workflow(client, test_print_server, test_age
     # Verify idempotency: duplicate webhook should succeed gracefully
     wh_dup = client.post(
         "/api/payments/webhook",
-        headers={"X-Razorpay-Signature": "test_sig", "Content-Type": "application/json"},
+        headers={"X-Razorpay-Signature": sign_payload(raw_webhook), "Content-Type": "application/json"},
         content=raw_webhook
     )
     assert wh_dup.status_code == 200

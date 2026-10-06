@@ -71,7 +71,6 @@ def seed():
         if not admin:
             admin = User(
                 email=settings.ADMIN_EMAIL,
-                phone=settings.ADMIN_PHONE,
                 full_name=settings.ADMIN_NAME,
                 password_hash=hash_password(settings.ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
@@ -89,7 +88,6 @@ def seed():
         demo_users = [
             {
                 "email": settings.DEMO_STUDENT_EMAIL,
-                "phone": settings.DEMO_STUDENT_PHONE,
                 "full_name": settings.DEMO_STUDENT_NAME,
                 "password": settings.DEMO_STUDENT_PASSWORD,
                 "dept_code": "IT",
@@ -97,7 +95,6 @@ def seed():
             },
             {
                 "email": "sarah.hr@printplatform.local",
-                "phone": "9876543211",
                 "full_name": "Sarah Jenkins",
                 "password": "Password123!",
                 "dept_code": "HR",
@@ -105,7 +102,6 @@ def seed():
             },
             {
                 "email": "john.fin@printplatform.local",
-                "phone": "9876543212",
                 "full_name": "John Davis",
                 "password": "Password123!",
                 "dept_code": "FIN",
@@ -113,7 +109,6 @@ def seed():
             },
             {
                 "email": "alex.eng@printplatform.local",
-                "phone": "9876543213",
                 "full_name": "Alex Mercer",
                 "password": "Password123!",
                 "dept_code": "ENG",
@@ -127,7 +122,6 @@ def seed():
             if not u:
                 u = User(
                     email=u_data["email"],
-                    phone=u_data["phone"],
                     full_name=u_data["full_name"],
                     password_hash=hash_password(u_data["password"]),
                     roll_number=u_data["roll"],

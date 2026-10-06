@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 50
 
     # OTP Configuration & Rate Limiting
-    OTP_TTL_MINUTES: int = 1440
     MAX_OTP_ATTEMPTS: int = 5
     MAX_PRINT_RETRIES: int = 2
     OTP_COOLDOWN_SECONDS: int = 60
@@ -42,12 +41,6 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "achupporihelpdesk@gmail.com"
     SMTP_FROM_NAME: str = "Achuppori Cloud Print"
 
-    # SMS Configuration for Student Phone OTP (Deprecated/Fallback)
-    SMS_PROVIDER: str = "mock"  # "mock", "fast2sms", "twilio"
-    FAST2SMS_API_KEY: str = ""
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_FROM_PHONE: str = ""
 
     # Razorpay Secrets (Loaded strictly from environment variables)
     RAZORPAY_KEY_ID: str = ""
@@ -75,13 +68,11 @@ class Settings(BaseSettings):
     # Initial Admin & Seed Credentials
     ADMIN_EMAIL: str = "admin@printplatform.local"
     ADMIN_PASSWORD: str = "AdminPass123!"
-    ADMIN_PHONE: str = "1000000000"
     ADMIN_NAME: str = "Platform Administrator"
 
     # Demo Student Credentials
     DEMO_STUDENT_EMAIL: str = "student@example.com"
     DEMO_STUDENT_PASSWORD: str = "Password123!"
-    DEMO_STUDENT_PHONE: str = "9876543210"
     DEMO_STUDENT_NAME: str = "Demo Student"
 
     # Print Server Station Defaults

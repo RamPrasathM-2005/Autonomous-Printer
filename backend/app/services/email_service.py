@@ -38,9 +38,8 @@ class EmailService:
         from_name = settings.SMTP_FROM_NAME.strip() or "Achuppori Cloud Print"
 
         if not (smtp_user and smtp_password):
-            logger.warning("[EMAIL] SMTP credentials incomplete. Falling back to console log.")
-            print(f"\n[ACHUPPORI EMAIL OTP FALLBACK] Email: {to_email} | Code: {otp}\n", flush=True)
-            return True
+            logger.warning("[EMAIL] SMTP credentials incomplete; verification email was not sent.")
+            return False
 
         subject = f"Your Achuppori Verification Code: {otp}"
         action_text = "register your student account" if purpose == "signup" else "sign in to your student account"
@@ -135,16 +134,9 @@ class EmailService:
                 server.login(smtp_user, smtp_password)
                 server.sendmail(from_email, [to_email], msg.as_string())
             logger.info(f"[EMAIL] Verification code successfully sent to {to_email}")
-            print(f"\n=======================================================", flush=True)
-            print(f"[ACHUPPORI GMAIL OTP SENT] To: {to_email} | Code: {otp}", flush=True)
-            print(f"=======================================================\n", flush=True)
             return True
         except Exception as e:
             logger.exception(f"[EMAIL] Failed to send OTP to {to_email} via SMTP: {e}")
-            # Fallback console log for development and troubleshooting
-            print(f"\n=======================================================", flush=True)
-            print(f"[ACHUPPORI EMAIL OTP FALLBACK] Delivery failed via SMTP ({e}). Fallback OTP for {to_email}: {otp}", flush=True)
-            print(f"=======================================================\n", flush=True)
             return False
 
 email_service = EmailService()

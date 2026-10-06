@@ -168,10 +168,14 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         if (mounted) {
           setState(() {
             _busy = false;
-            _message = 'Payment was not completed.';
+            _message = result.errorMessage == 'DISMISSED'
+                ? 'Checkout closed. You can try again.'
+                : result.errorMessage ?? 'Payment was not completed.';
           });
           PaymentFailedDialog.show(
             context,
+            message: _message,
+            onCheckStatus: _currentOrder == null ? null : _checkPaymentStatus,
             onRetry: () => _proceedToPayment(),
             onCancel: () => _handleCancelOrder(),
           );
@@ -217,6 +221,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         });
         PaymentFailedDialog.show(
           context,
+          message: _message,
+          onCheckStatus: _currentOrder == null ? null : _checkPaymentStatus,
           onRetry: () => _proceedToPayment(),
           onCancel: () => _handleCancelOrder(),
         );

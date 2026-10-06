@@ -1,19 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../config/theme.dart';
 import '../models/user_profile.dart';
 import '../services/customer_auth_service.dart';
+import '../services/api_error.dart';
 
 class AuthDialog extends StatefulWidget {
   final bool initialIsSignUp;
   final String? reason;
 
-  const AuthDialog({
-    super.key,
-    this.initialIsSignUp = false,
-    this.reason,
-  });
+  const AuthDialog({super.key, this.initialIsSignUp = false, this.reason});
 
   static Future<UserProfile?> show(
     BuildContext context, {
@@ -23,10 +22,8 @@ class AuthDialog extends StatefulWidget {
     return showDialog<UserProfile?>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => AuthDialog(
-        initialIsSignUp: initialIsSignUp,
-        reason: reason,
-      ),
+      builder: (ctx) =>
+          AuthDialog(initialIsSignUp: initialIsSignUp, reason: reason),
     );
   }
 
@@ -83,7 +80,7 @@ class _AuthDialogState extends State<AuthDialog> {
   }
 
   void _switchTab(bool isSignUp) {
-    if (_isSignUp == isSignUp) return;
+    if (_isBusy || _isSignUp == isSignUp) return;
     _infoDismissTimer?.cancel();
     _otpController.clear();
     setState(() {
@@ -112,8 +109,10 @@ class _AuthDialogState extends State<AuthDialog> {
 
   Future<void> _handleSendOtp() async {
     final email = _emailController.text.trim().toLowerCase();
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(email)) {
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$',
+    );
+    if (email.length > 254 || !emailRegex.hasMatch(email)) {
       setState(() {
         _error = 'Enter a valid email address';
         _info = null;
@@ -148,7 +147,7 @@ class _AuthDialogState extends State<AuthDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceAll('ApiError: ', '');
+        _error = userError(e);
         _info = null;
       });
     } finally {
@@ -160,12 +159,14 @@ class _AuthDialogState extends State<AuthDialog> {
     final email = _emailController.text.trim().toLowerCase();
     final otp = _otpController.text.trim();
 
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(email)) {
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$',
+    );
+    if (email.length > 254 || !emailRegex.hasMatch(email)) {
       setState(() => _error = 'Enter a valid email address');
       return;
     }
-    if (otp.length != 6) {
+    if (!RegExp(r'^\d{6}$').hasMatch(otp)) {
       setState(() => _error = 'Enter the 6-digit verification code');
       return;
     }
@@ -180,16 +181,16 @@ class _AuthDialogState extends State<AuthDialog> {
       if (_isSignUp) {
         final name = _nameController.text.trim();
         final roll = _rollController.text.trim();
-        if (name.isEmpty) {
+        if (name.length < 2 || name.length > 100) {
           setState(() {
-            _error = 'Enter your full name';
+            _error = 'Enter your full name (2–100 characters)';
             _isBusy = false;
           });
           return;
         }
-        if (roll.isEmpty) {
+        if (roll.length < 2 || roll.length > 50) {
           setState(() {
-            _error = 'Enter your roll number';
+            _error = 'Enter your roll number (2–50 characters)';
             _isBusy = false;
           });
           return;
@@ -210,7 +211,7 @@ class _AuthDialogState extends State<AuthDialog> {
       Navigator.of(context).pop(user);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString().replaceAll('ApiError: ', ''));
+      setState(() => _error = userError(e));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -298,19 +299,20 @@ class _AuthDialogState extends State<AuthDialog> {
                           width: 42,
                           height: 42,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.print_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.print_rounded,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -323,15 +325,16 @@ class _AuthDialogState extends State<AuthDialog> {
                                 fit: BoxFit.contain,
                                 alignment: Alignment.centerLeft,
                                 semanticLabel: 'Achuppori',
-                                errorBuilder: (context, error, stackTrace) => const Text(
-                                  'Achuppori',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Text(
+                                      'Achuppori',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
                               ),
                               const SizedBox(height: 2),
                               const Text(
@@ -358,7 +361,6 @@ class _AuthDialogState extends State<AuthDialog> {
                   // Divider
                   const Divider(height: 1, color: AppTheme.border),
 
-
                   // Tabs: Sign in & Sign up in the same row
                   Padding(
                     padding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
@@ -378,16 +380,21 @@ class _AuthDialogState extends State<AuthDialog> {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 decoration: BoxDecoration(
-                                  color: !_isSignUp ? const Color(0xFFEFF6FF) : Colors.transparent,
+                                  color: !_isSignUp
+                                      ? const Color(0xFFEFF6FF)
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(7),
                                   border: Border.all(
-                                    color: !_isSignUp ? const Color(0xFF93C5FD) : Colors.transparent,
+                                    color: !_isSignUp
+                                        ? const Color(0xFF93C5FD)
+                                        : Colors.transparent,
                                     width: 1.2,
                                   ),
                                   boxShadow: !_isSignUp
                                       ? [
                                           BoxShadow(
-                                            color: const Color(0xFF1E40AF).withValues(alpha: 0.08),
+                                            color: const Color(0xFF1E40AF)
+                                                .withValues(alpha: 0.08),
                                             blurRadius: 4,
                                             offset: const Offset(0, 1),
                                           ),
@@ -399,8 +406,12 @@ class _AuthDialogState extends State<AuthDialog> {
                                   'Sign in',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: !_isSignUp ? FontWeight.w600 : FontWeight.w500,
-                                    color: !_isSignUp ? const Color(0xFF1D4ED8) : AppTheme.textSecondary,
+                                    fontWeight: !_isSignUp
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: !_isSignUp
+                                        ? const Color(0xFF1D4ED8)
+                                        : AppTheme.textSecondary,
                                   ),
                                 ),
                               ),
@@ -412,16 +423,21 @@ class _AuthDialogState extends State<AuthDialog> {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 decoration: BoxDecoration(
-                                  color: _isSignUp ? const Color(0xFFEFF6FF) : Colors.transparent,
+                                  color: _isSignUp
+                                      ? const Color(0xFFEFF6FF)
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(7),
                                   border: Border.all(
-                                    color: _isSignUp ? const Color(0xFF93C5FD) : Colors.transparent,
+                                    color: _isSignUp
+                                        ? const Color(0xFF93C5FD)
+                                        : Colors.transparent,
                                     width: 1.2,
                                   ),
                                   boxShadow: _isSignUp
                                       ? [
                                           BoxShadow(
-                                            color: const Color(0xFF1E40AF).withValues(alpha: 0.08),
+                                            color: const Color(0xFF1E40AF)
+                                                .withValues(alpha: 0.08),
                                             blurRadius: 4,
                                             offset: const Offset(0, 1),
                                           ),
@@ -433,8 +449,12 @@ class _AuthDialogState extends State<AuthDialog> {
                                   'Sign up',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    fontWeight: _isSignUp ? FontWeight.w600 : FontWeight.w500,
-                                    color: _isSignUp ? const Color(0xFF1D4ED8) : AppTheme.textSecondary,
+                                    fontWeight: _isSignUp
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: _isSignUp
+                                        ? const Color(0xFF1D4ED8)
+                                        : AppTheme.textSecondary,
                                   ),
                                 ),
                               ),
@@ -454,7 +474,10 @@ class _AuthDialogState extends State<AuthDialog> {
                         // Error message
                         if (_error != null) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.dangerSurface,
                               borderRadius: BorderRadius.circular(8),
@@ -462,12 +485,20 @@ class _AuthDialogState extends State<AuthDialog> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.error_outline_rounded, size: 16, color: AppTheme.danger),
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 16,
+                                  color: AppTheme.danger,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _error!,
-                                    style: const TextStyle(fontSize: 12, color: AppTheme.danger, fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.danger,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -480,14 +511,20 @@ class _AuthDialogState extends State<AuthDialog> {
                         if (_info != null) ...[
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 250),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF0FDF4),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFBBF7D0)),
+                              border: Border.all(
+                                color: const Color(0xFFBBF7D0),
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF16A34A).withValues(alpha: 0.08),
+                                  color: const Color(0xFF16A34A)
+                                      .withValues(alpha: 0.08),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
@@ -495,12 +532,20 @@ class _AuthDialogState extends State<AuthDialog> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF16A34A)),
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 16,
+                                  color: Color(0xFF16A34A),
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _info!,
-                                    style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                                 GestureDetector(
@@ -508,7 +553,11 @@ class _AuthDialogState extends State<AuthDialog> {
                                     _infoDismissTimer?.cancel();
                                     setState(() => _info = null);
                                   },
-                                  child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF15803D)),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 14,
+                                    color: Color(0xFF15803D),
+                                  ),
                                 ),
                               ],
                             ),
@@ -523,7 +572,10 @@ class _AuthDialogState extends State<AuthDialog> {
                             textCapitalization: TextCapitalization.words,
                             decoration: _googleStyleInputDecoration(
                               label: 'Full Name',
-                              prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.person_outline_rounded,
+                                size: 20,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -532,7 +584,10 @@ class _AuthDialogState extends State<AuthDialog> {
                             textCapitalization: TextCapitalization.characters,
                             decoration: _googleStyleInputDecoration(
                               label: 'Roll Number',
-                              prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.badge_outlined,
+                                size: 20,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -540,7 +595,10 @@ class _AuthDialogState extends State<AuthDialog> {
                             initialValue: _selectedDepartment,
                             decoration: _googleStyleInputDecoration(
                               label: 'Department',
-                              prefixIcon: const Icon(Icons.account_balance_outlined, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.account_balance_outlined,
+                                size: 20,
+                              ),
                             ),
                             items: _departments.map((dept) {
                               return DropdownMenuItem(
@@ -553,7 +611,9 @@ class _AuthDialogState extends State<AuthDialog> {
                               );
                             }).toList(),
                             onChanged: (val) {
-                              if (val != null) setState(() => _selectedDepartment = val);
+                              if (val != null) {
+                                setState(() => _selectedDepartment = val);
+                              }
                             },
                           ),
                           const SizedBox(height: 12),
@@ -567,16 +627,26 @@ class _AuthDialogState extends State<AuthDialog> {
                           enableSuggestions: false,
                           decoration: _googleStyleInputDecoration(
                             label: 'Email address',
-                            prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                            prefixIcon: const Icon(
+                              Icons.email_outlined,
+                              size: 20,
+                            ),
                             suffix: Padding(
                               padding: const EdgeInsets.only(right: 6),
                               child: OutlinedButton(
-                                onPressed: (_isBusy || _otpCooldown > 0) ? null : _handleSendOtp,
+                                onPressed: (_isBusy || _otpCooldown > 0)
+                                    ? null
+                                    : _handleSendOtp,
                                 style: OutlinedButton.styleFrom(
                                   backgroundColor: const Color(0xFFEFF6FF),
                                   foregroundColor: const Color(0xFF1D4ED8),
-                                  side: const BorderSide(color: Color(0xFFBFDBFE)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                  side: const BorderSide(
+                                    color: Color(0xFFBFDBFE),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 0,
+                                  ),
                                   minimumSize: const Size(0, 32),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(6),
@@ -602,9 +672,16 @@ class _AuthDialogState extends State<AuthDialog> {
                         TextField(
                           controller: _otpController,
                           keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(6),
+                          ],
                           decoration: _googleStyleInputDecoration(
                             label: 'Verification code (OTP)',
-                            prefixIcon: const Icon(Icons.pin_outlined, size: 20),
+                            prefixIcon: const Icon(
+                              Icons.pin_outlined,
+                              size: 20,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -634,14 +711,19 @@ class _AuthDialogState extends State<AuthDialog> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        _isSignUp ? 'Create account' : 'Sign in',
+                                        _isSignUp
+                                            ? 'Create account'
+                                            : 'Sign in',
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      const Icon(Icons.arrow_forward_rounded, size: 16),
+                                      const Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 16,
+                                      ),
                                     ],
                                   ),
                           ),

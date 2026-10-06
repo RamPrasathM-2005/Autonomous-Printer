@@ -60,8 +60,6 @@ def reconcile_payment(
     Reconciles payment status for an order.
     Checks if order or payment record is confirmed and idempotently updates state.
     """
-    from app.db.models.order import Order, OrderStatus
-    from app.db.models.payment import Payment, PaymentStatus
     from app.utils.errors import AppException
 
     order_id = payload.get("orderId") or payload.get("order_id")
@@ -72,25 +70,7 @@ def reconcile_payment(
             message="orderId is required."
         )
 
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise AppException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            error_code="NOT_FOUND",
-            message="Order not found."
-        )
-
-    if order.status in [OrderStatus.PAID, OrderStatus.JOB_QUEUED, OrderStatus.WAITING_FOR_OTP, OrderStatus.RELEASED, OrderStatus.PRINTING, OrderStatus.COMPLETED]:
-        return {"status": "SUCCESS", "orderStatus": order.status, "paid": True}
-
-    payment = db.query(Payment).filter(Payment.order_id == order_id).first()
-    if payment and payment.status == PaymentStatus.CAPTURED:
-        if order.status == OrderStatus.CREATED:
-            order.status = OrderStatus.WAITING_FOR_OTP
-            db.commit()
-        return {"status": "SUCCESS", "orderStatus": order.status, "paid": True}
-
-    return {"status": "PENDING", "orderStatus": order.status, "paid": False}
+    return payment_service.reconcile_payment(db, order_id)
 
 @router.post("/webhook")
 async def razorpay_webhook(

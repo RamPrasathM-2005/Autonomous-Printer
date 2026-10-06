@@ -9,6 +9,7 @@ class OTP(Base):
     order_id = Column(String(64), ForeignKey("orders.id"), nullable=False, unique=True, index=True)
     otp_hash = Column(String(255), nullable=False, index=True)
     encrypted_value = Column(String(255), nullable=True)
+    # Legacy schema field retained for compatibility; order codes do not expire.
     expires_at = Column(DateTime, nullable=False, index=True)
     attempt_count = Column(Integer, default=0, nullable=False)
     used_at = Column(DateTime, nullable=True)
