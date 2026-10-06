@@ -121,7 +121,17 @@ class PrintOrder {
   };
   bool get isCompleted => status.toUpperCase() == 'COMPLETED';
   bool get isPrinting => status.toUpperCase() == 'PRINTING';
-  bool get isPendingPayment => status.toUpperCase() == 'WAITING_FOR_PAYMENT';
+  bool get isPendingPayment =>
+      const {'CREATED', 'WAITING_FOR_PAYMENT'}.contains(status.toUpperCase());
+  bool get isPending => const {
+    'CREATED',
+    'WAITING_FOR_PAYMENT',
+    'PAID',
+    'JOB_QUEUED',
+    'WAITING_FOR_OTP',
+    'RELEASED',
+    'PRINTING',
+  }.contains(status.toUpperCase());
 
   bool get isColor => printSettings.colour;
   bool get duplex => printSettings.sides != 'one-sided';
@@ -178,11 +188,13 @@ class OrderOtp {
       if (pInfo is Map && pInfo['otp'] != null) {
         return pInfo['otp'].toString();
       }
-      final isUnit2 = selectedPrinter!.contains('E9A0F4') ||
+      final isUnit2 =
+          selectedPrinter!.contains('E9A0F4') ||
           selectedPrinter!.contains('Unit 2') ||
           selectedPrinter!.contains('Printer_2');
       if (isUnit2) {
-        final p2 = printerOtps!['HP_LaserJet_400_M401dn_E9A0F4'] ??
+        final p2 =
+            printerOtps!['HP_LaserJet_400_M401dn_E9A0F4'] ??
             printerOtps!['Printer_2'];
         if (p2 is Map && p2['otp'] != null) {
           return p2['otp'].toString();

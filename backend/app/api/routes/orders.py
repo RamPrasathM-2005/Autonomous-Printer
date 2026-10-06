@@ -155,7 +155,9 @@ def get_active_order(
                 OrderStatus.CREATED,
                 OrderStatus.PAID,
                 OrderStatus.JOB_QUEUED,
-                OrderStatus.WAITING_FOR_OTP
+                OrderStatus.WAITING_FOR_OTP,
+                OrderStatus.RELEASED,
+                OrderStatus.PRINTING
             ])
         ).order_by(Order.created_at.desc()).first()
 
@@ -200,7 +202,7 @@ def get_active_order(
         return {
             "hasActiveOrder": True,
             "stage": "UNPAID",
-            "canUploadNew": False,
+            "canUploadNew": True,
             "order": ord_resp
         }
 
@@ -222,7 +224,7 @@ def get_active_order(
         return {
             "hasActiveOrder": True,
             "stage": "WAITING_FOR_OTP",
-            "canUploadNew": False,
+            "canUploadNew": True,
             "selectedPrinter": selected_printer,
             "printerSelectionLocked": is_locked,
             "order": ord_resp,
@@ -241,7 +243,7 @@ def get_active_order(
         return {
             "hasActiveOrder": True,
             "stage": "PRINTING",
-            "canUploadNew": False,
+            "canUploadNew": True,
             "selectedPrinter": cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer"),
             "order": ord_resp
         }
@@ -252,7 +254,7 @@ def get_active_order(
             "hasActiveOrder": False,
             "stage": "COMPLETED",
             "isCompletedReceipt": True,
-            "canUploadNew": False,
+            "canUploadNew": True,
             "selectedPrinter": cur_settings.get("cups_printer_name") or cur_settings.get("selected_printer"),
             "order": ord_resp
         }
