@@ -87,7 +87,7 @@ def test_database_status_and_roster_import(db_session):
 
         u_updated = db_session.query(User).filter(User.email == "rohan.it@campus.edu").first()
         assert u_updated.full_name == "Rohan Kumar Updated"
-        assert u_updated.phone == "9999999999"
+        assert u_updated.department == "Information Technology"
 
     finally:
         app.dependency_overrides.clear()

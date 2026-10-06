@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 50
 
     # OTP Configuration & Rate Limiting
+    OTP_TTL_MINUTES: int = 30
     MAX_OTP_ATTEMPTS: int = 5
     MAX_PRINT_RETRIES: int = 2
     OTP_COOLDOWN_SECONDS: int = 60
@@ -36,9 +37,9 @@ class Settings(BaseSettings):
     EMAIL_PROVIDER: str = "smtp"  # "smtp", "mock"
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: str = "achupporihelpdesk@gmail.com"
-    SMTP_PASSWORD: str = "pdmxbqncpmrjhkci"
-    SMTP_FROM_EMAIL: str = "achupporihelpdesk@gmail.com"
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
     SMTP_FROM_NAME: str = "Achuppori Cloud Print"
 
 

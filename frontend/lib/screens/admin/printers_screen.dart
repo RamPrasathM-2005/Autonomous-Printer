@@ -33,15 +33,13 @@ class _PrintersScreenState extends State<PrintersScreen> {
     });
 
     try {
-      final results = await Future.wait([
-        AdminApiService.getPrinters(),
-        AdminApiService.getDepartments(),
-      ]);
+      final printers = await AdminApiService.getPrinters();
+      final departments = await AdminApiService.getDepartments();
 
       if (mounted) {
         setState(() {
-          _printers = results[0] as List<dynamic>;
-          _departments = results[1] as List<dynamic>;
+          _printers = printers;
+          _departments = departments;
           _isLoading = false;
         });
       }

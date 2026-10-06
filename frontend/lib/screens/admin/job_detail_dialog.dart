@@ -128,7 +128,7 @@ class _JobDetailDialogState extends State<JobDetailDialog> {
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
             ),
           ),
-          if (trailing != null) trailing,
+          ?trailing,
         ],
       ),
     );

@@ -294,8 +294,7 @@ class AdminService:
             query = query.filter(
                 (User.full_name.ilike(term)) |
                 (User.email.ilike(term)) |
-                (User.roll_number.ilike(term)) |
-                (User.phone.ilike(term))
+                (User.roll_number.ilike(term))
             )
 
         if department_id:
@@ -323,7 +322,7 @@ class AdminService:
             user_items.append(AdminUserItem(
                 id=u.id,
                 email=u.email,
-                phone=u.phone,
+                phone=getattr(u, "phone", None),
                 full_name=u.full_name,
                 roll_number=u.roll_number,
                 department_id=u.department_id,
@@ -386,7 +385,7 @@ class AdminService:
         return AdminUserItem(
             id=user.id,
             email=user.email,
-            phone=user.phone,
+            phone=getattr(user, "phone", None),
             full_name=user.full_name,
             roll_number=user.roll_number,
             department_id=user.department_id,
@@ -609,8 +608,6 @@ class AdminService:
                     existing_user.full_name = full_name
                 if roll_number:
                     existing_user.roll_number = roll_number
-                if phone:
-                    existing_user.phone = phone
                 if target_dept:
                     existing_user.department_id = target_dept.id
                     existing_user.department = target_dept.name
@@ -622,7 +619,6 @@ class AdminService:
                     email=email,
                     full_name=full_name or email.split("@")[0],
                     roll_number=roll_number or None,
-                    phone=phone or None,
                     password_hash=hash_password(default_pw),
                     department_id=target_dept.id if target_dept else None,
                     department=target_dept.name if target_dept else None,
