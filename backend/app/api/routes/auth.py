@@ -23,16 +23,32 @@ from app.api.dependencies import get_current_user, get_current_admin
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/send-otp")
-def send_phone_otp(req: SendPhoneOtpRequest, db: Session = Depends(get_db)):
-    otp = auth_service.send_phone_otp(db, req.phone, req.purpose or "login")
-    resp = {"message": "Verification code sent successfully.", "phone": req.phone}
-    if settings.ENVIRONMENT == "development":
-        resp["dev_otp"] = otp
-    return resp
+def send_otp(req: SendPhoneOtpRequest, db: Session = Depends(get_db)):
+    target = (req.email or req.phone or "").strip()
+    if not target:
+        from app.utils.errors import AppException
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="EMAIL_REQUIRED",
+            message="Email address is required to send verification code."
+        )
+    auth_service.send_email_otp(db, target, req.purpose or "login")
+    return {
+        "message": "Verification code sent successfully to your email.",
+        "email": target
+    }
 
 @router.post("/verify-otp")
-def verify_phone_otp(req: VerifyPhoneOtpRequest):
-    auth_service.verify_phone_otp(req.phone, req.otp)
+def verify_otp(req: VerifyPhoneOtpRequest):
+    target = (req.email or req.phone or "").strip()
+    if not target:
+        from app.utils.errors import AppException
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="EMAIL_REQUIRED",
+            message="Email address is required."
+        )
+    auth_service.verify_email_otp(target, req.otp, consume=False)
     return {"message": "Verification code is valid.", "valid": True}
 
 @router.post("/student/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

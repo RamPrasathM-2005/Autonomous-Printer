@@ -40,6 +40,7 @@ class InvoiceService {
     String? otp,
     String? userName,
     String? userRoll,
+    String? userEmail,
     String? userPhone,
     String? userDept,
     String? location,
@@ -79,6 +80,9 @@ class InvoiceService {
     final finalRoll = (userRoll != null && userRoll.isNotEmpty)
         ? userRoll
         : (order.rollNumber ?? authUser?.rollNumber ?? '');
+    final finalEmail = (userEmail != null && userEmail.isNotEmpty)
+        ? userEmail
+        : (authUser?.email ?? '');
     final finalPhone = (userPhone != null && userPhone.isNotEmpty)
         ? userPhone
         : (authUser?.phone ?? '');
@@ -586,7 +590,7 @@ class InvoiceService {
                     pw.SizedBox(height: 7),
                     _buildDetailLine('Your ID:', finalRoll),
                     pw.SizedBox(height: 7),
-                    _buildDetailLine('Your Phone:', finalPhone),
+                    _buildDetailLine('Your Email:', finalEmail.isNotEmpty ? finalEmail : finalPhone),
                     pw.SizedBox(height: 7),
                     _buildDetailLine('Your Dept:', finalDept),
                   ],
@@ -721,6 +725,7 @@ class InvoiceService {
     String? otp,
     String? userName,
     String? userRoll,
+    String? userEmail,
     String? userPhone,
     String? userDept,
     String? location,
@@ -733,6 +738,7 @@ class InvoiceService {
       otp: otp,
       userName: userName,
       userRoll: userRoll,
+      userEmail: userEmail,
       userPhone: userPhone,
       userDept: userDept,
       location: location,

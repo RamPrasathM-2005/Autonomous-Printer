@@ -33,7 +33,16 @@ class Settings(BaseSettings):
     PER_PAGE_RATE: float = 2.00
     BASE_FEE: float = 0.00
 
-    # SMS Configuration for Student Phone OTP
+    # Email Configuration for Student Email OTP (Gmail SMTP)
+    EMAIL_PROVIDER: str = "smtp"  # "smtp", "mock"
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "achupporihelpdesk@gmail.com"
+    SMTP_PASSWORD: str = "pdmxbqncpmrjhkci"
+    SMTP_FROM_EMAIL: str = "achupporihelpdesk@gmail.com"
+    SMTP_FROM_NAME: str = "Achuppori Cloud Print"
+
+    # SMS Configuration for Student Phone OTP (Deprecated/Fallback)
     SMS_PROVIDER: str = "mock"  # "mock", "fast2sms", "twilio"
     FAST2SMS_API_KEY: str = ""
     TWILIO_ACCOUNT_SID: str = ""

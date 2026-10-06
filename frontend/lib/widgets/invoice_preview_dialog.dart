@@ -14,6 +14,7 @@ class InvoicePreviewDialog extends StatefulWidget {
   final String? otp;
   final String? userName;
   final String? userRoll;
+  final String? userEmail;
   final String? userPhone;
   final String? userDept;
   final String? location;
@@ -27,6 +28,7 @@ class InvoicePreviewDialog extends StatefulWidget {
     this.otp,
     this.userName,
     this.userRoll,
+    this.userEmail,
     this.userPhone,
     this.userDept,
     this.location,
@@ -41,6 +43,7 @@ class InvoicePreviewDialog extends StatefulWidget {
     String? otp,
     String? userName,
     String? userRoll,
+    String? userEmail,
     String? userPhone,
     String? userDept,
     String? location,
@@ -56,6 +59,7 @@ class InvoicePreviewDialog extends StatefulWidget {
         otp: otp,
         userName: userName,
         userRoll: userRoll,
+        userEmail: userEmail,
         userPhone: userPhone,
         userDept: userDept,
         location: location,
@@ -81,6 +85,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         otp: widget.otp,
         userName: widget.userName,
         userRoll: widget.userRoll,
+        userEmail: widget.userEmail,
         userPhone: widget.userPhone,
         userDept: widget.userDept,
         location: widget.location,
@@ -150,6 +155,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
     final finalRoll = (widget.userRoll != null && widget.userRoll!.isNotEmpty)
         ? widget.userRoll!
         : (widget.order.rollNumber ?? authUser?.rollNumber ?? '');
+    final finalEmail = (widget.userEmail != null && widget.userEmail!.isNotEmpty)
+        ? widget.userEmail!
+        : (authUser?.email ?? '');
     final finalPhone = (widget.userPhone != null && widget.userPhone!.isNotEmpty)
         ? widget.userPhone!
         : (authUser?.phone ?? '');
@@ -744,7 +752,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                 const SizedBox(height: 7),
                                 _detailLine('Your ID:', finalRoll),
                                 const SizedBox(height: 7),
-                                _detailLine('Your Phone:', finalPhone),
+                                _detailLine('Your Email:', finalEmail.isNotEmpty ? finalEmail : finalPhone),
                                 const SizedBox(height: 7),
                                 _detailLine('Your Dept:', finalDept),
                               ],

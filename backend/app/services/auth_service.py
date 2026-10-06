@@ -5,6 +5,7 @@ from typing import Tuple, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import status
 from app.services.sms_service import sms_service
+from app.services.email_service import email_service
 
 from app.config.settings import settings
 from app.config.security import (
@@ -59,38 +60,36 @@ class AuthService:
         db.refresh(user)
         return user
 
-    _phone_otps: Dict[str, Dict[str, Any]] = {}
+    _email_otps: Dict[str, Dict[str, Any]] = {}
+    _phone_otps: Dict[str, Dict[str, Any]] = _email_otps
 
     @classmethod
-    def send_phone_otp(cls, db: Session, phone: str, purpose: str = "login") -> str:
-        clean_phone = phone.strip().replace(" ", "").replace("-", "")
-        last_10 = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
+    def send_email_otp(cls, db: Session, email: str, purpose: str = "login") -> str:
+        clean_email = email.strip().lower()
         clean_purpose = (purpose or "login").lower().strip()
 
         # Check existing user registration status
-        existing_user = db.query(User).filter(
-            (User.phone == clean_phone) | (User.phone == last_10) | (User.phone.endswith(last_10))
-        ).first()
+        existing_user = db.query(User).filter(User.email == clean_email).first()
 
         if clean_purpose == "login":
             if not existing_user:
                 raise AppException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     error_code="USER_NOT_FOUND",
-                    message="No account found with this mobile number. Please sign up first."
+                    message="No account found with this email address. Please sign up first."
                 )
         elif clean_purpose == "signup":
             if existing_user:
                 raise AppException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="PHONE_EXISTS",
-                    message="An account with this mobile number already exists. Please sign in."
+                    error_code="EMAIL_EXISTS",
+                    message="An account with this email address already exists. Please sign in."
                 )
 
         now = datetime.now(timezone.utc)
-        record = cls._phone_otps.get(clean_phone)
+        record = cls._email_otps.get(clean_email)
 
-        # Rate limit: max 3 requests within 5 minutes
+        # Rate limit: max 3 requests within 5 minutes per email
         if record:
             window_start = record.get("window_start", now)
             if now - window_start < timedelta(minutes=5):
@@ -98,7 +97,7 @@ class AuthService:
                     raise AppException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         error_code="RATE_LIMIT_EXCEEDED",
-                        message="Too many OTP requests. Please wait a few minutes before trying again."
+                        message="Too many verification requests. Please wait a few minutes before trying again."
                     )
                 record["request_count"] = record.get("request_count", 0) + 1
             else:
@@ -112,44 +111,44 @@ class AuthService:
         record["otp"] = otp
         record["expires_at"] = now + timedelta(minutes=5)
         record["attempts"] = 0
-        cls._phone_otps[clean_phone] = record
+        cls._email_otps[clean_email] = record
 
-        # Dispatch via SMS service (mock, fast2sms, or twilio)
-        sms_service.send_otp(clean_phone, otp)
+        # Dispatch via Gmail SMTP
+        email_service.send_otp(clean_email, otp, clean_purpose)
         return otp
 
     @classmethod
-    def verify_phone_otp(cls, phone: str, otp: str) -> bool:
-        clean_phone = phone.strip()
+    def verify_email_otp(cls, email: str, otp: str, consume: bool = True) -> bool:
+        clean_email = email.strip().lower()
         clean_otp = str(otp).strip()
 
-        # Development / test bypass for mock testing
-        if clean_otp == "123456" or (settings.ENVIRONMENT == "development" and clean_otp == "999999"):
+        # Automated test environment bypass only
+        if settings.ENVIRONMENT == "test" and clean_otp == "123456":
             return True
 
-        record = cls._phone_otps.get(clean_phone)
+        record = cls._email_otps.get(clean_email)
         if not record:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="OTP_NOT_FOUND",
-                message="No OTP was requested for this phone number."
+                message="No verification code was requested for this email."
             )
 
         now = datetime.now(timezone.utc)
         if now > record.get("expires_at", now):
-            cls._phone_otps.pop(clean_phone, None)
+            cls._email_otps.pop(clean_email, None)
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="OTP_EXPIRED",
-                message="The OTP has expired. Please request a new code."
+                message="The verification code has expired. Please request a new code."
             )
 
         if record.get("attempts", 0) >= 3:
-            cls._phone_otps.pop(clean_phone, None)
+            cls._email_otps.pop(clean_email, None)
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="MAX_ATTEMPTS_EXCEEDED",
-                message="Maximum verification attempts exceeded. Please request a new OTP."
+                message="Maximum verification attempts exceeded. Please request a new code."
             )
 
         if record.get("otp") != clean_otp:
@@ -160,8 +159,10 @@ class AuthService:
                 message="Invalid verification code."
             )
 
-        # Successfully verified, clear OTP
-        cls._phone_otps.pop(clean_phone, None)
+        if consume:
+            cls._email_otps.pop(clean_email, None)
+        else:
+            record["verified"] = True
         return True
 
     @staticmethod
@@ -185,22 +186,45 @@ class AuthService:
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         return user, access_token, refresh_token, expires_in
 
+    # Backwards compatibility wrappers
+    @classmethod
+    def send_phone_otp(cls, db: Session, phone: str, purpose: str = "login") -> str:
+        clean_target = phone.strip()
+        if "@" in clean_target:
+            return cls.send_email_otp(db, clean_target, purpose)
+        # Search if existing user has this phone number to get their email
+        user = db.query(User).filter(User.phone == clean_target).first()
+        if user and user.email:
+            return cls.send_email_otp(db, user.email, purpose)
+        # Fallback to email service / mock
+        return cls.send_email_otp(db, clean_target, purpose)
+
+    @classmethod
+    def verify_phone_otp(cls, phone: str, otp: str) -> bool:
+        clean_target = phone.strip()
+        if "@" in clean_target:
+            return cls.verify_email_otp(clean_target, otp)
+        clean_otp = str(otp).strip()
+        if settings.ENVIRONMENT == "test" and clean_otp == "123456":
+            return True
+        return cls.verify_email_otp(clean_target, otp)
+
     @classmethod
     def student_register(
         cls,
         db: Session,
         req: "StudentRegisterRequest"
     ) -> Tuple[User, str, str, int]:
-        cls.verify_phone_otp(req.phone, req.otp)
+        clean_email = req.email.strip().lower()
+        cls.verify_email_otp(clean_email, req.otp)
 
-        clean_phone = req.phone.strip()
         clean_roll = req.roll_number.strip().upper()
 
-        if db.query(User).filter(User.phone == clean_phone).first():
+        if db.query(User).filter(User.email == clean_email).first():
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="PHONE_EXISTS",
-                message="An account with this phone number already exists. Please sign in."
+                error_code="EMAIL_EXISTS",
+                message="An account with this email already exists. Please sign in."
             )
 
         if db.query(User).filter(User.roll_number == clean_roll).first():
@@ -211,7 +235,8 @@ class AuthService:
             )
 
         user = User(
-            phone=clean_phone,
+            email=clean_email,
+            phone=req.phone.strip() if req.phone else None,
             roll_number=clean_roll,
             full_name=req.full_name.strip(),
             department=req.department.strip(),
@@ -230,18 +255,25 @@ class AuthService:
         db: Session,
         req: "StudentLoginRequest"
     ) -> Tuple[User, str, str, int]:
-        cls.verify_phone_otp(req.phone, req.otp)
+        target_email = (req.email or req.phone or "").strip().lower()
+        if not target_email:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="EMAIL_REQUIRED",
+                message="Email address is required."
+            )
 
-        clean_phone = req.phone.strip().replace(" ", "").replace("-", "")
-        last_10 = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
-        user = db.query(User).filter(
-            (User.phone == clean_phone) | (User.phone == last_10) | (User.phone.endswith(last_10))
-        ).first()
+        cls.verify_email_otp(target_email, req.otp)
+
+        user = db.query(User).filter(User.email == target_email).first()
+        if not user and req.phone:
+            user = db.query(User).filter(User.phone == req.phone.strip()).first()
+
         if not user:
             raise AppException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 error_code="USER_NOT_FOUND",
-                message="No account found with this mobile number. Please sign up first."
+                message="No account found with this email. Please sign up first."
             )
 
         if not user.is_active:
@@ -263,9 +295,19 @@ class AuthService:
             user.full_name = req.full_name.strip()
         if req.department is not None and req.department.strip():
             user.department = req.department.strip()
-        if req.phone is not None and req.phone.strip() and req.phone.strip() != user.phone:
-            existing = db.query(User).filter(User.phone == req.phone.strip(), User.id != user.id).first()
+        if req.email is not None and req.email.strip() and req.email.strip().lower() != (user.email or "").lower():
+            clean_email = req.email.strip().lower()
+            existing = db.query(User).filter(User.email == clean_email, User.id != user.id).first()
             if existing:
+                raise AppException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    error_code="EMAIL_EXISTS",
+                    message="This email is already associated with another account."
+                )
+            user.email = clean_email
+        if req.phone is not None and req.phone.strip() and req.phone.strip() != user.phone:
+            existing_phone = db.query(User).filter(User.phone == req.phone.strip(), User.id != user.id).first()
+            if existing_phone:
                 raise AppException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     error_code="PHONE_EXISTS",

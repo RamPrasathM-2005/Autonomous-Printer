@@ -12,8 +12,8 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    email = Column(String(255), unique=True, index=True, nullable=True)
-    phone = Column(String(50), unique=True, index=True, nullable=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    phone = Column(String(50), nullable=True)
     full_name = Column(String(255), nullable=True)
     roll_number = Column(String(50), unique=True, index=True, nullable=True)
     department = Column(String(100), nullable=True)

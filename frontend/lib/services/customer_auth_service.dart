@@ -147,27 +147,34 @@ class CustomerAuthService {
     return false;
   }
 
-  Future<String?> sendOtp(String phone, {String purpose = 'login'}) async {
-    final cleanPhone = phone.trim();
+  Future<void> sendOtp(String email, {String purpose = 'login'}) async {
+    final cleanEmail = email.trim().toLowerCase();
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/send-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': cleanPhone, 'purpose': purpose}),
-    ).timeout(const Duration(seconds: 10));
+      body: jsonEncode({
+        'email': cleanEmail,
+        'purpose': purpose,
+      }),
+    ).timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
-      throw ApiError(data['message'] ?? 'Failed to send OTP code.');
+      throw ApiError(data['message'] ?? 'Failed to send verification code.');
     }
-    return data['dev_otp'] as String?;
   }
 
-  Future<void> verifyOtp(String phone, String otp) async {
+  Future<void> verifyOtp(String email, String otp) async {
+    final cleanEmail = email.trim().toLowerCase();
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone.trim(), 'otp': otp.trim()}),
-    ).timeout(const Duration(seconds: 10));
+      body: jsonEncode({
+        'email': cleanEmail,
+        'phone': cleanEmail,
+        'otp': otp.trim(),
+      }),
+    ).timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
@@ -176,18 +183,24 @@ class CustomerAuthService {
   }
 
   Future<UserProfile> studentLogin({
-    required String phone,
+    required String email,
     required String otp,
+    String? phone,
   }) async {
+    final cleanEmail = email.trim().toLowerCase();
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/student/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone.trim(), 'otp': otp.trim()}),
+      body: jsonEncode({
+        'email': cleanEmail,
+        'phone': (phone ?? cleanEmail).trim(),
+        'otp': otp.trim(),
+      }),
     ).timeout(const Duration(seconds: 15));
 
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) {
-      throw ApiError(data['message'] ?? 'Login failed. Please check your OTP.');
+      throw ApiError(data['message'] ?? 'Login failed. Please check your verification code.');
     }
 
     _accessToken = data['access_token'];
@@ -208,17 +221,20 @@ class CustomerAuthService {
   Future<UserProfile> studentSignup({
     required String fullName,
     required String rollNumber,
-    required String phone,
+    required String email,
     required String department,
     required String otp,
+    String? phone,
   }) async {
+    final cleanEmail = email.trim().toLowerCase();
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/student/signup'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'full_name': fullName.trim(),
         'roll_number': rollNumber.trim().toUpperCase(),
-        'phone': phone.trim(),
+        'email': cleanEmail,
+        'phone': (phone ?? cleanEmail).trim(),
         'department': department.trim(),
         'otp': otp.trim(),
       }),
@@ -247,12 +263,14 @@ class CustomerAuthService {
   Future<UserProfile> updateProfile({
     String? fullName,
     String? department,
+    String? email,
     String? phone,
   }) async {
     if (_accessToken == null) throw const ApiError('User not logged in.');
     final payload = <String, dynamic>{
       if (fullName != null) 'full_name': fullName.trim(),
       if (department != null) 'department': department.trim(),
+      if (email != null) 'email': email.trim().toLowerCase(),
       if (phone != null) 'phone': phone.trim(),
     };
 
