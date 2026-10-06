@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../services/admin_api_service.dart';
+import '../../utils/download_helper.dart';
 import '../../widgets/admin/stat_card.dart';
 import 'admin_shell.dart';
 import 'job_detail_dialog.dart';
@@ -155,6 +157,222 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   void _onFilterChanged() {
     _loadReport();
     _loadJobs(page: 1);
+  }
+
+  Future<void> _showExportDialog() async {
+    bool isExporting = false;
+    String? exportStatus;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySurface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.file_download_outlined, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Export Administrative Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select your preferred document format. The generated file will include all active department and job filters.',
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 20),
+                if (isExporting) ...[
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24.0),
+                      child: Column(
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(exportStatus ?? 'Generating export file...',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // Option 1: Excel
+                  InkWell(
+                    onTap: () async {
+                      setDialogState(() {
+                        isExporting = true;
+                        exportStatus = 'Compiling multi-sheet Excel workbook...';
+                      });
+                      try {
+                        final bytes = await AdminApiService.exportReportExcel(
+                          departmentId: _selectedDepartmentId,
+                          startDate: _getStartDateForPreset(),
+                          userId: _selectedUserId,
+                          printerId: _selectedPrinterId,
+                          status: _selectedStatus,
+                          isColor: _isColor,
+                        );
+                        final dateStr = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+                        await downloadFile(bytes, 'Achuppori_Report_$dateStr.xlsx');
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Excel workbook downloaded successfully!'),
+                              backgroundColor: AppTheme.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isExporting = false;
+                        });
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Export failed: $e'), backgroundColor: AppTheme.danger),
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF107C41).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.table_chart_rounded, color: Color(0xFF107C41), size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Excel Workbook (.xlsx)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                SizedBox(height: 2),
+                                Text(
+                                  '4 Sheets: Executive Summary, Departments, User Statistics, and Audit Logs',
+                                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Option 2: PDF
+                  InkWell(
+                    onTap: () async {
+                      setDialogState(() {
+                        isExporting = true;
+                        exportStatus = 'Generating executive printable PDF...';
+                      });
+                      try {
+                        final bytes = await AdminApiService.exportReportPdf(
+                          departmentId: _selectedDepartmentId,
+                          startDate: _getStartDateForPreset(),
+                          userId: _selectedUserId,
+                          printerId: _selectedPrinterId,
+                          status: _selectedStatus,
+                          isColor: _isColor,
+                        );
+                        final dateStr = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+                        await downloadFile(bytes, 'Achuppori_Report_$dateStr.pdf');
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Executive PDF report downloaded successfully!'),
+                              backgroundColor: AppTheme.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isExporting = false;
+                        });
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Export failed: $e'), backgroundColor: AppTheme.danger),
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.danger.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.danger, size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Printable PDF Report (.pdf)',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                SizedBox(height: 2),
+                                Text(
+                                  'A4 printable executive layout with branded header and metric cards',
+                                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isExporting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFilterToolbar() {
@@ -317,6 +535,18 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   _onFilterChanged();
                 },
               ),
+
+            // Export Action Button
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 16),
+              label: const Text('Export Report', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              onPressed: _showExportDialog,
+            ),
           ],
         ),
 

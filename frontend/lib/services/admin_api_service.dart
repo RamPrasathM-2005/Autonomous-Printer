@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'admin_auth_service.dart';
@@ -246,4 +247,350 @@ class AdminApiService {
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  // ----------------- PRINTER MANAGEMENT -----------------
+
+  static Future<List<dynamic>> getPrinters() async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/printers'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to load printers.');
+      } catch (_) {
+        throw Exception('Failed to load printers (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updatePrinter(String id, Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .patch(
+          Uri.parse('$origin/api/admin/printers/$id'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update printer.');
+      } catch (_) {
+        throw Exception('Failed to update printer (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> updatePrintServer(String serverId, Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .patch(
+          Uri.parse('$origin/api/admin/print-servers/$serverId'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update print server.');
+      } catch (_) {
+        throw Exception('Failed to update print server.');
+      }
+    }
+  }
+
+  // ----------------- USER MANAGEMENT -----------------
+
+  static Future<Map<String, dynamic>> getUsers({
+    int page = 1,
+    int limit = 15,
+    String? search,
+    int? departmentId,
+    String? role,
+    bool? isActive,
+  }) async {
+    final origin = ApiConfig.backendUrl;
+    final params = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+    if (search != null && search.trim().isNotEmpty) params['search'] = search.trim();
+    if (departmentId != null) params['department_id'] = departmentId.toString();
+    if (role != null && role.isNotEmpty) params['role'] = role;
+    if (isActive != null) params['is_active'] = isActive.toString();
+
+    final uri = Uri.parse('$origin/api/admin/users').replace(queryParameters: params);
+    final response = await http
+        .get(
+          uri,
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to load users.');
+      } catch (_) {
+        throw Exception('Failed to load users (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateUser(int id, Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .patch(
+          Uri.parse('$origin/api/admin/users/$id'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update user.');
+      } catch (_) {
+        throw Exception('Failed to update user (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ----------------- SYSTEM SETTINGS -----------------
+
+  static Future<Map<String, dynamic>> getSettings() async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/settings'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to load settings.');
+      } catch (_) {
+        throw Exception('Failed to load settings (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .patch(
+          Uri.parse('$origin/api/admin/settings'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update settings.');
+      } catch (_) {
+        throw Exception('Failed to update settings (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ----------------- EXPORT REPORTS -----------------
+
+  static Future<Uint8List> exportReportExcel({
+    int? departmentId,
+    String? startDate,
+    String? endDate,
+    int? userId,
+    String? printerId,
+    String? status,
+    bool? isColor,
+  }) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final params = <String, String>{};
+    if (departmentId != null) params['department_id'] = departmentId.toString();
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
+    if (userId != null) params['user_id'] = userId.toString();
+    if (printerId != null) params['printer_id'] = printerId;
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (isColor != null) params['is_color'] = isColor.toString();
+
+    final uri = Uri.parse('$origin/api/reports/export/excel').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http
+        .get(uri, headers: AdminAuthService.authHeaders)
+        .timeout(const Duration(seconds: 45));
+
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to export Excel report (HTTP ${response.statusCode}).');
+    }
+
+    return response.bodyBytes;
+  }
+
+  static Future<Uint8List> exportReportPdf({
+    int? departmentId,
+    String? startDate,
+    String? endDate,
+    int? userId,
+    String? printerId,
+    String? status,
+    bool? isColor,
+  }) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final params = <String, String>{};
+    if (departmentId != null) params['department_id'] = departmentId.toString();
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
+    if (userId != null) params['user_id'] = userId.toString();
+    if (printerId != null) params['printer_id'] = printerId;
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (isColor != null) params['is_color'] = isColor.toString();
+
+    final uri = Uri.parse('$origin/api/reports/export/pdf').replace(queryParameters: params.isNotEmpty ? params : null);
+    final response = await http
+        .get(uri, headers: AdminAuthService.authHeaders)
+        .timeout(const Duration(seconds: 45));
+
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to export PDF report (HTTP ${response.statusCode}).');
+    }
+
+    return response.bodyBytes;
+  }
+
+  static Future<Map<String, dynamic>> getDatabaseStatus() async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/database/status'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to fetch database status (HTTP ${response.statusCode}).');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Uint8List> downloadRosterTemplate() async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/users/import/template'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to download roster template (HTTP ${response.statusCode}).');
+    }
+    return response.bodyBytes;
+  }
+
+  static Future<Map<String, dynamic>> importUserRoster(Uint8List fileBytes, String filename) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$origin/api/admin/users/import'),
+    );
+    request.headers.addAll(AdminAuthService.authHeaders);
+    request.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: filename));
+
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+    final response = await http.Response.fromStream(streamedResponse);
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Roster import failed.');
+      } catch (_) {
+        throw Exception('Roster import failed (HTTP ${response.statusCode}).');
+      }
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 }
+
+

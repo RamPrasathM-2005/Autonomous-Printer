@@ -69,19 +69,13 @@ class AdminShell extends StatelessWidget {
         Navigator.of(context).pushReplacementNamed('/admin/reports');
         break;
       case AdminNavSection.printers:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Printer hardware management available via local station.')),
-        );
+        Navigator.of(context).pushReplacementNamed('/admin/printers');
         break;
       case AdminNavSection.users:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User directory management upcoming.')),
-        );
+        Navigator.of(context).pushReplacementNamed('/admin/users');
         break;
       case AdminNavSection.settings:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('System configuration settings.')),
-        );
+        Navigator.of(context).pushReplacementNamed('/admin/settings');
         break;
     }
   }

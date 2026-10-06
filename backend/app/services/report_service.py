@@ -432,7 +432,7 @@ class ReportService:
 
         total = len(formatted_jobs)
         page = max(1, page)
-        page_size = max(1, min(100, page_size))
+        page_size = max(1, min(5000, page_size))
         total_pages = (total + page_size - 1) // page_size if total > 0 else 1
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size

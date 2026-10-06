@@ -7,6 +7,9 @@ import 'screens/admin_login_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/departments_screen.dart';
 import 'screens/admin/reports_screen.dart';
+import 'screens/admin/printers_screen.dart';
+import 'screens/admin/users_screen.dart';
+import 'screens/admin/settings_screen.dart';
 
 import 'services/customer_auth_service.dart';
 
@@ -31,6 +34,9 @@ class PrintApp extends StatelessWidget {
         '/admin/login': (_) => const AdminLoginScreen(),
         '/admin/dashboard': (_) => const AdminDashboardScreen(),
         '/admin/departments': (_) => const DepartmentsScreen(),
+        '/admin/printers': (_) => const PrintersScreen(),
+        '/admin/users': (_) => const UsersScreen(),
+        '/admin/settings': (_) => const SettingsScreen(),
         '/admin/reports': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           int? deptId;

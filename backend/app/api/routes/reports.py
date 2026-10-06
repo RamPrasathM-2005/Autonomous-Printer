@@ -119,3 +119,72 @@ def get_print_job_detail(
     """
     return report_service.get_print_job_detail(db=db, job_id=job_id)
 
+@router.get("/export/excel")
+def export_excel_report(
+    department_id: Optional[int] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    user_id: Optional[int] = Query(None),
+    printer_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    is_color: Optional[bool] = Query(None),
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Export comprehensive multi-sheet Excel workbook (.xlsx) with formatting and formulas.
+    Accessible only to authenticated administrators.
+    """
+    from fastapi import Response
+    from app.services.export_service import export_service
+    excel_bytes = export_service.generate_excel_report(
+        db=db,
+        department_id=department_id,
+        start_date=start_date,
+        end_date=end_date,
+        user_id=user_id,
+        printer_id=printer_id,
+        job_status=status,
+        is_color=is_color,
+    )
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=achuppori_print_report.xlsx"},
+    )
+
+@router.get("/export/pdf")
+def export_pdf_report(
+    department_id: Optional[int] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    user_id: Optional[int] = Query(None),
+    printer_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    is_color: Optional[bool] = Query(None),
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Export formatted printable executive PDF report (.pdf).
+    Accessible only to authenticated administrators.
+    """
+    from fastapi import Response
+    from app.services.export_service import export_service
+    pdf_bytes = export_service.generate_pdf_report(
+        db=db,
+        department_id=department_id,
+        start_date=start_date,
+        end_date=end_date,
+        user_id=user_id,
+        printer_id=printer_id,
+        job_status=status,
+        is_color=is_color,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=achuppori_print_report.pdf"},
+    )
+
+
