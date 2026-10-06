@@ -23,26 +23,29 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         clean_path = self.path.split('?')[0].rstrip('/')
         if clean_path in ('/env.json', '/config.json'):
-            backend_url = ""
-            for env_path in (
-                Path(__file__).resolve().parents[1] / 'frontend' / '.env',
-                Path(__file__).resolve().parents[1] / '.env',
-                Path(__file__).resolve().parents[1] / 'backend' / '.env',
-            ):
-                if env_path.exists():
-                    try:
-                        for line in env_path.read_text(encoding='utf-8').splitlines():
-                            line = line.strip()
-                            if line.startswith('BACKEND_URL=') and not line.startswith('#'):
-                                backend_url = line.split('=', 1)[1].strip().strip('"').strip("'")
-                                break
-                    except Exception:
-                        pass
-                if backend_url:
-                    break
+            backend_url = os.environ.get("BACKEND_URL") or os.environ.get("API_BASE_URL") or ""
+            if not backend_url:
+                for env_path in (
+                    Path(__file__).resolve().parents[1] / 'frontend' / '.env',
+                    Path(__file__).resolve().parents[1] / '.env',
+                    Path(__file__).resolve().parents[1] / 'backend' / '.env',
+                ):
+                    if env_path.exists():
+                        try:
+                            for line in env_path.read_text(encoding='utf-8').splitlines():
+                                line = line.strip()
+                                if line.startswith('BACKEND_URL=') and not line.startswith('#'):
+                                    backend_url = line.split('=', 1)[1].strip().strip('"').strip("'")
+                                    break
+                        except Exception:
+                            pass
+                    if backend_url:
+                        break
             payload = json.dumps({'BACKEND_URL': backend_url}).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Content-Length', str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)

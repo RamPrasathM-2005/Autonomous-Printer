@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
 
-    DATABASE_URL: str = "mysql+pymysql://muthukumar_9360:Muthukumar12@127.0.0.1:3306/print_platform"
+    DATABASE_URL: str = "sqlite:///./print_platform.db"
 
     # Auth & Tokens
     JWT_SECRET_KEY: str = ""

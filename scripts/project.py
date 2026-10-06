@@ -63,20 +63,22 @@ def setup():
     # Never overwrite a configured installation.
     created = []
     device_token = secrets.token_urlsafe(32)
-    for folder in ("backend", "print-agent"):
+    for folder in ("backend", "print-agent", "frontend"):
         target = ROOT / folder / ".env"
         if not target.exists():
-            text = (target.parent / ".env.example").read_text()
-            if folder == "backend":
-                text = text.replace("CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS", secrets.token_urlsafe(48))
-                text += f"\nINTERNAL_AGENT_TOKEN={device_token}\n"
-            if folder == "print-agent":
-                text = text.replace("/var/lib/printplatform/storage", "./storage")
-                text = text.replace("MOCK_CUPS=false", "MOCK_CUPS=true")
-                text = text.replace("CHANGE_ME_AGENT_DEVICE_TOKEN", device_token)
-            target.write_text(text)
-            created.append(folder)
-            print(f"Created {folder}/.env for local development.")
+            example = target.parent / ".env.example"
+            if example.exists():
+                text = example.read_text()
+                if folder == "backend":
+                    text = text.replace("CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS", secrets.token_urlsafe(48))
+                    text += f"\nINTERNAL_AGENT_TOKEN={device_token}\n"
+                if folder == "print-agent":
+                    text = text.replace("/var/lib/printplatform/storage", "./storage")
+                    text = text.replace("MOCK_CUPS=false", "MOCK_CUPS=true")
+                    text = text.replace("CHANGE_ME_AGENT_DEVICE_TOKEN", device_token)
+                target.write_text(text)
+                created.append(folder)
+                print(f"Created {folder}/.env for local development.")
     if len(created) == 2:
         run([PYTHON, ROOT / "scripts/init_local_station.py"], ROOT / "backend")
     run([flutter(), "pub", "get", "--enforce-lockfile"], FRONTEND)
