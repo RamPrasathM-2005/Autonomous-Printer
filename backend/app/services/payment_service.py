@@ -1,10 +1,10 @@
+"""Gateway-backed checkout, capture verification and payment recovery."""
 import json
+import logging
+import re
 import uuid
 from decimal import Decimal
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
-from sqlalchemy.orm import Session
-from fastapi import status
 
 from app.config.settings import settings
 from app.config.security import verify_razorpay_signature
@@ -14,293 +14,179 @@ from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.schemas.payment import PaymentCreateResponse
 from app.services.otp_service import otp_service
 from app.utils.errors import AppException
-from app.utils.state_machine import validate_order_transition
+
+logger = logging.getLogger(__name__)
+GATEWAY_ORDER = re.compile(r"^order_[A-Za-z0-9]+$")
+GATEWAY_PAYMENT = re.compile(r"^pay_[A-Za-z0-9]+$")
+PAID_STATES = {OrderStatus.WAITING_FOR_OTP, OrderStatus.RELEASED,
+               OrderStatus.PRINTING, OrderStatus.COMPLETED}
+
 
 class PaymentService:
     @staticmethod
-    def create_payment(db: Session, order_id: str, user_id: Optional[int] = None) -> PaymentCreateResponse:
-        query = db.query(Order).filter(Order.id == order_id)
-        if user_id is not None:
-            query = query.filter((Order.user_id == user_id) | (Order.user_id == None))
-        order = query.first()
-        if not order:
-            raise AppException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                error_code="NOT_FOUND",
-                message="Order not found."
-            )
+    def _gateway_client():
+        if (not settings.RAZORPAY_KEY_SECRET or
+                settings.RAZORPAY_KEY_ID in {"", "rzp_test_key_id", "test_key"}):
+            raise AppException(503, "PAYMENTS_UNAVAILABLE", "Payment gateway is not configured. Contact the station.")
+        import razorpay
+        return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
-        if order.status != OrderStatus.CREATED:
-            raise AppException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="INVALID_STATE",
-                message=f"Order status is {order.status.value}, cannot initiate payment."
-            )
+    @staticmethod
+    def _gateway_call(call, *args, **kwargs):
+        try:
+            return call(*args, timeout=10, **kwargs)
+        except Exception as exc:
+            logger.warning("Razorpay request failed (%s)", type(exc).__name__)
+            raise AppException(502, "GATEWAY_UNAVAILABLE", "Could not connect to the payment gateway. Please try again shortly.") from exc
 
-        # If payment is already captured, return existing
-        existing_payment = db.query(Payment).filter(Payment.order_id == order_id).first()
-        if existing_payment and existing_payment.status == PaymentStatus.CAPTURED:
-            amount_paise = int(existing_payment.amount * 100)
-            return PaymentCreateResponse(
-                payment_id=existing_payment.id,
-                order_id=order.id,
-                razorpay_order_id=existing_payment.razorpay_order_id,
-                amount=float(existing_payment.amount),
-                amount_paise=amount_paise,
-                currency=existing_payment.currency,
-                key_id=settings.RAZORPAY_KEY_ID
-            )
-
-        amount_paise = int(Decimal(str(order.amount)) * 100)
-        rzp_order_id = f"order_rzp_{uuid.uuid4().hex[:14]}"
-        payment_id = f"pay_{uuid.uuid4().hex[:12]}"
-
-        # Try to use actual Razorpay SDK if live keys are present, else fallback
-        if settings.RAZORPAY_KEY_ID != "rzp_test_key_id":
-            try:
-                import razorpay
-                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                rzp_resp = client.order.create({
-                    "amount": amount_paise,
-                    "currency": order.currency,
-                    "receipt": f"{order.id}_{uuid.uuid4().hex[:6]}",
-                    "notes": {"userId": str(user_id)}
-                })
-                rzp_order_id = rzp_resp["id"]
-            except Exception as e:
-                # Log error and fallback to simulated order ID so workflow never crashes
-                print(f"[WARN] Razorpay live order creation failed: {e}. Falling back to test ID.")
-                rzp_order_id = f"order_rzp_{uuid.uuid4().hex[:14]}"
-
-        if existing_payment:
-            existing_payment.razorpay_order_id = rzp_order_id
-            existing_payment.status = PaymentStatus.PENDING
-            existing_payment.updated_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(existing_payment)
-            payment = existing_payment
-        else:
-            payment = Payment(
-                id=payment_id,
-                order_id=order.id,
-                user_id=user_id,
-                razorpay_order_id=rzp_order_id,
-                amount=order.amount,
-                currency=order.currency,
-                status=PaymentStatus.PENDING,
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(payment)
-            db.commit()
-            db.refresh(payment)
-
+    @staticmethod
+    def _response(order, payment):
         return PaymentCreateResponse(
-            payment_id=payment.id,
-            order_id=order.id,
-            razorpay_order_id=rzp_order_id,
-            amount=float(order.amount),
-            amount_paise=amount_paise,
-            currency=order.currency,
-            key_id=settings.RAZORPAY_KEY_ID
+            payment_id=payment.id, order_id=order.id,
+            razorpay_order_id=payment.razorpay_order_id,
+            amount=float(order.amount), amount_paise=int(Decimal(str(order.amount)) * 100),
+            currency=order.currency, key_id=settings.RAZORPAY_KEY_ID,
         )
 
-    @staticmethod
-    def handle_webhook(
-        db: Session,
-        raw_body: bytes,
-        signature: Optional[str]
-    ) -> Dict[str, Any]:
-        """
-        Authoritative webhook processing with signature verification and idempotency.
-        """
-        if not signature:
-            if settings.ENVIRONMENT == "development":
-                signature = "dev_simulated_sig"
-            else:
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_SIGNATURE",
-                    message="Missing Razorpay signature header."
-                )
-
-        # In testing or development, allow webhook secret check or signature check
-        if settings.ENVIRONMENT != "development" and signature not in ["dev_simulated_sig", "test_sig"]:
-            if not verify_razorpay_signature(raw_body, signature, settings.RAZORPAY_WEBHOOK_SECRET):
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_SIGNATURE",
-                    message="Razorpay webhook signature verification failed."
-                )
-
-        try:
-            payload = json.loads(raw_body.decode('utf-8'))
-        except Exception:
-            raise AppException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                error_code="INVALID_PAYLOAD",
-                message="Malformed JSON body."
-            )
-
-        event = payload.get("event")
-        entity_payload = payload.get("payload", {}).get("payment", {}).get("entity", {})
-        if not entity_payload:
-            entity_payload = payload.get("payload", {}).get("order", {}).get("entity", {})
-
-        rzp_order_id = entity_payload.get("order_id") or entity_payload.get("id")
-        rzp_payment_id = entity_payload.get("id") if entity_payload.get("order_id") else None
-
-        if not rzp_order_id:
-            # Not an order payment event or unhandled
-            return {"status": "ignored", "reason": "No order_id found"}
-
-        # Find payment by razorpay_order_id
-        payment = db.query(Payment).filter(Payment.razorpay_order_id == rzp_order_id).with_for_update().first()
-        if not payment:
-            # Could not match payment record
-            return {"status": "ignored", "reason": "No corresponding payment found"}
-
-        # Idempotency check: if payment already captured, do nothing
-        if payment.status == PaymentStatus.CAPTURED:
-            return {"status": "success", "message": "Payment already processed."}
-
-        order = db.query(Order).filter(Order.id == payment.order_id).with_for_update().first()
-        if not order:
-            raise AppException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                error_code="NOT_FOUND",
-                message="Associated order not found."
-            )
-
-        # Verify payment amount matches order amount (amount in paise in Razorpay)
-        paid_paise = entity_payload.get("amount")
-        if paid_paise is not None:
-            expected_paise = int(Decimal(str(order.amount)) * 100)
-            if paid_paise != expected_paise:
-                raise AppException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="PAYMENT_AMOUNT_MISMATCH",
-                    message=f"Received amount {paid_paise} paise does not match expected {expected_paise} paise."
-                )
-
-        # Mark payment captured
-        payment.status = PaymentStatus.CAPTURED
-        payment.razorpay_payment_id = rzp_payment_id
-        payment.razorpay_signature = signature
-        payment.raw_payload = payload
+    @classmethod
+    def create_payment(cls, db, order_id, user_id=None):
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+        if not order or (user_id is not None and order.user_id not in (None, user_id)):
+            raise AppException(404, "NOT_FOUND", "Order not found.")
+        if order.status != OrderStatus.CREATED:
+            raise AppException(400, "INVALID_STATE", "This order cannot start another payment. Check its status.")
+        payment = db.query(Payment).filter(Payment.order_id == order_id).first()
+        if payment and payment.status == PaymentStatus.REFUNDED:
+            raise AppException(400, "PAYMENT_REFUNDED", "This payment has been refunded.")
+        # Keep the same real gateway order on retry. Replace legacy invented IDs.
+        if payment and GATEWAY_ORDER.fullmatch(payment.razorpay_order_id):
+            if payment.status == PaymentStatus.CAPTURED:
+                raise AppException(400, "PAYMENT_CONFLICT", "Payment is captured. Check order status.")
+            return cls._response(order, payment)
+        gateway = cls._gateway_client()
+        amount = int(Decimal(str(order.amount)) * 100)
+        if amount <= 0:
+            raise AppException(400, "PAYMENT_MISMATCH", "Order amount must be greater than zero.")
+        entity = cls._gateway_call(gateway.order.create, {
+            "amount": amount, "currency": order.currency,
+            "receipt": f"{order.id[:25]}_{uuid.uuid4().hex[:10]}",
+            "notes": {"orderId": order.id},
+        })
+        if (not GATEWAY_ORDER.fullmatch(str(entity.get("id", ""))) or
+                entity.get("amount") != amount or entity.get("currency") != order.currency):
+            raise AppException(502, "PAYMENT_MISMATCH", "Payment gateway returned an invalid order.")
+        if payment is None:
+            payment = Payment(id=f"pay_{uuid.uuid4().hex[:12]}", order_id=order.id,
+                              user_id=order.user_id, amount=order.amount, currency=order.currency)
+            db.add(payment)
+        payment.razorpay_order_id = entity["id"]
+        payment.status = PaymentStatus.PENDING
         payment.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return cls._response(order, payment)
 
-        # Order state transitions: CREATED -> PAID -> JOB_QUEUED -> WAITING_FOR_OTP
-        validate_order_transition(order.status, OrderStatus.PAID)
-        order.status = OrderStatus.PAID
-        db.flush()
-
-        validate_order_transition(order.status, OrderStatus.JOB_QUEUED)
+    @staticmethod
+    def _fulfill(db, order, payment, entity, signature=None):
+        if (entity.get("order_id") != payment.razorpay_order_id or
+                entity.get("amount") != int(Decimal(str(order.amount)) * 100) or
+                entity.get("currency") != order.currency or
+                not GATEWAY_PAYMENT.fullmatch(str(entity.get("id", "")))):
+            raise AppException(400, "PAYMENT_MISMATCH", "Payment does not match this order.")
+        if entity.get("status") != "captured":
+            raise AppException(409, "PAYMENT_NOT_CAPTURED", "Payment is not yet captured. Check payment status shortly.")
+        if entity.get("amount_refunded", 0) or payment.status == PaymentStatus.REFUNDED:
+            raise AppException(409, "PAYMENT_REFUNDED", "This payment has been refunded.")
+        other = db.query(Payment).filter(Payment.razorpay_payment_id == entity["id"], Payment.id != payment.id).first()
+        if other:
+            raise AppException(409, "PAYMENT_REUSED", "Payment has already been used for another order.")
+        if payment.status == PaymentStatus.CAPTURED:
+            if payment.razorpay_payment_id != entity["id"]:
+                raise AppException(409, "PAYMENT_CONFLICT", "This order already has a different payment.")
+            if order.status in PAID_STATES:
+                return {"success": True, "orderId": order.id, "status": order.status.value}
+        if order.status not in {OrderStatus.CREATED, OrderStatus.PAID, OrderStatus.JOB_QUEUED}:
+            raise AppException(409, "INVALID_STATE", "This order cannot be released. Contact the station about your payment.")
+        payment.status = PaymentStatus.CAPTURED
+        payment.razorpay_payment_id = entity["id"]
+        payment.razorpay_signature = signature
+        payment.raw_payload = entity
+        payment.updated_at = datetime.now(timezone.utc)
         order.status = OrderStatus.JOB_QUEUED
+        if not db.query(PrintJob).filter(PrintJob.order_id == order.id).first():
+            db.add(PrintJob(id=f"job_{uuid.uuid4().hex[:12]}", order_id=order.id,
+                            server_id=order.print_server_id, status=PrintJobStatus.QUEUED, retry_count=0))
         db.flush()
-
-        # Check if print job already exists for this order
-        existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
-        if not existing_job:
-            job_id = f"job_{uuid.uuid4().hex[:12]}"
-            print_job = PrintJob(
-                id=job_id,
-                order_id=order.id,
-                server_id=order.print_server_id,
-                status=PrintJobStatus.QUEUED,
-                retry_count=0,
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(print_job)
-            db.flush()
-
-        # Generate OTP and move order to WAITING_FOR_OTP
         otp_service.generate_and_store_otp(db, order.id)
-
-        validate_order_transition(order.status, OrderStatus.WAITING_FOR_OTP)
         order.status = OrderStatus.WAITING_FOR_OTP
         order.updated_at = datetime.now(timezone.utc)
-
         db.commit()
-        return {"status": "success", "orderId": order.id}
+        return {"success": True, "orderId": order.id, "status": order.status.value}
 
-    @staticmethod
-    def verify_or_confirm_payment(
-        db: Session,
-        order_id: str,
-        rzp_order_id: Optional[str] = None,
-        rzp_payment_id: Optional[str] = None,
-        rzp_signature: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Confirms payment and automatically generates OTP for the order.
-        Moves order to WAITING_FOR_OTP state and queues print job.
-        """
-        order = db.query(Order).filter(Order.id == order_id).first()
+    @classmethod
+    def verify_or_confirm_payment(cls, db, order_id, rzp_order_id=None, rzp_payment_id=None, rzp_signature=None):
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
         if not order:
-            raise AppException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                error_code="NOT_FOUND",
-                message="Order not found."
-            )
-
-        # Find or create payment record
+            raise AppException(404, "NOT_FOUND", "Order not found.")
         payment = db.query(Payment).filter(Payment.order_id == order_id).first()
         if not payment:
-            payment = Payment(
-                id=f"pay_{uuid.uuid4().hex[:12]}",
-                order_id=order.id,
-                razorpay_order_id=rzp_order_id or f"order_rzp_{uuid.uuid4().hex[:14]}",
-                amount=order.amount,
-                currency=order.currency,
-                status=PaymentStatus.PENDING,
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(payment)
-            db.flush()
+            raise AppException(400, "PAYMENT_NOT_CREATED", "Start checkout before verifying payment.")
+        if rzp_order_id != payment.razorpay_order_id:
+            raise AppException(400, "PAYMENT_MISMATCH", "Payment order does not match checkout.")
+        if not GATEWAY_PAYMENT.fullmatch(str(rzp_payment_id or "")) or not rzp_signature:
+            raise AppException(400, "INVALID_SIGNATURE", "Payment verification details are incomplete.")
+        if not verify_razorpay_signature(f"{payment.razorpay_order_id}|{rzp_payment_id}".encode(),
+                                        rzp_signature, settings.RAZORPAY_KEY_SECRET):
+            raise AppException(400, "INVALID_SIGNATURE", "Payment signature could not be verified.")
+        gateway = cls._gateway_client()
+        entity = cls._gateway_call(gateway.payment.fetch, rzp_payment_id)
+        if entity.get("id") != rzp_payment_id:
+            raise AppException(400, "PAYMENT_MISMATCH", "Payment gateway returned a different payment.")
+        return cls._fulfill(db, order, payment, entity, rzp_signature)
 
-        # Mark payment captured
-        payment.status = PaymentStatus.CAPTURED
-        payment.razorpay_payment_id = rzp_payment_id or f"pay_rzp_{uuid.uuid4().hex[:10]}"
-        payment.razorpay_signature = rzp_signature or "test_sig"
-        payment.updated_at = datetime.now(timezone.utc)
+    @classmethod
+    def reconcile_payment(cls, db, order_id):
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+        if not order:
+            raise AppException(404, "NOT_FOUND", "Order not found.")
+        if order.status in PAID_STATES:
+            return {"status": "SUCCESS", "orderStatus": order.status.value, "paid": True}
+        payment = db.query(Payment).filter(Payment.order_id == order_id).first()
+        if order.status not in {OrderStatus.CREATED, OrderStatus.PAID, OrderStatus.JOB_QUEUED} or not payment or not GATEWAY_ORDER.fullmatch(payment.razorpay_order_id):
+            return {"status": "PENDING", "orderStatus": order.status.value, "paid": False}
+        gateway = cls._gateway_client()
+        result = cls._gateway_call(gateway.order.payments, payment.razorpay_order_id)
+        for entity in result.get("items", []):
+            if entity.get("status") == "captured":
+                cls._fulfill(db, order, payment, entity)
+                return {"status": "SUCCESS", "orderStatus": order.status.value, "paid": True}
+        return {"status": "PENDING", "orderStatus": order.status.value, "paid": False}
 
-        # Transition order to PAID -> JOB_QUEUED
-        if order.status == OrderStatus.CREATED:
-            order.status = OrderStatus.PAID
-            db.flush()
+    @classmethod
+    def handle_webhook(cls, db, raw_body, signature):
+        if (not signature or not settings.RAZORPAY_WEBHOOK_SECRET or
+                not verify_razorpay_signature(raw_body, signature, settings.RAZORPAY_WEBHOOK_SECRET)):
+            raise AppException(400, "INVALID_SIGNATURE", "Razorpay webhook signature verification failed.")
+        try:
+            payload = json.loads(raw_body)
+            if payload.get("event") not in {"payment.captured", "order.paid"}:
+                return {"status": "ignored"}
+            entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+            gateway_order = entity.get("order_id") or payload.get("payload", {}).get("order", {}).get("entity", {}).get("id")
+        except (ValueError, AttributeError, TypeError):
+            raise AppException(400, "INVALID_PAYLOAD", "Malformed webhook payload.")
+        if not gateway_order:
+            raise AppException(400, "INVALID_PAYLOAD", "Missing payment order in webhook.")
+        payment = db.query(Payment).filter(Payment.razorpay_order_id == gateway_order).first()
+        if not payment:
+            return {"status": "ignored", "reason": "No corresponding payment found"}
+        if not entity:
+            result = cls.reconcile_payment(db, payment.order_id)
+            return {"status": "success" if result["paid"] else "pending"}
+        order = db.query(Order).filter(Order.id == payment.order_id).with_for_update().first()
+        if not order:
+            raise AppException(404, "NOT_FOUND", "Associated order not found.")
+        cls._fulfill(db, order, payment, entity, signature)
+        return {"status": "success", "orderId": order.id}
 
-        if order.status == OrderStatus.PAID:
-            order.status = OrderStatus.JOB_QUEUED
-            db.flush()
-
-        # Ensure PrintJob exists
-        existing_job = db.query(PrintJob).filter(PrintJob.order_id == order.id).first()
-        if not existing_job:
-            job_id = f"job_{uuid.uuid4().hex[:12]}"
-            print_job = PrintJob(
-                id=job_id,
-                order_id=order.id,
-                server_id=order.print_server_id,
-                status=PrintJobStatus.QUEUED,
-                retry_count=0,
-                created_at=datetime.now(timezone.utc)
-            )
-            db.add(print_job)
-            db.flush()
-
-        # Generate and store 6-digit OTP
-        otp_plaintext = otp_service.generate_and_store_otp(db, order.id)
-
-        # Move to WAITING_FOR_OTP
-        order.status = OrderStatus.WAITING_FOR_OTP
-        order.updated_at = datetime.now(timezone.utc)
-        db.commit()
-
-        return {
-            "success": True,
-            "orderId": order.id,
-            "status": "WAITING_FOR_OTP",
-            "otp": otp_plaintext
-        }
 
 payment_service = PaymentService()

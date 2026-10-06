@@ -5,8 +5,16 @@ function loadCheckout() {
   if (!checkoutScript) checkoutScript = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = resolve;
-    script.onerror = () => { checkoutScript = null; reject(new Error('Checkout unavailable')); };
+    const timer = setTimeout(() => {
+      script.remove(); checkoutScript = null;
+      reject(new Error('Checkout download timed out'));
+    }, 15000);
+    script.onload = () => {
+      clearTimeout(timer);
+      if (window.Razorpay) resolve();
+      else { script.remove(); checkoutScript = null; reject(new Error('Checkout unavailable')); }
+    };
+    script.onerror = () => { clearTimeout(timer); script.remove(); checkoutScript = null; reject(new Error('Checkout unavailable')); };
     document.head.appendChild(script);
   });
   return checkoutScript;
@@ -19,9 +27,14 @@ window.openRazorpayModal = async function(key, order, amount, success, failure) 
     await loadCheckout();
     const checkout = new window.Razorpay({key, order_id:order, amount, currency:'INR',
       name:'Achuppori', description:'Print order', theme:{color:'#2563EB'},
-      handler: response => success(response.razorpay_payment_id || '', response.razorpay_order_id || '', response.razorpay_signature || ''),
+      handler: response => {
+        if (!response.razorpay_payment_id || response.razorpay_order_id !== order || !response.razorpay_signature) {
+          failure('Payment unconfirmed. Check payment status.'); return;
+        }
+        success(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
+      },
       modal:{ondismiss:() => failure('DISMISSED')}});
     checkout.on('payment.failed', () => failure('Payment failed. Check status before retrying.'));
     checkout.open();
-  } catch (_) { failure('Checkout unavailable. Check payment status.'); }
+  } catch (_) { failure('Checkout could not load. Check your connection and try again.'); }
 };

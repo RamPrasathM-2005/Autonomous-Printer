@@ -1,6 +1,7 @@
 import '../widgets/app_scaffold.dart';
 import '../widgets/help_action.dart';
 import '../widgets/user_action.dart';
+
 import 'package:flutter/material.dart';
 
 import '../services/api_error.dart';
@@ -114,7 +115,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _message = null;
     });
     try {
-      final payment = _payment ?? await _api.createPaymentOrder(widget.order.id);
+      final payment =
+          _payment ?? await _api.createPaymentOrder(widget.order.id);
       _payment = payment;
       if (!mounted) return;
       final result = await RazorpayWebService.openCheckout(
@@ -126,10 +128,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
         if (mounted) {
           setState(() {
             _busy = false;
-            _message = 'Payment was not completed.';
+            _message = result.errorMessage == 'DISMISSED'
+                ? 'Checkout closed. You can try again.'
+                : result.errorMessage ?? 'Payment was not completed.';
           });
           PaymentFailedDialog.show(
             context,
+            message: _message,
+            onCheckStatus: _check,
             onRetry: () => _pay(),
             onCancel: () => _handleCancelOrder(),
           );
@@ -147,10 +153,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _message = 'Payment unconfirmed. Check status before paying again.';
+          _message = userError(
+            e,
+            fallback: 'Payment unconfirmed. Check status before paying again.',
+          );
         });
         PaymentFailedDialog.show(
           context,
+          message: _message,
+          onCheckStatus: _check,
           onRetry: () => _pay(),
           onCancel: () => _handleCancelOrder(),
         );
@@ -196,9 +207,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             child: const Text('Keep Order'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.danger,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Cancel Order'),
           ),
@@ -222,7 +231,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _message = userError(e, fallback: 'Could not cancel order. Please try again.');
+          _message = userError(
+            e,
+            fallback: 'Could not cancel order. Please try again.',
+          );
         });
       }
     }
@@ -326,7 +338,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildDetailsCard(PrintOrder order, PrintSettings settings, List items) {
+  Widget _buildDetailsCard(
+    PrintOrder order,
+    PrintSettings settings,
+    List items,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
@@ -360,7 +376,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Container(
@@ -425,10 +443,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ...widget.documents!.map(
               (doc) => Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Text(
                   doc.filename,
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
               ),
             ),
@@ -454,7 +477,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 _detailRow('Paper', settings.paperSize),
                 _detailRow(
                   'Orientation',
-                  settings.orientation == 'landscape' ? 'Landscape' : 'Portrait',
+                  settings.orientation == 'landscape'
+                      ? 'Landscape'
+                      : 'Portrait',
                 ),
                 _detailRow(
                   'Sides',
@@ -497,7 +522,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 if (_testPaymentMode)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.warningSurface,
                       borderRadius: BorderRadius.circular(5),
@@ -521,7 +549,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (items.isNotEmpty) _summaryLine('Documents', '${items.length}'),
+                if (items.isNotEmpty)
+                  _summaryLine('Documents', '${items.length}'),
                 _summaryLine('Printed pages', '${order.totalPages}'),
 
                 const SizedBox(height: 12),
@@ -564,7 +593,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 if (_message != null) ...[
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.dangerSurface,
                       borderRadius: BorderRadius.circular(8),
@@ -630,7 +662,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   onPressed: _busy ? null : _check,
                   child: const Text(
                     'Check payment status',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ),
 
@@ -638,7 +673,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
                 TextButton.icon(
                   onPressed: _busy ? null : _handleCancelOrder,
-                  icon: const Icon(Icons.close_rounded, size: 16, color: AppTheme.danger),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: AppTheme.danger,
+                  ),
                   label: const Text(
                     'Cancel Order',
                     style: TextStyle(

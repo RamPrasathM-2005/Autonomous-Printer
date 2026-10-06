@@ -114,7 +114,13 @@ class AuthService:
         cls._email_otps[clean_email] = record
 
         # Dispatch via Gmail SMTP
-        email_service.send_otp(clean_email, otp, clean_purpose)
+        if not email_service.send_otp(clean_email, otp, clean_purpose):
+            record.pop("otp", None)
+            raise AppException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                error_code="EMAIL_DELIVERY_FAILED",
+                message="Could not send the verification email. Please try again shortly."
+            )
         return otp
 
     @classmethod
@@ -216,8 +222,6 @@ class AuthService:
         req: "StudentRegisterRequest"
     ) -> Tuple[User, str, str, int]:
         clean_email = req.email.strip().lower()
-        cls.verify_email_otp(clean_email, req.otp)
-
         clean_roll = req.roll_number.strip().upper()
 
         if db.query(User).filter(User.email == clean_email).first():
@@ -233,6 +237,8 @@ class AuthService:
                 error_code="ROLL_EXISTS",
                 message="An account with this roll number already exists."
             )
+
+        cls.verify_email_otp(clean_email, req.otp)
 
         user = User(
             email=clean_email,

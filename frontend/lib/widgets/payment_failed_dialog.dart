@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../config/theme.dart';
 
 /// Modal dialog presented when a payment attempt fails or is closed.
@@ -6,22 +7,35 @@ import '../config/theme.dart';
 class PaymentFailedDialog extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onCancel;
+  final String? message;
+  final VoidCallback? onCheckStatus;
 
   const PaymentFailedDialog({
     super.key,
     required this.onRetry,
     required this.onCancel,
+    this.message,
+    this.onCheckStatus,
   });
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onRetry,
     required VoidCallback onCancel,
+    String? message,
+    VoidCallback? onCheckStatus,
   }) {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => PaymentFailedDialog(
+        message: message,
+        onCheckStatus: onCheckStatus == null
+            ? null
+            : () {
+                Navigator.of(ctx).pop();
+                onCheckStatus();
+              },
         onRetry: () {
           Navigator.of(ctx).pop();
           onRetry();
@@ -37,9 +51,7 @@ class PaymentFailedDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 8,
       backgroundColor: AppTheme.surfaceWhite,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -92,9 +104,9 @@ class PaymentFailedDialog extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Subtitle
-              const Text(
-                'Your transaction couldn’t be completed. Please try again or use a different payment method.',
-                style: TextStyle(
+              Text(
+                message ?? 'Your transaction couldn’t be completed. Please try again or use a different payment method.',
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: AppTheme.textSecondary,
@@ -121,15 +133,18 @@ class PaymentFailedDialog extends StatelessWidget {
                   ),
                   child: const Text(
                     'Retry Payment',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
 
               const SizedBox(height: 10),
+
+              if (onCheckStatus != null)
+                TextButton(
+                  onPressed: onCheckStatus,
+                  child: const Text('Check payment status'),
+                ),
 
               // Cancel Button (Outlined/Neutral)
               SizedBox(

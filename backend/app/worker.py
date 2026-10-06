@@ -1,6 +1,7 @@
 """Background reconciliation worker for Achuppori Platform."""
 import logging
 import time
+import uuid
 from datetime import datetime, timezone
 from sqlalchemy import text
 

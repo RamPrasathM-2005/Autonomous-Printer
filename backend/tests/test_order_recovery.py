@@ -2,9 +2,9 @@ import pytest
 from app.db.models.order import Order, OrderStatus
 from app.db.models.otp import OTP
 from app.db.models.print_job import PrintJob, PrintJobStatus
-from tests.conftest import create_sample_pdf
+from tests.conftest import create_sample_pdf, checkout_payload
 
-def test_order_recovery_lifecycle(client, test_print_server, db_session):
+def test_order_recovery_lifecycle(client, test_print_server, db_session, gateway):
     # 1. Create a document and order
     pdf_bytes = create_sample_pdf(2)
     doc_resp = client.post(
@@ -39,12 +39,7 @@ def test_order_recovery_lifecycle(client, test_print_server, db_session):
     # 3. Pay for the order
     pay_resp = client.post(
         "/api/payments/verify",
-        json={
-            "orderId": order_id,
-            "razorpayOrderId": "order_test_rzp",
-            "razorpayPaymentId": "pay_test_rzp",
-            "razorpaySignature": "sig_test"
-        }
+        json=checkout_payload(client, gateway, order_id)
     )
     assert pay_resp.status_code == 200
 
@@ -145,7 +140,7 @@ def test_cancel_unpaid_order(client, test_print_server, db_session):
     assert rec["canUploadNew"] is True
 
 
-def test_cancel_paid_order_triggers_refund(client, test_print_server, db_session):
+def test_cancel_paid_order_triggers_refund(client, test_print_server, db_session, gateway):
     pdf_bytes = create_sample_pdf(1)
     doc_resp = client.post(
         "/api/documents/upload",
@@ -170,12 +165,7 @@ def test_cancel_paid_order_triggers_refund(client, test_print_server, db_session
     # Pay
     client.post(
         "/api/payments/verify",
-        json={
-            "orderId": order_id,
-            "razorpayOrderId": "order_test_rzp_cancel",
-            "razorpayPaymentId": "pay_test_rzp_cancel",
-            "razorpaySignature": "sig_test"
-        }
+        json=checkout_payload(client, gateway, order_id)
     )
 
     rec_paid = client.get(f"/api/orders/active?order_id={order_id}", headers=headers).json()
