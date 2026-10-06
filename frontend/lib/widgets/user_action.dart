@@ -106,27 +106,28 @@ class _UserProfileModalState extends State<_UserProfileModal> {
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late String _department;
-
-  static const List<String> _departments = [
-    'Computer Science (CSE)',
-    'Electronics & Communication (ECE)',
-    'Electrical & Electronics (EEE)',
-    'Mechanical Engineering (MECH)',
-    'Civil Engineering (CIVIL)',
-    'Information Technology (IT)',
-    'Artificial Intelligence & Data Science (AI&DS)',
-    'Management Studies (MBA)',
-  ];
+  List<Map<String, dynamic>> _dbDepartments = [];
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.user.fullName ?? '');
     _emailController = TextEditingController(text: widget.user.email ?? '');
-    _department = widget.user.department ?? _departments.first;
-    if (!_departments.contains(_department)) {
-      _department = _departments.first;
-    }
+    _department = widget.user.department ?? '';
+    _loadDepartments();
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final depts = await _auth.getDepartments();
+      if (!mounted) return;
+      setState(() {
+        _dbDepartments = depts;
+        if (_department.isEmpty && _dbDepartments.isNotEmpty) {
+          _department = _dbDepartments.first['name'] as String? ?? '';
+        }
+      });
+    } catch (_) {}
   }
 
   @override
@@ -359,15 +360,20 @@ class _UserProfileModalState extends State<_UserProfileModal> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        initialValue: _department,
+                        value: _dbDepartments.any((d) => d['name'] == _department)
+                            ? _department
+                            : (_dbDepartments.isNotEmpty ? _dbDepartments.first['name'] as String? : null),
                         decoration: const InputDecoration(
                           labelText: 'Department',
                           prefixIcon: Icon(Icons.account_balance_outlined, size: 18),
                         ),
-                        items: _departments.map((dept) {
+                        items: _dbDepartments.map((dept) {
+                          final name = dept['name'] as String? ?? '';
+                          final code = dept['code'] as String? ?? '';
+                          final label = code.isNotEmpty ? '$name ($code)' : name;
                           return DropdownMenuItem(
-                            value: dept,
-                            child: Text(dept, style: const TextStyle(fontSize: 13)),
+                            value: name,
+                            child: Text(label, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                           );
                         }).toList(),
                         onChanged: (val) {

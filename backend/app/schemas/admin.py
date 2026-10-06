@@ -52,23 +52,116 @@ class AdminPrinterItem(BaseModel):
     department_name: Optional[str] = None
     cups_printer_name: str
     display_name: str
-    supports_color: bool
-    supports_duplex: bool
-    is_active: bool
+    ip_address: Optional[str] = None
+    protocol: str = "Socket"
+    device_uri: Optional[str] = None
+    model: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    supports_color: bool = True
+    supports_duplex: bool = True
+    is_enabled: bool = True
+    is_active: bool = False
     printer_state: Optional[str] = None
     paper_state: Optional[str] = None
     last_heartbeat: Optional[str] = None
     total_jobs_count: int = 0
     created_at: str
+    last_tested_at: Optional[str] = None
+    test_status: str = "PENDING"
+    test_message: Optional[str] = None
+    has_mismatch: bool = False
+    mismatch_details: Optional[str] = None
+
+class AdminPrinterCreate(BaseModel):
+    cups_printer_name: str
+    display_name: str
+    ip_address: Optional[str] = None
+    protocol: str = "Socket"
+    device_uri: Optional[str] = None
+    server_id: str
+    department_id: Optional[int] = None
+    location: Optional[str] = None
+    model: Optional[str] = None
+    description: Optional[str] = None
+    supports_color: bool = True
+    supports_duplex: bool = True
+    is_enabled: bool = True
 
 class AdminPrinterUpdate(BaseModel):
     display_name: Optional[str] = None
+    cups_printer_name: Optional[str] = None
+    ip_address: Optional[str] = None
+    protocol: Optional[str] = None
+    device_uri: Optional[str] = None
+    server_id: Optional[str] = None
     department_id: Optional[int] = None
+    location: Optional[str] = None
+    model: Optional[str] = None
+    description: Optional[str] = None
+    supports_color: Optional[bool] = None
+    supports_duplex: Optional[bool] = None
+    is_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
 
+class PrinterTestConnectionResponse(BaseModel):
+    success: bool
+    printer_id: str
+    is_active: bool
+    cups_exists: bool
+    reachable: bool
+    available: bool
+    status: str
+    message: str
+    tested_at: str
+
+class AdminDiscoveredPrinterItem(BaseModel):
+    id: str
+    server_id: str
+    server_name: Optional[str] = None
+    cups_printer_name: str
+    ip_address: Optional[str] = None
+    device_uri: Optional[str] = None
+    reported_status: Optional[str] = None
+    reported_jobs: Optional[str] = None
+    first_seen: str
+    last_seen: str
+
+class AdminPrintAgentItem(BaseModel):
+    id: str
+    name: str
+    location: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    hostname: Optional[str] = None
+    ip_address: Optional[str] = None
+    software_version: Optional[str] = None
+    status: str
+    is_enabled: bool
+    last_heartbeat: Optional[str] = None
+    printer_count: int = 0
+    created_at: str
+
+class AdminPrintAgentCreate(BaseModel):
+    id: str
+    name: str
+    location: Optional[str] = None
+    department_id: Optional[int] = None
+    hostname: Optional[str] = None
+    ip_address: Optional[str] = None
+    software_version: Optional[str] = None
+    token: Optional[str] = None
+
 class AdminPrintServerUpdate(BaseModel):
+    name: Optional[str] = None
     status: Optional[str] = None
     location: Optional[str] = None
+    department_id: Optional[int] = None
+    hostname: Optional[str] = None
+    ip_address: Optional[str] = None
+    software_version: Optional[str] = None
+    is_enabled: Optional[bool] = None
+
 
 class AdminUserItem(BaseModel):
     id: int

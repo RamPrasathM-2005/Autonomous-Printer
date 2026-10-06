@@ -260,6 +260,17 @@ class CustomerAuthService {
     return _currentUser!;
   }
 
+  Future<List<Map<String, dynamic>>> getDepartments() async {
+    final res = await _client
+        .get(Uri.parse('$_baseUrl/api/departments/public'))
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode >= 400) {
+      throw const ApiError('Failed to load departments from database.');
+    }
+    final List<dynamic> decoded = jsonDecode(res.body);
+    return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<UserProfile> studentSignup({
     required String fullName,
     required String rollNumber,

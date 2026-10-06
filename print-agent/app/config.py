@@ -5,9 +5,17 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
+def normalize_backend_url(raw_url: str) -> str:
+    cleaned = (raw_url or "").strip().rstrip("/")
+    if not cleaned:
+        return "http://127.0.0.1:8000/api"
+    if not cleaned.endswith("/api"):
+        cleaned = f"{cleaned}/api"
+    return cleaned
+
 class Config:
     AGENT_ID: str = os.getenv("AGENT_ID", "PRINT-SERVER-001")
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api").rstrip("/")
+    BACKEND_URL: str = normalize_backend_url(os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api"))
     AGENT_TOKEN: str = os.getenv("AGENT_TOKEN", "test-agent-device-token-secret")
     STORAGE_ROOT: Path = Path(os.getenv("STORAGE_ROOT", "./storage")).resolve()
 

@@ -8,7 +8,12 @@ from app.api.dependencies import get_current_admin
 from app.schemas.admin import (
     AdminDashboardResponse,
     AdminPrinterItem,
+    AdminPrinterCreate,
     AdminPrinterUpdate,
+    PrinterTestConnectionResponse,
+    AdminDiscoveredPrinterItem,
+    AdminPrintAgentItem,
+    AdminPrintAgentCreate,
     AdminPrintServerUpdate,
     AdminUserItem,
     AdminUserUpdate,
@@ -45,6 +50,29 @@ def get_admin_printers(
     """
     return admin_service.get_printers(db)
 
+@router.post("/printers", response_model=AdminPrinterItem, status_code=status.HTTP_201_CREATED)
+def create_admin_printer(
+    data: AdminPrinterCreate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually registers a new printer assigned to a Print Agent.
+    """
+    return admin_service.create_printer(data, db)
+
+@router.post("/printers/{printer_id}/test-connection", response_model=PrinterTestConnectionResponse)
+def test_admin_printer_connection(
+    printer_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Instructs the assigned Print Agent to verify printer existence in CUPS and network reachability.
+    Only after successful validation is the printer activated.
+    """
+    return admin_service.test_printer_connection(printer_id, db)
+
 @router.patch("/printers/{printer_id}", response_model=AdminPrinterItem)
 def update_admin_printer(
     printer_id: str,
@@ -57,6 +85,42 @@ def update_admin_printer(
     """
     return admin_service.update_printer(printer_id, data, db)
 
+@router.delete("/printers/{printer_id}")
+def delete_admin_printer(
+    printer_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes a registered printer if there are no active jobs in progress.
+    """
+    admin_service.delete_printer(printer_id, db)
+    return {"message": f"Printer '{printer_id}' deleted successfully"}
+
+# ----------------- PRINT AGENTS & DISCOVERY -----------------
+
+@router.get("/print-agents", response_model=List[AdminPrintAgentItem])
+def get_admin_print_agents(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lists all registered Print Agents with connection health and hardware attributes.
+    """
+    return admin_service.get_print_servers(db)
+
+@router.post("/print-agents", response_model=AdminPrintAgentItem, status_code=status.HTTP_201_CREATED)
+def create_admin_print_agent(
+    data: AdminPrintAgentCreate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Registers a new Raspberry Pi Print Agent station.
+    """
+    return admin_service.create_print_server(data, db)
+
+@router.patch("/print-agents/{server_id}")
 @router.patch("/print-servers/{server_id}")
 def update_admin_print_server(
     server_id: str,
@@ -69,6 +133,41 @@ def update_admin_print_server(
     """
     admin_service.update_print_server(server_id, data, db)
     return {"message": "Print server updated successfully"}
+
+@router.delete("/print-agents/{server_id}")
+def delete_admin_print_agent(
+    server_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes a registered Print Agent if no printers are assigned.
+    """
+    admin_service.delete_print_server(server_id, db)
+    return {"message": f"Print Agent '{server_id}' deleted successfully"}
+
+@router.get("/discovered-printers", response_model=List[AdminDiscoveredPrinterItem])
+def get_admin_discovered_printers(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Lists unregistered printers reported by Print Agent heartbeats.
+    """
+    return admin_service.get_discovered_printers(db)
+
+@router.delete("/discovered-printers/{discovered_id}")
+def dismiss_admin_discovered_printer(
+    discovered_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Dismisses a discovered printer record from the inbox.
+    """
+    admin_service.dismiss_discovered_printer(discovered_id, db)
+    return {"message": "Discovered printer dismissed"}
+
 
 # ----------------- USER MANAGEMENT -----------------
 

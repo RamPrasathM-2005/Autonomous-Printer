@@ -13,6 +13,9 @@ from app.schemas.department import (
     DepartmentDetailResponse,
     DepartmentUser,
     DepartmentPrinter,
+    PublicDepartmentItem,
+    DepartmentCreate,
+    DepartmentUpdate,
 )
 from app.schemas.admin import RecentPrintJob
 from app.utils.errors import AppException
@@ -227,5 +230,119 @@ class DepartmentService:
             printers=printer_items,
             recent_jobs=recent_jobs,
         )
+
+    @staticmethod
+    def get_public_departments(db: Session) -> List[PublicDepartmentItem]:
+        depts = db.query(Department).order_by(Department.name.asc()).all()
+        return [
+            PublicDepartmentItem(
+                id=d.id,
+                code=d.code,
+                name=d.name,
+                description=d.description
+            )
+            for d in depts
+        ]
+
+    @staticmethod
+    def create_department(db: Session, data: DepartmentCreate) -> DepartmentListItem:
+        clean_code = data.code.strip().upper()
+        clean_name = data.name.strip()
+        if not clean_code or not clean_name:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="INVALID_DEPARTMENT_DATA",
+                message="Department code and name are required."
+            )
+        if db.query(Department).filter(Department.code == clean_code).first():
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="DEPARTMENT_CODE_EXISTS",
+                message=f"Department code '{clean_code}' already exists."
+            )
+        if db.query(Department).filter(Department.name == clean_name).first():
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="DEPARTMENT_NAME_EXISTS",
+                message=f"Department name '{clean_name}' already exists."
+            )
+        dept = Department(
+            code=clean_code,
+            name=clean_name,
+            description=data.description.strip() if data.description else None
+        )
+        db.add(dept)
+        db.commit()
+        db.refresh(dept)
+        return DepartmentListItem(
+            id=dept.id,
+            code=dept.code,
+            name=dept.name,
+            description=dept.description,
+            users_count=0,
+            printers_count=0,
+            jobs_count=0,
+            pages_count=0,
+            created_at=dept.created_at.strftime("%Y-%m-%d %H:%M:%S") if dept.created_at else "",
+        )
+
+    @staticmethod
+    def update_department(db: Session, department_id: int, data: DepartmentUpdate) -> DepartmentListItem:
+        dept = db.query(Department).filter(Department.id == department_id).first()
+        if not dept:
+            raise AppException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                error_code="DEPARTMENT_NOT_FOUND",
+                message=f"Department with ID {department_id} not found."
+            )
+        if data.code is not None and data.code.strip():
+            clean_code = data.code.strip().upper()
+            if clean_code != dept.code:
+                existing = db.query(Department).filter(Department.code == clean_code, Department.id != dept.id).first()
+                if existing:
+                    raise AppException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        error_code="DEPARTMENT_CODE_EXISTS",
+                        message=f"Department code '{clean_code}' already exists."
+                    )
+                dept.code = clean_code
+        if data.name is not None and data.name.strip():
+            clean_name = data.name.strip()
+            if clean_name != dept.name:
+                existing = db.query(Department).filter(Department.name == clean_name, Department.id != dept.id).first()
+                if existing:
+                    raise AppException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        error_code="DEPARTMENT_NAME_EXISTS",
+                        message=f"Department name '{clean_name}' already exists."
+                    )
+                dept.name = clean_name
+        if data.description is not None:
+            dept.description = data.description.strip() if data.description.strip() else None
+
+        db.commit()
+        db.refresh(dept)
+        return DepartmentService.get_departments(db, search=dept.code)[0]
+
+    @staticmethod
+    def delete_department(db: Session, department_id: int) -> dict:
+        dept = db.query(Department).filter(Department.id == department_id).first()
+        if not dept:
+            raise AppException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                error_code="DEPARTMENT_NOT_FOUND",
+                message=f"Department with ID {department_id} not found."
+            )
+        printers_count = db.query(Printer).filter(Printer.department_id == dept.id).count()
+        if printers_count > 0:
+            raise AppException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                error_code="DEPARTMENT_HAS_PRINTERS",
+                message=f"Cannot delete department with {printers_count} assigned printer(s). Reassign them first."
+            )
+        db.query(User).filter(User.department_id == dept.id).update({User.department_id: None})
+        db.delete(dept)
+        db.commit()
+        return {"success": True, "message": f"Department '{dept.name}' deleted successfully."}
 
 department_service = DepartmentService()

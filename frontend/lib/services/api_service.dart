@@ -40,6 +40,17 @@ class ApiService {
     return data;
   }
 
+  Future<List<Map<String, dynamic>>> getDepartments() async {
+    final response = await http
+        .get(Uri.parse('$_baseUrl/api/departments/public'))
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode >= 400) {
+      throw const ApiError('Failed to load departments from database.');
+    }
+    final List<dynamic> decoded = jsonDecode(response.body);
+    return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<String> _token() async {
     final saved = readSessionValue(_sessionKey);
     if (saved != null) {

@@ -26,9 +26,14 @@ def sync_missing_columns():
             db_cols = {c['name'] for c in insp.get_columns(table_name)}
             for col in table.columns:
                 if col.name not in db_cols:
-                    col_type = col.type.compile(engine.dialect)
-                    nullable = "NULL" if col.nullable else "NOT NULL"
-                    sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} {nullable}"
+                    col_type_str = str(col.type.compile(engine.dialect)).upper()
+                    if "DATETIME" in col_type_str or "TIMESTAMP" in col_type_str:
+                        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col.type.compile(engine.dialect)} NULL DEFAULT CURRENT_TIMESTAMP"
+                    elif "BOOLEAN" in col_type_str or "BOOL" in col_type_str:
+                        default_val = "1" if getattr(col, "default", None) and getattr(col.default, "arg", None) is True else "0"
+                        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col.type.compile(engine.dialect)} NOT NULL DEFAULT {default_val}"
+                    else:
+                        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col.type.compile(engine.dialect)} NULL"
                     print(f"  - Auto-migrating column: {sql}")
                     conn.execute(text(sql))
 
@@ -41,13 +46,17 @@ def seed():
     try:
         print("[INFO] Seeding database infrastructure...")
 
-        # 0. Departments master data
+        # 0. Real Campus Departments master data
         departments_data = [
-            {"code": "HR", "name": "Human Resources", "description": "People and Culture Department"},
-            {"code": "FIN", "name": "Finance", "description": "Finance and Accounts Department"},
-            {"code": "IT", "name": "Information Technology", "description": "IT Infrastructure and Support"},
-            {"code": "ENG", "name": "Engineering", "description": "Engineering and R&D Department"},
-            {"code": "MKT", "name": "Marketing", "description": "Marketing and Communications"},
+            {"code": "CSE", "name": "Computer Science and Engineering", "description": "Department of Computer Science and Engineering"},
+            {"code": "ECE", "name": "Electronics and Communication Engineering", "description": "Department of Electronics and Communication Engineering"},
+            {"code": "EEE", "name": "Electrical and Electronics Engineering", "description": "Department of Electrical and Electronics Engineering"},
+            {"code": "MECH", "name": "Mechanical Engineering", "description": "Department of Mechanical Engineering"},
+            {"code": "CIVIL", "name": "Civil Engineering", "description": "Department of Civil Engineering"},
+            {"code": "IT", "name": "Information Technology", "description": "Department of Information Technology"},
+            {"code": "AIDS", "name": "Artificial Intelligence and Data Science", "description": "Department of Artificial Intelligence and Data Science"},
+            {"code": "MBA", "name": "Management Studies", "description": "Department of Management Studies"},
+            {"code": "S&H", "name": "Science and Humanities", "description": "Department of Science and Humanities"},
         ]
         depts = {}
         for d_data in departments_data:
@@ -61,7 +70,45 @@ def seed():
                 db.add(dept)
                 db.flush()
                 print(f"  - Created department: {d_data['name']} ({d_data['code']})")
+            else:
+                dept.name = d_data["name"]
+                dept.description = d_data["description"]
+                db.flush()
             depts[d_data["code"]] = dept
+
+        # Remove legacy sample corporate departments if unlinked
+        dummy_codes = ["HR", "FIN", "ENG", "MKT"]
+        for dcode in dummy_codes:
+            old_dept = db.query(Department).filter(Department.code == dcode).first()
+            if old_dept:
+                users_with_dept = db.query(User).filter(User.department_id == old_dept.id).count()
+                printers_with_dept = db.query(Printer).filter(Printer.department_id == old_dept.id).count()
+                if users_with_dept == 0 and printers_with_dept == 0:
+                    db.delete(old_dept)
+                    print(f"  - Cleaned up legacy placeholder department: {dcode}")
+
+        # Link any unlinked users to matching department
+        import re
+        for u in db.query(User).all():
+            if not u.department_id and u.department:
+                dept_match = db.query(Department).filter(
+                    (Department.name.ilike(u.department)) |
+                    (Department.code.ilike(u.department)) |
+                    (Department.name.ilike(f"%{u.department}%"))
+                ).first()
+                if not dept_match:
+                    code_match = re.search(r'\(([^)]+)\)', u.department)
+                    if code_match:
+                        code_extracted = code_match.group(1).strip()
+                        dept_match = db.query(Department).filter(
+                            (Department.code.ilike(code_extracted)) |
+                            (Department.name.ilike(f"%{code_extracted}%"))
+                        ).first()
+                if dept_match:
+                    u.department_id = dept_match.id
+                    u.department = dept_match.name
+                    print(f"  - Linked user {u.email} to department {dept_match.name} ({dept_match.code})")
+        db.flush()
 
         # 1. Administrator account from environment
         if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
@@ -106,55 +153,11 @@ def seed():
             server.device_token_hash = token_hash
             server.status = PrintServerStatus.ONLINE
 
-        # 3. Printers attached to station and departments
-        printer1 = db.query(Printer).filter(Printer.id == "printer_central_01").first()
-        if not printer1:
-            printer1 = Printer(
-                id="printer_central_01",
-                server_id=server_id,
-                department_id=depts["IT"].id,
-                cups_printer_name="HP_LaserJet_400_M401dn_F36EC0",
-                display_name="HP LaserJet 400 M401dn (IT Lab)",
-                supports_color=False,
-                supports_duplex=True,
-                is_active=True
-            )
-            db.add(printer1)
-            print("  - Created printer 1: HP LaserJet 400 M401dn (IT)")
-        else:
-            printer1.department_id = depts["IT"].id
-
-        printer2 = db.query(Printer).filter(Printer.id == "printer_central_02").first()
-        if not printer2:
-            printer2 = Printer(
-                id="printer_central_02",
-                server_id=server_id,
-                department_id=depts["HR"].id,
-                cups_printer_name="HP_LaserJet_400_M401dn_E9A0F4",
-                display_name="HP LaserJet 400 M401dn (HR Floor)",
-                supports_color=True,
-                supports_duplex=True,
-                is_active=True
-            )
-            db.add(printer2)
-            print("  - Created printer 2: HP LaserJet 400 M401dn (HR)")
-        else:
-            printer2.department_id = depts["HR"].id
-
-        printer3 = db.query(Printer).filter(Printer.id == "printer_central_03").first()
-        if not printer3:
-            printer3 = Printer(
-                id="printer_central_03",
-                server_id=server_id,
-                department_id=depts["FIN"].id,
-                cups_printer_name="Canon_imageRUNNER_2520",
-                display_name="Canon imageRUNNER 2520 (Finance)",
-                supports_color=True,
-                supports_duplex=True,
-                is_active=True
-            )
-            db.add(printer3)
-            print("  - Created printer 3: Canon imageRUNNER 2520 (Finance)")
+        # 3. Existing printers mapping to real departments
+        existing_printers = db.query(Printer).all()
+        for p in existing_printers:
+            if not p.department_id or p.department_id not in [d.id for d in depts.values()]:
+                p.department_id = depts["IT"].id
 
         db.commit()
         print("[SUCCESS] Infrastructure database seeding complete! Student accounts & logs are created dynamically on user login.")

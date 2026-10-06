@@ -6,15 +6,32 @@ from fastapi.exceptions import RequestValidationError
 class AppException(HTTPException):
     def __init__(
         self,
-        status_code: int,
-        error_code: str,
-        message: str,
+        arg1: Any = 500,
+        arg2: Optional[str] = None,
+        arg3: Optional[str] = None,
+        status_code: Optional[int] = None,
+        error_code: Optional[str] = None,
+        message: Optional[str] = None,
         details: Optional[Any] = None
     ):
-        self.error_code = error_code
-        self.message = message
+        if isinstance(arg1, int):
+            final_status = status_code or arg1
+            final_code = error_code or (arg2 if isinstance(arg2, str) else "ERROR")
+            final_msg = message or (arg3 if isinstance(arg3, str) else "An application error occurred.")
+        elif isinstance(arg1, str):
+            final_msg = message or arg1
+            final_status = status_code or (arg2 if isinstance(arg2, int) else 500)
+            final_code = error_code or (arg3 if isinstance(arg3, str) else "APP_ERROR")
+        else:
+            final_status = status_code or 500
+            final_code = error_code or "ERROR"
+            final_msg = message or "An application error occurred."
+
+        self.error_code = final_code
+        self.message = final_msg
         self.details = details
-        super().__init__(status_code=status_code, detail=message)
+        super().__init__(status_code=final_status, detail=final_msg)
+
 
 def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     content = {

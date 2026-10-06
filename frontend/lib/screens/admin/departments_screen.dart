@@ -50,6 +50,214 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
     }
   }
 
+  Future<void> _showCreateDepartmentDialog() async {
+    final codeCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String? formError;
+    bool isSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('New Department', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (formError != null)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: AppTheme.dangerSurface, borderRadius: BorderRadius.circular(6)),
+                    child: Text(formError!, style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+                  ),
+                TextField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(labelText: 'Department Code (e.g. MECH, CSE)', border: OutlineInputBorder()),
+                  textCapitalization: TextCapitalization.characters,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Department Name', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(labelText: 'Description (Optional)', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) {
+                        setDialogState(() => formError = 'Code and name are required.');
+                        return;
+                      }
+                      setDialogState(() {
+                        isSubmitting = true;
+                        formError = null;
+                      });
+                      try {
+                        await AdminApiService.createDepartment(
+                          code: codeCtrl.text.trim(),
+                          name: nameCtrl.text.trim(),
+                          description: descCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        _loadDepartments();
+                      } catch (e) {
+                        setDialogState(() {
+                          isSubmitting = false;
+                          formError = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditDepartmentDialog(Map<String, dynamic> dept) async {
+    final codeCtrl = TextEditingController(text: dept['code'] ?? '');
+    final nameCtrl = TextEditingController(text: dept['name'] ?? '');
+    final descCtrl = TextEditingController(text: dept['description'] ?? '');
+    String? formError;
+    bool isSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit Department', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (formError != null)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: AppTheme.dangerSurface, borderRadius: BorderRadius.circular(6)),
+                    child: Text(formError!, style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+                  ),
+                TextField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(labelText: 'Department Code', border: OutlineInputBorder()),
+                  textCapitalization: TextCapitalization.characters,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Department Name', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(labelText: 'Description (Optional)', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) {
+                        setDialogState(() => formError = 'Code and name are required.');
+                        return;
+                      }
+                      setDialogState(() {
+                        isSubmitting = true;
+                        formError = null;
+                      });
+                      try {
+                        await AdminApiService.updateDepartment(
+                          id: dept['id'] as int,
+                          code: codeCtrl.text.trim(),
+                          name: nameCtrl.text.trim(),
+                          description: descCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        _loadDepartments();
+                      } catch (e) {
+                        setDialogState(() {
+                          isSubmitting = false;
+                          formError = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteDepartment(Map<String, dynamic> dept) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Department', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "${dept['name']} (${dept['code']})"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await AdminApiService.deleteDepartment(dept['id'] as int);
+        _loadDepartments();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
+      }
+    }
+  }
+
   List<Map<String, dynamic>> _getFilteredAndSortedDepartments() {
     var list = _departments.where((d) {
       if (_searchQuery.isEmpty) return true;
@@ -228,10 +436,20 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
                               ),
                             ],
                           ),
-                          OutlinedButton.icon(
-                            onPressed: _loadDepartments,
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Refresh'),
+                          Row(
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _loadDepartments,
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Refresh'),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton.icon(
+                                onPressed: _showCreateDepartmentDialog,
+                                icon: const Icon(Icons.add_rounded, size: 16),
+                                label: const Text('New Department'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -451,14 +669,25 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
                                             ),
                                           ),
                                           DataCell(
-                                            OutlinedButton.icon(
-                                              style: OutlinedButton.styleFrom(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                              icon: const Icon(Icons.visibility_outlined, size: 15),
-                                              label: const Text('View'),
-                                              onPressed: () => DepartmentDetailDialog.show(context, deptId, deptName),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                                                  tooltip: 'View Details',
+                                                  onPressed: () => DepartmentDetailDialog.show(context, deptId, deptName),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.edit_outlined, size: 18),
+                                                  tooltip: 'Edit Department',
+                                                  onPressed: () => _showEditDepartmentDialog(d),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
+                                                  tooltip: 'Delete Department',
+                                                  onPressed: () => _confirmDeleteDepartment(d),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],

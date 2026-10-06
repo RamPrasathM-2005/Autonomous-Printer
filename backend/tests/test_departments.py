@@ -96,3 +96,47 @@ def test_departments_list_and_search(db_session):
         assert not_found.status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+def test_public_departments_and_student_resolution(db_session):
+    dept_cse = Department(code="CSE_PUB", name="Computer Science and Engineering Pub", description="CSE Desc")
+    db_session.add(dept_cse)
+    db_session.commit()
+
+    app.dependency_overrides[get_db] = lambda: db_session
+    try:
+        client = TestClient(app)
+        # 1. Public department listing without token
+        pub_res = client.get('/api/departments/public')
+        assert pub_res.status_code == 200
+        data = pub_res.json()
+        assert isinstance(data, list)
+        assert any(d['code'] == 'CSE_PUB' for d in data)
+
+        # 2. Auth departments alias
+        auth_dept_res = client.get('/api/auth/departments')
+        assert auth_dept_res.status_code == 200
+        auth_data = auth_dept_res.json()
+        assert any(d['code'] == 'CSE_PUB' for d in auth_data)
+
+        # 3. Student signup resolves department_id automatically from DB
+        client.post('/api/auth/send-otp', json={'email': 'student_cs@example.com', 'purpose': 'signup'})
+        from app.services.auth_service import auth_service
+        otp = auth_service._email_otps['student_cs@example.com']['otp']
+
+        signup_res = client.post(
+            '/api/auth/student/signup',
+            json={
+                'full_name': 'Test CS Student',
+                'roll_number': 'CS202699',
+                'email': 'student_cs@example.com',
+                'department': 'Computer Science and Engineering Pub',
+                'otp': otp,
+            }
+        )
+        assert signup_res.status_code == 201
+        user_in_db = db_session.query(User).filter(User.email == 'student_cs@example.com').first()
+        assert user_in_db is not None
+        assert user_in_db.department_id == dept_cse.id
+        assert user_in_db.department == dept_cse.name
+    finally:
+        app.dependency_overrides.clear()

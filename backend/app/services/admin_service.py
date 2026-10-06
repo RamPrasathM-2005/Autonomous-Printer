@@ -12,6 +12,8 @@ from openpyxl.utils import get_column_letter
 from app.db.models.department import Department
 from app.db.models.user import User, UserRole
 from app.db.models.printer import Printer
+from app.db.models.print_server import PrintServer, PrintServerStatus
+from app.db.models.discovered_printer import DiscoveredPrinter
 from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.db.models.order import Order
 from app.db.models.document import Document
@@ -21,7 +23,12 @@ from app.schemas.admin import (
     RecentPrintJob,
     DepartmentSummary,
     AdminPrinterItem,
+    AdminPrinterCreate,
     AdminPrinterUpdate,
+    PrinterTestConnectionResponse,
+    AdminDiscoveredPrinterItem,
+    AdminPrintAgentItem,
+    AdminPrintAgentCreate,
     AdminPrintServerUpdate,
     AdminUserItem,
     AdminUserUpdate,
@@ -32,6 +39,7 @@ from app.schemas.admin import (
     UserImportSummary,
 )
 from app.utils.errors import AppException
+
 
 class AdminService:
     @staticmethod
@@ -218,17 +226,266 @@ class AdminService:
                 department_name=dept.name if dept else None,
                 cups_printer_name=p.cups_printer_name,
                 display_name=p.display_name,
+                ip_address=p.ip_address,
+                protocol=p.protocol or "Socket",
+                device_uri=p.device_uri,
+                model=p.model,
+                location=p.location or (server.location if server else None),
+                description=p.description,
                 supports_color=p.supports_color,
                 supports_duplex=p.supports_duplex,
+                is_enabled=p.is_enabled if p.is_enabled is not None else True,
                 is_active=p.is_active,
-                printer_state=server.printer_state if server else "UNKNOWN",
+                printer_state=p.printer_status or (server.printer_state if server else "UNKNOWN"),
                 paper_state=server.paper_state if server else "UNKNOWN",
                 last_heartbeat=server.last_heartbeat.strftime("%Y-%m-%d %H:%M:%S") if (server and server.last_heartbeat) else None,
                 total_jobs_count=job_count,
                 created_at=p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else "",
+                last_tested_at=p.last_tested_at.strftime("%Y-%m-%d %H:%M:%S") if p.last_tested_at else None,
+                test_status=p.test_status or "PENDING",
+                test_message=p.test_message,
+                has_mismatch=p.has_mismatch,
+                mismatch_details=p.mismatch_details,
             ))
 
         return results
+
+    @staticmethod
+    def create_printer(data: AdminPrinterCreate, db: Session) -> AdminPrinterItem:
+        import uuid
+        from datetime import datetime, timezone
+
+        server = db.query(PrintServer).filter(PrintServer.id == data.server_id).first()
+        if not server:
+            raise AppException(f"Selected Print Agent '{data.server_id}' does not exist.", status_code=400)
+        if server.status == PrintServerStatus.DISABLED:
+            raise AppException("Selected Print Agent is currently disabled.", status_code=400)
+
+        if data.department_id:
+            dept = db.query(Department).filter(Department.id == data.department_id).first()
+            if not dept:
+                raise AppException("Selected department does not exist.", status_code=400)
+
+        # Check for duplicate CUPS name on same agent
+        existing = db.query(Printer).filter(
+            Printer.server_id == data.server_id,
+            Printer.cups_printer_name == data.cups_printer_name.strip()
+        ).first()
+        if existing:
+            raise AppException(
+                f"Printer '{data.cups_printer_name}' is already registered on Print Agent '{data.server_id}'.",
+                status_code=400
+            )
+
+        # Compute device_uri if not explicitly provided
+        device_uri = (data.device_uri or "").strip()
+        proto = (data.protocol or "Socket").strip()
+        ip = (data.ip_address or "").strip()
+        if not device_uri and ip:
+            if proto.lower() == "ipp":
+                device_uri = f"ipp://{ip}:631/ipp/print"
+            elif proto.lower() == "lpd":
+                device_uri = f"lpd://{ip}/queue"
+            else:
+                device_uri = f"socket://{ip}:9100"
+
+        # Unique printer ID
+        printer_id = f"PRN-{uuid.uuid4().hex[:8].upper()}"
+
+        new_printer = Printer(
+            id=printer_id,
+            server_id=data.server_id,
+            department_id=data.department_id,
+            cups_printer_name=data.cups_printer_name.strip(),
+            display_name=data.display_name.strip(),
+            ip_address=ip or None,
+            protocol=proto,
+            device_uri=device_uri or None,
+            model=data.model.strip() if data.model else None,
+            location=data.location.strip() if data.location else None,
+            description=data.description.strip() if data.description else None,
+            supports_color=data.supports_color,
+            supports_duplex=data.supports_duplex,
+            is_enabled=data.is_enabled,
+            is_active=False,  # Active ONLY after successful Test Connection
+            printer_status="OFFLINE",
+            test_status="PENDING",
+            test_message="Registered. Awaiting connection test validation.",
+            has_mismatch=False,
+            mismatch_details=None,
+        )
+
+        db.add(new_printer)
+
+        # If it was in DiscoveredPrinter, remove from discovered queue
+        disc_id = f"{data.server_id}::{data.cups_printer_name.strip()}"
+        disc = db.query(DiscoveredPrinter).filter(DiscoveredPrinter.id == disc_id).first()
+        if disc:
+            db.delete(disc)
+
+        db.commit()
+        db.refresh(new_printer)
+
+        printers = AdminService.get_printers(db)
+        for p in printers:
+            if p.id == new_printer.id:
+                return p
+        raise AppException("Failed to load newly created printer", status_code=500)
+
+    @staticmethod
+    def test_printer_connection(printer_id: str, db: Session) -> PrinterTestConnectionResponse:
+        import socket
+        import requests
+        from datetime import datetime, timezone
+        from app.config.settings import settings
+
+        printer = db.query(Printer).filter(Printer.id == printer_id).first()
+        if not printer:
+            raise AppException(f"Printer '{printer_id}' not found.", status_code=404)
+
+        server = db.query(PrintServer).filter(PrintServer.id == printer.server_id).first()
+        if not server:
+            printer.is_active = False
+            printer.test_status = "FAILED"
+            printer.test_message = f"Assigned Print Agent '{printer.server_id}' does not exist."
+            printer.last_tested_at = datetime.now(timezone.utc)
+            db.commit()
+            return PrinterTestConnectionResponse(
+                success=False,
+                printer_id=printer.id,
+                is_active=False,
+                cups_exists=False,
+                reachable=False,
+                available=False,
+                status="FAILED",
+                message=printer.test_message,
+                tested_at=printer.last_tested_at.strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        if server.status == PrintServerStatus.DISABLED:
+            printer.is_active = False
+            printer.test_status = "FAILED"
+            printer.test_message = f"Assigned Print Agent '{server.name}' is currently disabled."
+            printer.last_tested_at = datetime.now(timezone.utc)
+            db.commit()
+            return PrinterTestConnectionResponse(
+                success=False,
+                printer_id=printer.id,
+                is_active=False,
+                cups_exists=False,
+                reachable=False,
+                available=False,
+                status="FAILED",
+                message=printer.test_message,
+                tested_at=printer.last_tested_at.strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        # 1. Attempt to instruct assigned Print Agent via HTTP endpoint
+        agent_responded = False
+        agent_result = {}
+        dispatch_headers = {
+            "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
+            "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
+        }
+        test_payload = {
+            "cups_printer_name": printer.cups_printer_name,
+            "ip_address": printer.ip_address,
+            "device_uri": printer.device_uri,
+            "protocol": printer.protocol or "Socket"
+        }
+
+        candidate_urls = []
+        if server.ip_address:
+            candidate_urls.extend([
+                f"http://{server.ip_address}:5001/local/test-printer",
+                f"http://{server.ip_address}:5000/local/test-printer"
+            ])
+        candidate_urls.extend([
+            "http://127.0.0.1:5001/local/test-printer",
+            "http://127.0.0.1:5000/local/test-printer"
+        ])
+
+        for url in candidate_urls:
+            try:
+                resp = requests.post(url, json=test_payload, headers=dispatch_headers, timeout=3)
+                if resp.status_code == 200:
+                    agent_result = resp.json()
+                    agent_responded = True
+                    break
+            except Exception:
+                continue
+
+        # 2. Evaluate connection test
+        if agent_responded:
+            success = bool(agent_result.get("success", False))
+            cups_exists = bool(agent_result.get("cups_exists", False))
+            reachable = bool(agent_result.get("reachable", False))
+            available = bool(agent_result.get("available", False))
+            message = str(agent_result.get("message") or "")
+        else:
+            # Fallback probe if print agent HTTP endpoint was unreachable:
+            port = 9100
+            proto_lower = (printer.protocol or "").lower()
+            if "ipp" in proto_lower or (printer.device_uri and "631" in printer.device_uri):
+                port = 631
+            elif "lpd" in proto_lower or (printer.device_uri and "515" in printer.device_uri):
+                port = 515
+
+            target_ip = (printer.ip_address or "").strip()
+            if target_ip:
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(2.0)
+                    s.connect((target_ip, port))
+                    s.close()
+                    reachable = True
+                    cups_exists = True
+                    available = True
+                    success = True
+                    message = f"Network probe verified connection to {target_ip}:{port} ({printer.protocol})."
+                except Exception as ex:
+                    reachable = False
+                    cups_exists = False
+                    available = False
+                    success = False
+                    message = f"Connection failed to {target_ip}:{port} ({ex}). Printer is unreachable or offline."
+            else:
+                reachable = False
+                cups_exists = False
+                available = False
+                success = False
+                message = "Assigned Print Agent is offline and no static IP address is configured for direct probe."
+
+        # 3. Only after a successful validation should the printer be marked as Active
+        now = datetime.now(timezone.utc)
+        printer.last_tested_at = now
+        if success:
+            printer.is_active = True
+            printer.test_status = "SUCCESS"
+            printer.printer_status = "READY"
+            printer.test_message = message
+            printer.has_mismatch = False
+            printer.mismatch_details = None
+        else:
+            printer.is_active = False
+            printer.test_status = "FAILED"
+            printer.printer_status = "OFFLINE"
+            printer.test_message = message
+
+        db.commit()
+        db.refresh(printer)
+
+        return PrinterTestConnectionResponse(
+            success=success,
+            printer_id=printer.id,
+            is_active=printer.is_active,
+            cups_exists=cups_exists,
+            reachable=reachable,
+            available=available,
+            status=printer.test_status,
+            message=printer.test_message or "",
+            tested_at=printer.last_tested_at.strftime("%Y-%m-%d %H:%M:%S")
+        )
 
     @staticmethod
     def update_printer(printer_id: str, data: AdminPrinterUpdate, db: Session) -> AdminPrinterItem:
@@ -238,6 +495,31 @@ class AdminService:
 
         if data.display_name is not None:
             printer.display_name = data.display_name.strip()
+        if data.cups_printer_name is not None:
+            printer.cups_printer_name = data.cups_printer_name.strip()
+        if data.ip_address is not None:
+            printer.ip_address = data.ip_address.strip() or None
+        if data.protocol is not None:
+            printer.protocol = data.protocol.strip()
+        if data.device_uri is not None:
+            printer.device_uri = data.device_uri.strip() or None
+        if data.model is not None:
+            printer.model = data.model.strip() or None
+        if data.location is not None:
+            printer.location = data.location.strip() or None
+        if data.description is not None:
+            printer.description = data.description.strip() or None
+        if data.supports_color is not None:
+            printer.supports_color = data.supports_color
+        if data.supports_duplex is not None:
+            printer.supports_duplex = data.supports_duplex
+        if data.is_enabled is not None:
+            printer.is_enabled = data.is_enabled
+        if data.server_id is not None:
+            server = db.query(PrintServer).filter(PrintServer.id == data.server_id).first()
+            if not server:
+                raise AppException(f"Selected Print Agent '{data.server_id}' not found", status_code=400)
+            printer.server_id = data.server_id
         if data.department_id is not None:
             if data.department_id > 0:
                 dept = db.query(Department).filter(Department.id == data.department_id).first()
@@ -259,22 +541,174 @@ class AdminService:
         raise AppException("Failed to load updated printer", status_code=500)
 
     @staticmethod
+    def delete_printer(printer_id: str, db: Session) -> bool:
+        printer = db.query(Printer).filter(Printer.id == printer_id).first()
+        if not printer:
+            raise AppException(f"Printer '{printer_id}' not found", status_code=404)
+
+        # Prevent deletion if active jobs are printing
+        active_jobs = db.query(PrintJob).filter(
+            PrintJob.printer_id == printer_id,
+            PrintJob.status.in_([PrintJobStatus.PRINTING, PrintJobStatus.PROCESSING])
+        ).count()
+        if active_jobs > 0:
+            raise AppException("Cannot delete printer while active print jobs are in progress.", status_code=400)
+
+        db.delete(printer)
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_print_servers(db: Session) -> List[AdminPrintAgentItem]:
+        from datetime import datetime, timezone, timedelta
+        from app.config.settings import settings
+
+        now = datetime.now(timezone.utc)
+        timeout = timedelta(seconds=settings.HEARTBEAT_TIMEOUT_SECONDS)
+
+        servers = db.query(PrintServer).all()
+        results: List[AdminPrintAgentItem] = []
+
+        for s in servers:
+            dept = db.query(Department).filter(Department.id == s.department_id).first() if s.department_id else None
+            p_count = db.query(Printer).filter(Printer.server_id == s.id).count()
+
+            server_status = s.status.value if (s and hasattr(s.status, "value")) else ("OFFLINE" if not s else str(s.status))
+            if s.status not in [PrintServerStatus.DISABLED, PrintServerStatus.MAINTENANCE]:
+                hb = s.last_heartbeat
+                if hb:
+                    if hb.tzinfo is None:
+                        hb = hb.replace(tzinfo=timezone.utc)
+                    if hb < now - timeout:
+                        server_status = "OFFLINE"
+                else:
+                    server_status = "OFFLINE"
+
+            results.append(AdminPrintAgentItem(
+                id=s.id,
+                name=s.name,
+                location=s.location,
+                department_id=s.department_id,
+                department_name=dept.name if dept else None,
+                hostname=s.hostname,
+                ip_address=s.ip_address,
+                software_version=s.software_version,
+                status=server_status,
+                is_enabled=s.is_enabled if s.is_enabled is not None else True,
+                last_heartbeat=s.last_heartbeat.strftime("%Y-%m-%d %H:%M:%S") if s.last_heartbeat else None,
+                printer_count=p_count,
+                created_at=s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else "",
+            ))
+
+        return results
+
+    @staticmethod
+    def create_print_server(data: AdminPrintAgentCreate, db: Session) -> AdminPrintAgentItem:
+        import hashlib
+        existing = db.query(PrintServer).filter(PrintServer.id == data.id).first()
+        if existing:
+            raise AppException(f"Print Agent with ID '{data.id}' already exists", status_code=400)
+
+        token = data.token or f"agent-sec-{secrets.token_hex(16)}"
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        server = PrintServer(
+            id=data.id.strip(),
+            name=data.name.strip(),
+            location=data.location.strip() if data.location else None,
+            device_token_hash=token_hash,
+            department_id=data.department_id,
+            hostname=data.hostname.strip() if data.hostname else None,
+            ip_address=data.ip_address.strip() if data.ip_address else None,
+            software_version=data.software_version.strip() if data.software_version else "1.0.0",
+            is_enabled=True,
+            status=PrintServerStatus.OFFLINE,
+        )
+        db.add(server)
+        db.commit()
+        db.refresh(server)
+
+        agents = AdminService.get_print_servers(db)
+        for a in agents:
+            if a.id == server.id:
+                return a
+        raise AppException("Failed to load created print agent", status_code=500)
+
+    @staticmethod
+    def delete_print_server(server_id: str, db: Session) -> bool:
+        server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
+        if not server:
+            raise AppException(f"Print Agent '{server_id}' not found", status_code=404)
+
+        printers_count = db.query(Printer).filter(Printer.server_id == server_id).count()
+        if printers_count > 0:
+            raise AppException(
+                f"Cannot delete Print Agent '{server_id}' because {printers_count} printer(s) are assigned to it. Reassign or delete printers first.",
+                status_code=400
+            )
+
+        db.delete(server)
+        db.commit()
+        return True
+
+    @staticmethod
+    def get_discovered_printers(db: Session) -> List[AdminDiscoveredPrinterItem]:
+        discovered = db.query(DiscoveredPrinter).order_by(DiscoveredPrinter.last_seen.desc()).all()
+        results: List[AdminDiscoveredPrinterItem] = []
+        for d in discovered:
+            srv = db.query(PrintServer).filter(PrintServer.id == d.server_id).first()
+            results.append(AdminDiscoveredPrinterItem(
+                id=d.id,
+                server_id=d.server_id,
+                server_name=srv.name if srv else None,
+                cups_printer_name=d.cups_printer_name,
+                ip_address=d.ip_address,
+                device_uri=d.device_uri,
+                reported_status=d.reported_status or "READY",
+                reported_jobs=d.reported_jobs or "0",
+                first_seen=d.first_seen.strftime("%Y-%m-%d %H:%M:%S") if d.first_seen else "",
+                last_seen=d.last_seen.strftime("%Y-%m-%d %H:%M:%S") if d.last_seen else "",
+            ))
+        return results
+
+    @staticmethod
+    def dismiss_discovered_printer(discovered_id: str, db: Session) -> bool:
+        disc = db.query(DiscoveredPrinter).filter(DiscoveredPrinter.id == discovered_id).first()
+        if disc:
+            db.delete(disc)
+            db.commit()
+        return True
+
+    @staticmethod
     def update_print_server(server_id: str, data: AdminPrintServerUpdate, db: Session) -> bool:
         from app.db.models.print_server import PrintServer, PrintServerStatus
         server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
         if not server:
             raise AppException(f"Print Server '{server_id}' not found", status_code=404)
 
+        if data.name is not None:
+            server.name = data.name.strip()
         if data.status is not None:
             try:
                 server.status = PrintServerStatus(data.status.upper())
             except ValueError:
                 raise AppException(f"Invalid server status '{data.status}'", status_code=400)
-
         if data.location is not None:
             server.location = data.location.strip()
+        if data.department_id is not None:
+            server.department_id = data.department_id if data.department_id > 0 else None
+        if data.hostname is not None:
+            server.hostname = data.hostname.strip() or None
+        if data.ip_address is not None:
+            server.ip_address = data.ip_address.strip() or None
+        if data.software_version is not None:
+            server.software_version = data.software_version.strip() or None
+        if data.is_enabled is not None:
+            server.is_enabled = data.is_enabled
 
         db.commit()
+        return True
+
         return True
 
     @staticmethod

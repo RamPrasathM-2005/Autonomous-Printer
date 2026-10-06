@@ -26,9 +26,24 @@ class PrintServerResponse(BaseModel):
     paper_state: Optional[str] = None
     printers: List[PrinterResponse] = []
 
+class ReportedPrinterInfo(BaseModel):
+    cups_printer_name: str
+    ip_address: Optional[str] = None
+    device_uri: Optional[str] = None
+    status: Optional[str] = "READY"
+    jobs: Optional[int] = 0
+
+    def __init__(self, **data):
+        if "cups_name" in data and "cups_printer_name" not in data:
+            data["cups_printer_name"] = data.pop("cups_name")
+        if "name" in data and "cups_printer_name" not in data:
+            data["cups_printer_name"] = data.pop("name")
+        super().__init__(**data)
+
 class HeartbeatRequest(BaseModel):
     printerState: str = "READY"
     paperState: str = "AVAILABLE"
+    printers: Optional[List[ReportedPrinterInfo]] = None
 
     def __init__(self, **data):
         if "printer_state" in data and "printerState" not in data:
@@ -40,3 +55,4 @@ class HeartbeatRequest(BaseModel):
 class HeartbeatResponse(BaseModel):
     status: str
     server_time: datetime
+

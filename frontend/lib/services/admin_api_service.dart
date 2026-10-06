@@ -103,6 +103,105 @@ class AdminApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  static Future<Map<String, dynamic>> createDepartment({
+    required String code,
+    required String name,
+    String? description,
+  }) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final response = await http
+        .post(
+          Uri.parse('$origin/api/departments'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode({
+            'code': code.trim(),
+            'name': name.trim(),
+            'description': description?.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to create department.');
+      } catch (_) {
+        throw Exception('Failed to create department (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> updateDepartment({
+    required int id,
+    String? code,
+    String? name,
+    String? description,
+  }) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final body = <String, dynamic>{};
+    if (code != null) body['code'] = code.trim();
+    if (name != null) body['name'] = name.trim();
+    if (description != null) body['description'] = description.trim();
+
+    final response = await http
+        .put(
+          Uri.parse('$origin/api/departments/$id'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update department.');
+      } catch (_) {
+        throw Exception('Failed to update department (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> deleteDepartment(int id) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final response = await http
+        .delete(
+          Uri.parse('$origin/api/departments/$id'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to delete department.');
+      } catch (_) {
+        throw Exception('Failed to delete department (HTTP ${response.statusCode}).');
+      }
+    }
+  }
+
   static Future<Map<String, dynamic>> getDepartmentReport({
     int? departmentId,
     String? startDate,
@@ -282,6 +381,68 @@ class AdminApiService {
     return jsonDecode(response.body) as List<dynamic>;
   }
 
+  static Future<Map<String, dynamic>> createPrinter(Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .post(
+          Uri.parse('$origin/api/admin/printers'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to register printer.');
+      } catch (_) {
+        throw Exception('Failed to register printer (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> testPrinterConnection(String id) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .post(
+          Uri.parse('$origin/api/admin/printers/$id/test-connection'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to test connection.');
+      } catch (_) {
+        throw Exception('Failed to test connection (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> deletePrinter(String id) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .delete(
+          Uri.parse('$origin/api/admin/printers/$id'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to delete printer.');
+      } catch (_) {
+        throw Exception('Failed to delete printer.');
+      }
+    }
+  }
+
   static Future<Map<String, dynamic>> updatePrinter(String id, Map<String, dynamic> data) async {
     final origin = ApiConfig.backendUrl;
     final response = await http
@@ -309,11 +470,99 @@ class AdminApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  static Future<List<dynamic>> getPrintAgents() async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/print-agents'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to load print agents.');
+      } catch (_) {
+        throw Exception('Failed to load print agents.');
+      }
+    }
+
+    return jsonDecode(response.body) as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> createPrintAgent(Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .post(
+          Uri.parse('$origin/api/admin/print-agents'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to register print agent.');
+      } catch (_) {
+        throw Exception('Failed to register print agent.');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> deletePrintAgent(String serverId) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .delete(
+          Uri.parse('$origin/api/admin/print-agents/$serverId'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to delete print agent.');
+      } catch (_) {
+        throw Exception('Failed to delete print agent.');
+      }
+    }
+  }
+
+  static Future<List<dynamic>> getDiscoveredPrinters() async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/discovered-printers'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode >= 400) {
+      return [];
+    }
+
+    return jsonDecode(response.body) as List<dynamic>;
+  }
+
+  static Future<void> dismissDiscoveredPrinter(String id) async {
+    final origin = ApiConfig.backendUrl;
+    await http
+        .delete(
+          Uri.parse('$origin/api/admin/discovered-printers/$id'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+  }
+
   static Future<void> updatePrintServer(String serverId, Map<String, dynamic> data) async {
     final origin = ApiConfig.backendUrl;
     final response = await http
         .patch(
-          Uri.parse('$origin/api/admin/print-servers/$serverId'),
+          Uri.parse('$origin/api/admin/print-agents/$serverId'),
           headers: AdminAuthService.authHeaders,
           body: jsonEncode(data),
         )
@@ -328,6 +577,7 @@ class AdminApiService {
       }
     }
   }
+
 
   // ----------------- USER MANAGEMENT -----------------
 

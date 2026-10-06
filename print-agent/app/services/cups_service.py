@@ -391,4 +391,203 @@ class CupsService:
 
         return "COMPLETED"
 
+    def get_detected_printers(self) -> list:
+        """
+        Scans CUPS for all installed and detected printers.
+        Extracts CUPS queue name, device URI, IP address (if network-based), and state.
+        Returns empty list when no physical/CUPS printers are available.
+        """
+        printers_list = []
+
+        if self.has_pycups:
+            try:
+                conn = self.cups.Connection(host=config.CUPS_SERVER)
+                cups_printers = conn.getPrinters()
+                for name, info in cups_printers.items():
+                    uri = info.get("device-uri", "")
+                    state_num = info.get("printer-state", 3)
+                    state_str = "READY"
+                    if state_num == 4:
+                        state_str = "BUSY"
+                    elif state_num == 5:
+                        state_str = "OFFLINE"
+
+                    ip = None
+                    if uri:
+                        ip_match = re.search(r"://([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", uri)
+                        if ip_match:
+                            ip = ip_match.group(1)
+
+                    printers_list.append({
+                        "cups_printer_name": name,
+                        "device_uri": uri,
+                        "ip_address": ip,
+                        "status": state_str,
+                        "jobs": 0,
+                    })
+                return printers_list
+            except Exception as e:
+                agent_logger.warning(f"Error querying pycups for detected printers: {e}")
+
+        # CLI fallback via lpstat -v and lpstat -p
+        try:
+            res_v = subprocess.run(["lpstat", "-v"], capture_output=True, text=True)
+            if res_v.returncode == 0 and res_v.stdout.strip():
+                for line in res_v.stdout.strip().splitlines():
+                    # Format: "device for <printer_name>: <uri>"
+                    m = re.match(r"device for ([^:]+):\s*(.+)", line.strip())
+                    if m:
+                        p_name = m.group(1).strip()
+                        uri = m.group(2).strip()
+                        ip = None
+                        ip_match = re.search(r"://([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", uri)
+                        if ip_match:
+                            ip = ip_match.group(1)
+
+                        printers_list.append({
+                            "cups_printer_name": p_name,
+                            "device_uri": uri,
+                            "ip_address": ip,
+                            "status": "READY",
+                            "jobs": 0,
+                        })
+                return printers_list
+        except Exception as e:
+            agent_logger.debug(f"lpstat fallback error: {e}")
+
+        # If in Mock mode and mock fallback is active
+        if self.mock_mode:
+            # If default PRINTER_NAME is configured, return mock entries
+            if self.printer_name:
+                return [{
+                    "cups_printer_name": self.printer_name,
+                    "device_uri": f"socket://127.0.0.1:9100",
+                    "ip_address": "127.0.0.1",
+                    "status": "READY",
+                    "jobs": 0,
+                }]
+
+        return []
+
+    def verify_printer(
+        self,
+        cups_printer_name: str,
+        ip_address: str = None,
+        device_uri: str = None,
+        protocol: str = "Socket"
+    ) -> dict:
+        """
+        Performs diagnostic validation of a printer:
+        1. Verifies if printer exists in CUPS.
+        2. Probes network reachability using static IP or device URI.
+        3. Verifies printer availability (not stopped or error).
+        """
+        import socket
+        cups_exists = False
+        reachable = False
+        available = False
+        messages = []
+
+        cups_name = (cups_printer_name or "").strip()
+        target_ip = (ip_address or "").strip()
+        uri = (device_uri or "").strip()
+        proto = (protocol or "Socket").strip().lower()
+
+        # Extract target IP from URI if not directly given
+        if not target_ip and uri:
+            ip_m = re.search(r"://([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", uri)
+            if ip_m:
+                target_ip = ip_m.group(1)
+
+        # 1. Check CUPS existence & status
+        if self.has_pycups:
+            try:
+                conn = self.cups.Connection(host=config.CUPS_SERVER)
+                printers = conn.getPrinters()
+                if cups_name in printers:
+                    cups_exists = True
+                    info = printers[cups_name]
+                    state = info.get("printer-state", 3)
+                    available = (state != 5)
+                    if not available:
+                        messages.append(f"Printer '{cups_name}' exists in CUPS but is STOPPED/DISABLED.")
+                else:
+                    messages.append(f"Printer '{cups_name}' does not exist in CUPS.")
+            except Exception as e:
+                agent_logger.warning(f"CUPS connection check failed: {e}")
+                messages.append(f"CUPS service error: {e}")
+        else:
+            try:
+                res = subprocess.run(["lpstat", "-p", cups_name], capture_output=True, text=True)
+                if res.returncode == 0:
+                    cups_exists = True
+                    out_lower = res.stdout.lower()
+                    if "disabled" in out_lower or "stopped" in out_lower:
+                        available = False
+                        messages.append(f"CUPS queue '{cups_name}' is disabled or stopped.")
+                    else:
+                        available = True
+                else:
+                    messages.append(f"Printer '{cups_name}' was not found in CUPS.")
+            except Exception as e:
+                messages.append(f"CUPS lpstat error: {e}")
+
+        # If Mock CUPS mode is enabled and cups was not found via real CUPS
+        if not cups_exists and self.mock_mode:
+            if cups_name:
+                cups_exists = True
+                available = True
+
+        # 2. Network Reachability Probe
+        port = 9100
+        if "ipp" in proto or "631" in uri:
+            port = 631
+        elif "lpd" in proto or "515" in uri:
+            port = 515
+        elif uri and ":" in uri:
+            port_match = re.search(r":([0-9]{2,5})", uri.split("://")[-1] if "://" in uri else uri)
+            if port_match:
+                try:
+                    port = int(port_match.group(1))
+                except ValueError:
+                    pass
+
+        if target_ip:
+            # Probe TCP socket on the configured IP:Port with a strict 2-second timeout
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0)
+                sock.connect((target_ip, port))
+                sock.close()
+                reachable = True
+            except socket.timeout:
+                reachable = False
+                messages.append(f"Network probe timed out for {target_ip}:{port}. Printer is unreachable.")
+            except socket.error as se:
+                reachable = False
+                messages.append(f"Network connection failed to {target_ip}:{port} ({se}).")
+        else:
+            # No static IP or URI specified
+            reachable = cups_exists
+            if not target_ip:
+                messages.append("No static IP address configured for network reachability probe.")
+
+        # Determine overall success
+        overall_success = cups_exists and reachable and available
+
+        summary_msg = ""
+        if overall_success:
+            summary_msg = f"Printer '{cups_name}' verified: CUPS queue exists, reachable on {target_ip or 'CUPS'}:{port}, status available."
+        else:
+            summary_msg = " ; ".join(messages) if messages else "Printer verification failed."
+
+        return {
+            "success": overall_success,
+            "cups_exists": cups_exists,
+            "reachable": reachable,
+            "available": available,
+            "message": summary_msg
+        }
+
 cups_service = CupsService()
+

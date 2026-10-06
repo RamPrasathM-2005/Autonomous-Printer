@@ -5,10 +5,27 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models.user import User
 from app.api.dependencies import get_current_admin
-from app.schemas.department import DepartmentListItem, DepartmentDetailResponse
+from app.schemas.department import (
+    DepartmentListItem,
+    DepartmentDetailResponse,
+    PublicDepartmentItem,
+    DepartmentCreate,
+    DepartmentUpdate,
+)
 from app.services.department_service import department_service
+from fastapi import status
 
 router = APIRouter(prefix="/api/departments", tags=["Department Management"])
+
+@router.get("/public", response_model=List[PublicDepartmentItem])
+def list_public_departments(
+    db: Session = Depends(get_db),
+):
+    """
+    Returns active departments from DB for public selection (e.g. student signup & profile selection).
+    No authentication required.
+    """
+    return department_service.get_public_departments(db)
 
 @router.get("", response_model=List[DepartmentListItem])
 def list_departments(
@@ -22,6 +39,43 @@ def list_departments(
     Accessible only to authenticated administrators.
     """
     return department_service.get_departments(db, search=q)
+
+@router.post("", response_model=DepartmentListItem, status_code=status.HTTP_201_CREATED)
+def create_department(
+    data: DepartmentCreate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Creates a new department record in the database.
+    Accessible only to authenticated administrators.
+    """
+    return department_service.create_department(db, data)
+
+@router.put("/{department_id}", response_model=DepartmentListItem)
+def update_department(
+    department_id: int,
+    data: DepartmentUpdate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Updates an existing department record.
+    Accessible only to authenticated administrators.
+    """
+    return department_service.update_department(db, department_id, data)
+
+@router.delete("/{department_id}")
+def delete_department(
+    department_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Deletes an existing department if no printers are assigned.
+    Accessible only to authenticated administrators.
+    """
+    return department_service.delete_department(db, department_id)
 
 @router.get("/{department_id}", response_model=DepartmentDetailResponse)
 def get_department_detail(

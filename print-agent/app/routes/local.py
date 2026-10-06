@@ -193,3 +193,31 @@ def direct_print_job():
         ).start()
         return jsonify({"status": "PRINTING", "job_id": job_id}), 200
     return jsonify({"status": "ALREADY_ACTIVE", "job_id": job_id}), 200
+
+@local_bp.route("/test-printer", methods=["POST", "OPTIONS"])
+def test_printer_connection():
+    if request.method == "OPTIONS":
+        return "", 200
+
+    is_valid, err_msg = _verify_internal_token()
+    if not is_valid:
+        return jsonify({
+            "error": "UNAUTHORIZED",
+            "message": err_msg
+        }), 401
+
+    data = request.get_json(silent=True) or {}
+    cups_name = data.get("cups_printer_name") or data.get("cups_name") or ""
+    ip_addr = data.get("ip_address") or ""
+    device_uri = data.get("device_uri") or ""
+    protocol = data.get("protocol") or "Socket"
+
+    from app.services.cups_service import cups_service
+    res = cups_service.verify_printer(
+        cups_printer_name=cups_name,
+        ip_address=ip_addr,
+        device_uri=device_uri,
+        protocol=protocol
+    )
+    return jsonify(res), 200
+

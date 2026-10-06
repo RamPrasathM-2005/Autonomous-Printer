@@ -18,10 +18,14 @@ class BackendClient:
     def send_heartbeat(self, printer_state: str = "READY", paper_state: str = "AVAILABLE") -> bool:
         url = f"{self.base_url}/agent/heartbeat"
         try:
-            resp = self.session.post(url, json={
+            from app.services.cups_service import cups_service
+            detected = cups_service.get_detected_printers()
+            payload = {
                 "printerState": printer_state,
-                "paperState": paper_state
-            }, timeout=5)
+                "paperState": paper_state,
+                "printers": detected
+            }
+            resp = self.session.post(url, json=payload, timeout=5)
             if resp.status_code == 200:
                 return True
             agent_logger.warning(f"Heartbeat responded with status code: {resp.status_code}")
@@ -29,6 +33,7 @@ class BackendClient:
         except Exception as e:
             agent_logger.warning(f"Heartbeat error: {e}")
             return False
+
 
     def poll_jobs(self) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/agent/jobs"

@@ -205,21 +205,35 @@ class AuthService:
 
         cls.verify_email_otp(clean_email, req.otp, consume=False)
 
-        # Resolve department ID if department exists in catalog
+        # Resolve department ID and canonical name if department exists in catalog
         dept_id = None
+        dept_name_resolved = req.department.strip() if req.department else None
         if req.department:
             from app.db.models.department import Department
+            dept_text = req.department.strip()
             dept_match = db.query(Department).filter(
-                (Department.name == req.department.strip()) | (Department.code == req.department.strip())
+                (Department.name.ilike(dept_text)) | 
+                (Department.code.ilike(dept_text)) |
+                (Department.name.ilike(f"%{dept_text}%"))
             ).first()
+            if not dept_match:
+                import re
+                code_match = re.search(r'\(([^)]+)\)', dept_text)
+                if code_match:
+                    code_extracted = code_match.group(1).strip()
+                    dept_match = db.query(Department).filter(
+                        (Department.code.ilike(code_extracted)) |
+                        (Department.name.ilike(f"%{code_extracted}%"))
+                    ).first()
             if dept_match:
                 dept_id = dept_match.id
+                dept_name_resolved = dept_match.name
 
         user = User(
             email=clean_email,
             roll_number=clean_roll,
             full_name=req.full_name.strip(),
-            department=req.department.strip(),
+            department=dept_name_resolved,
             department_id=dept_id,
             role=UserRole.USER,
             is_active=True
@@ -282,7 +296,26 @@ class AuthService:
         if req.full_name is not None and req.full_name.strip():
             user.full_name = req.full_name.strip()
         if req.department is not None and req.department.strip():
-            user.department = req.department.strip()
+            dept_text = req.department.strip()
+            user.department = dept_text
+            from app.db.models.department import Department
+            dept_match = db.query(Department).filter(
+                (Department.name.ilike(dept_text)) | 
+                (Department.code.ilike(dept_text)) |
+                (Department.name.ilike(f"%{dept_text}%"))
+            ).first()
+            if not dept_match:
+                import re
+                code_match = re.search(r'\(([^)]+)\)', dept_text)
+                if code_match:
+                    code_extracted = code_match.group(1).strip()
+                    dept_match = db.query(Department).filter(
+                        (Department.code.ilike(code_extracted)) |
+                        (Department.name.ilike(f"%{code_extracted}%"))
+                    ).first()
+            if dept_match:
+                user.department_id = dept_match.id
+                user.department = dept_match.name
         if req.email is not None and req.email.strip() and req.email.strip().lower() != (user.email or "").lower():
             clean_email = req.email.strip().lower()
             existing = db.query(User).filter(User.email == clean_email, User.id != user.id).first()

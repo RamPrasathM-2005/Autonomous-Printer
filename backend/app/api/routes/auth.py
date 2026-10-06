@@ -17,10 +17,20 @@ from app.schemas.auth import (
 )
 from app.schemas.common import MessageResponse
 from app.services.auth_service import auth_service
+from app.services.department_service import department_service
+from app.schemas.department import PublicDepartmentItem
+from typing import List
 from app.config.settings import settings
 from app.api.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+@router.get("/departments", response_model=List[PublicDepartmentItem])
+def get_auth_departments(db: Session = Depends(get_db)):
+    """
+    Returns configured departments from DB for unauthenticated student registration.
+    """
+    return department_service.get_public_departments(db)
 
 @router.post("/send-otp")
 def send_otp(req: SendOtpRequest, db: Session = Depends(get_db)):

@@ -42,17 +42,8 @@ class _AuthDialogState extends State<AuthDialog> {
   final _nameController = TextEditingController();
   final _rollController = TextEditingController();
 
-  String _selectedDepartment = 'Computer Science (CSE)';
-  static const List<String> _departments = [
-    'Computer Science (CSE)',
-    'Electronics & Communication (ECE)',
-    'Electrical & Electronics (EEE)',
-    'Mechanical Engineering (MECH)',
-    'Civil Engineering (CIVIL)',
-    'Information Technology (IT)',
-    'Artificial Intelligence & Data Science (AI&DS)',
-    'Management Studies (MBA)',
-  ];
+  String? _selectedDepartment;
+  List<Map<String, dynamic>> _dbDepartments = [];
 
   bool _isBusy = false;
   bool _otpSent = false;
@@ -66,6 +57,20 @@ class _AuthDialogState extends State<AuthDialog> {
   void initState() {
     super.initState();
     _isSignUp = widget.initialIsSignUp;
+    _loadDepartments();
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final depts = await _auth.getDepartments();
+      if (!mounted) return;
+      setState(() {
+        _dbDepartments = depts;
+        if (_dbDepartments.isNotEmpty) {
+          _selectedDepartment = _dbDepartments.first['name'] as String?;
+        }
+      });
+    } catch (_) {}
   }
 
   @override
@@ -200,7 +205,7 @@ class _AuthDialogState extends State<AuthDialog> {
           fullName: name,
           rollNumber: roll,
           email: email,
-          department: _selectedDepartment,
+          department: _selectedDepartment ?? '',
           otp: otp,
         );
       } else {
@@ -592,7 +597,7 @@ class _AuthDialogState extends State<AuthDialog> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            initialValue: _selectedDepartment,
+                            value: _selectedDepartment,
                             decoration: _googleStyleInputDecoration(
                               label: 'Department',
                               prefixIcon: const Icon(
@@ -600,11 +605,14 @@ class _AuthDialogState extends State<AuthDialog> {
                                 size: 20,
                               ),
                             ),
-                            items: _departments.map((dept) {
+                            items: _dbDepartments.map((dept) {
+                              final name = dept['name'] as String? ?? '';
+                              final code = dept['code'] as String? ?? '';
+                              final label = code.isNotEmpty ? '$name ($code)' : name;
                               return DropdownMenuItem(
-                                value: dept,
+                                value: name,
                                 child: Text(
-                                  dept,
+                                  label,
                                   style: const TextStyle(fontSize: 13),
                                   overflow: TextOverflow.ellipsis,
                                 ),

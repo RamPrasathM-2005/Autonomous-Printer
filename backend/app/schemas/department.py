@@ -47,3 +47,19 @@ class DepartmentDetailResponse(BaseModel):
     users: List[DepartmentUser]
     printers: List[DepartmentPrinter]
     recent_jobs: List[RecentPrintJob]
+
+class PublicDepartmentItem(BaseModel):
+    id: int
+    code: str
+    name: str
+    description: Optional[str] = None
+
+class DepartmentCreate(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+
+class DepartmentUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
