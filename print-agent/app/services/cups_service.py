@@ -16,13 +16,13 @@ class CupsService:
         self.printer_name = config.PRINTER_NAME
         self.mock_mode = config.MOCK_CUPS
 
-        # Try pycups if available
+        # Try pycups if available (native on Linux / Raspberry Pi OS)
         self.has_pycups = False
         try:
-            import cups
-            self.cups = cups
+            import importlib
+            self.cups = importlib.import_module("cups")
             self.has_pycups = True
-        except ImportError:
+        except (ImportError, ModuleNotFoundError):
             self.cups = None
 
     def build_cups_options(self, settings: Dict[str, Any]) -> Dict[str, str]:
