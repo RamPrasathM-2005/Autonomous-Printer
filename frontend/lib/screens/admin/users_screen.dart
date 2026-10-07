@@ -84,9 +84,13 @@ class _UsersScreenState extends State<UsersScreen> {
 
   Future<void> _showEditUserDialog(Map<String, dynamic> user) async {
     final nameCtrl = TextEditingController(text: user['full_name'] ?? '');
+    final emailCtrl = TextEditingController(text: user['email'] ?? '');
+    final rollCtrl = TextEditingController(text: user['roll_number'] ?? '');
+    final passwordCtrl = TextEditingController();
     int? selectedDept = user['department_id'] as int?;
     String selectedRole = user['role'] ?? 'USER';
     bool isActive = user['is_active'] == true;
+    String? dialogError;
 
     final updated = await showDialog<bool>(
       context: context,
@@ -114,9 +118,27 @@ class _UsersScreenState extends State<UsersScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${user['email'] ?? user['roll_number'] ?? 'User #${user['id']}'}',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textMuted)),
-                  const SizedBox(height: 16),
+                  if (dialogError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.dangerSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.dangerBorder),
+                      ),
+                      child: Text(dialogError!, style: const TextStyle(color: AppTheme.danger, fontSize: 13)),
+                    ),
+                  ],
+                  TextField(
+                    controller: rollCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Roll Number / ID',
+                      prefixIcon: const Icon(Icons.numbers_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: nameCtrl,
                     decoration: InputDecoration(
@@ -125,7 +147,17 @@ class _UsersScreenState extends State<UsersScreen> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email Address',
+                      prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   DropdownButtonFormField<int?>(
                     value: selectedDept,
                     decoration: InputDecoration(
@@ -147,7 +179,7 @@ class _UsersScreenState extends State<UsersScreen> {
                       setDialogState(() => selectedDept = val);
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     value: selectedRole,
                     decoration: InputDecoration(
@@ -164,10 +196,20 @@ class _UsersScreenState extends State<UsersScreen> {
                       if (val != null) setDialogState(() => selectedRole = val);
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: passwordCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Reset Password (leave blank to keep current)',
+                      prefixIcon: const Icon(Icons.lock_reset_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   SwitchListTile(
                     title: const Text('Account Active', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                    subtitle: const Text('Allow student or staff to log in and print', style: TextStyle(fontSize: 12)),
+                    subtitle: const Text('Allow user to log in and create print orders', style: TextStyle(fontSize: 12)),
                     value: isActive,
                     activeColor: AppTheme.primary,
                     contentPadding: EdgeInsets.zero,
@@ -190,20 +232,36 @@ class _UsersScreenState extends State<UsersScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () async {
+                final cleanEmail = emailCtrl.text.trim();
+                final cleanName = nameCtrl.text.trim();
+                if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+                  setDialogState(() => dialogError = 'Valid email address is required.');
+                  return;
+                }
+                if (cleanName.isEmpty) {
+                  setDialogState(() => dialogError = 'Full name is required.');
+                  return;
+                }
+
                 try {
-                  await AdminApiService.updateUser(user['id'] as int, {
-                    'full_name': nameCtrl.text.trim(),
+                  final updatePayload = <String, dynamic>{
+                    'full_name': cleanName,
+                    'email': cleanEmail,
+                    'roll_number': rollCtrl.text.trim().isEmpty ? null : rollCtrl.text.trim(),
                     'department_id': selectedDept ?? 0,
                     'role': selectedRole,
                     'is_active': isActive,
-                  });
+                  };
+                  if (passwordCtrl.text.trim().isNotEmpty) {
+                    updatePayload['password'] = passwordCtrl.text.trim();
+                  }
+
+                  await AdminApiService.updateUser(user['id'] as int, updatePayload);
                   if (ctx.mounted) Navigator.of(ctx).pop(true);
                 } catch (e) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Failed: $e'), backgroundColor: AppTheme.danger),
-                    );
-                  }
+                  setDialogState(() {
+                    dialogError = e.toString().replaceAll('Exception: ', '');
+                  });
                 }
               },
               child: const Text('Save Changes'),
@@ -215,6 +273,288 @@ class _UsersScreenState extends State<UsersScreen> {
 
     if (updated == true) {
       _loadUsers();
+    }
+  }
+
+  Future<void> _showAddUserDialog() async {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final rollCtrl = TextEditingController();
+    int? selectedDept;
+    String selectedRole = 'USER';
+    bool isActive = true;
+    String? formError;
+    bool isSubmitting = false;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySurface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.person_add_outlined, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Add User Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (formError != null)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.dangerSurface,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(formError!, style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+                    ),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Full Name',
+                      prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Email Address',
+                      prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: rollCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Roll Number / Staff ID (Optional)',
+                      prefixIcon: const Icon(Icons.numbers_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<int?>(
+                    value: selectedDept,
+                    decoration: InputDecoration(
+                      labelText: 'Department',
+                      prefixIcon: const Icon(Icons.business_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('Unassigned'),
+                      ),
+                      ..._departments.map((d) => DropdownMenuItem<int?>(
+                            value: d['id'] as int,
+                            child: Text('${d['name']} (${d['code']})'),
+                          )),
+                    ],
+                    onChanged: (val) {
+                      setDialogState(() => selectedDept = val);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: 'System Role',
+                      prefixIcon: const Icon(Icons.security_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'USER', child: Text('Standard User / Student')),
+                      DropdownMenuItem(value: 'ADMIN', child: Text('Administrator')),
+                      DropdownMenuItem(value: 'SUPER_ADMIN', child: Text('Super Admin')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedRole = val);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  SwitchListTile(
+                    title: const Text('Account Active', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    subtitle: const Text('Allow user to log in and print', style: TextStyle(fontSize: 12)),
+                    value: isActive,
+                    activeColor: AppTheme.primary,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) {
+                      setDialogState(() => isActive = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final name = nameCtrl.text.trim();
+                      final email = emailCtrl.text.trim();
+                      if (name.isEmpty) {
+                        setDialogState(() => formError = 'Full name is required.');
+                        return;
+                      }
+                      if (email.isEmpty || !email.contains('@')) {
+                        setDialogState(() => formError = 'A valid email address is required.');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isSubmitting = true;
+                        formError = null;
+                      });
+
+                      try {
+                        await AdminApiService.createUser({
+                          'full_name': name,
+                          'email': email,
+                          'roll_number': rollCtrl.text.trim().isNotEmpty ? rollCtrl.text.trim() : null,
+                          'department_id': selectedDept,
+                          'role': selectedRole,
+                          'is_active': isActive,
+                        });
+                        if (ctx.mounted) Navigator.of(ctx).pop(true);
+                      } catch (e) {
+                        setDialogState(() {
+                          isSubmitting = false;
+                          formError = e.toString().replaceFirst('Exception: ', '');
+                        });
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Create User'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (created == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User account created successfully.'), backgroundColor: AppTheme.success),
+        );
+      }
+      _loadUsers();
+    }
+  }
+
+  Future<void> _confirmDeleteUser(Map<String, dynamic> user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete User', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Text('Delete user ${user['full_name'] ?? user['email']}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await AdminApiService.deleteUser(user['id'] as int);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User deleted successfully.'), backgroundColor: AppTheme.success),
+          );
+          _loadUsers();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppTheme.danger),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _toggleUserStatus(Map<String, dynamic> user, bool makeActive) async {
+    final actionLabel = makeActive ? 'Reactivate' : 'Deactivate';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('$actionLabel Account', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Text('$actionLabel user ${user['full_name'] ?? user['email']}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: makeActive ? AppTheme.success : AppTheme.warning,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await AdminApiService.toggleUserStatus(user['id'] as int, makeActive);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Account ${makeActive ? "reactivated" : "deactivated"} successfully.'),
+              backgroundColor: makeActive ? AppTheme.success : AppTheme.warning,
+            ),
+          );
+          _loadUsers();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: AppTheme.danger),
+          );
+        }
+      }
     }
   }
 
@@ -596,6 +936,34 @@ class _UsersScreenState extends State<UsersScreen> {
                       ),
                     ),
 
+                    // Status Filter
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<bool?>(
+                          value: _selectedIsActive,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                          items: const [
+                            DropdownMenuItem<bool?>(value: null, child: Text('Status: All Statuses')),
+                            DropdownMenuItem<bool?>(value: true, child: Text('Status: Active Only')),
+                            DropdownMenuItem<bool?>(value: false, child: Text('Status: Deactivated Only')),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedIsActive = val;
+                              _currentPage = 1;
+                            });
+                            _loadUsers();
+                          },
+                        ),
+                      ),
+                    ),
+
                     // Refresh Button
                     OutlinedButton.icon(
                       onPressed: _loadUsers,
@@ -619,10 +987,21 @@ class _UsersScreenState extends State<UsersScreen> {
                     ),
 
                     // Import Roster (.xlsx / .csv)
-                    FilledButton.icon(
+                    OutlinedButton.icon(
                       onPressed: _showImportRosterDialog,
                       icon: const Icon(Icons.upload_file_rounded, size: 16),
                       label: const Text('Import Roster', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+
+                    // Add Single User
+                    FilledButton.icon(
+                      onPressed: _showAddUserDialog,
+                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                      label: const Text('Add User', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppTheme.primary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -633,6 +1012,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 20),
 
             // User Table Card
@@ -756,9 +1136,24 @@ class _UsersScreenState extends State<UsersScreen> {
                         );
                       },
                     ),
+                    IconButton(
+                      icon: Icon(
+                        isActive ? Icons.block_outlined : Icons.check_circle_outline,
+                        size: 18,
+                        color: isActive ? AppTheme.warning : AppTheme.success,
+                      ),
+                      tooltip: isActive ? 'Deactivate User' : 'Reactivate User',
+                      onPressed: () => _toggleUserStatus(u, !isActive),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
+                      tooltip: 'Delete User',
+                      onPressed: () => _confirmDeleteUser(u),
+                    ),
                   ],
                 ),
               ),
+
             ],
           );
         }).toList(),

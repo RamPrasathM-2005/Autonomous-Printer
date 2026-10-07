@@ -66,6 +66,12 @@ class AuthService:
                     error_code="USER_NOT_FOUND",
                     message="No account found with this email address. Please sign up first."
                 )
+            if not existing_user.is_active:
+                raise AppException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    error_code="USER_INACTIVE",
+                    message="Account has been deactivated. Please contact your administrator."
+                )
         elif clean_purpose == "signup":
             if existing_user:
                 raise AppException(

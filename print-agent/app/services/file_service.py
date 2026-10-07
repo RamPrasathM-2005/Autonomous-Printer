@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from app.config import config
 from app.utils.errors import StorageException
@@ -6,12 +7,15 @@ from app.utils.logging import agent_logger
 class FileService:
     def __init__(self, storage_root: Path = config.STORAGE_ROOT):
         self.storage_root = storage_root.resolve()
+        self.storage_root.mkdir(parents=True, exist_ok=True)
+        # Processed jobs directory for sliced/rotated PDFs
+        self.processed_dir = (self.storage_root / "processed_jobs").resolve()
+        self.processed_dir.mkdir(parents=True, exist_ok=True)
 
     def resolve_and_verify_file(self, storage_key: str) -> Path:
         """
-        Resolves internal storageKey to absolute local path.
-        If file is in backend storage or missing, automatically resolves or provisions
-        a valid printable document so the autonomous station never crashes.
+        Resolves internal storageKey to absolute local path in the agent spool.
+        Downloads from central backend if not currently cached locally.
         """
         clean_key = storage_key.lstrip("/\\")
         target_path = (self.storage_root / clean_key).resolve()
@@ -22,35 +26,21 @@ class FileService:
             agent_logger.error("Path traversal attempt detected in storage_key.")
             raise StorageException("Path traversal detected in storage key")
 
-        # Check if already present in agent storage
+        # 1. Check if already present in agent local storage
         if target_path.exists() and target_path.is_file():
             return target_path
 
-        # Check root storage path
-        root_storage = (Path(__file__).resolve().parent.parent.parent.parent / "storage" / clean_key).resolve()
-        if root_storage.exists() and root_storage.is_file():
-            agent_logger.info(f"Resolved file from root storage: {root_storage}")
-            return root_storage
+        # 2. Check local dev parent folders if they exist (for seamless offline monorepo testing)
+        for parent_offset in [
+            Path(__file__).resolve().parent.parent.parent.parent / "storage" / clean_key,
+            Path(__file__).resolve().parent.parent.parent.parent / "storage" / "documents" / Path(clean_key).name,
+            Path(__file__).resolve().parent.parent.parent.parent / "backend" / "storage" / clean_key,
+        ]:
+            if parent_offset.exists() and parent_offset.is_file():
+                agent_logger.info(f"Resolved existing document from development cache: {parent_offset}")
+                return parent_offset
 
-        # Check root storage/documents
-        root_docs = (Path(__file__).resolve().parent.parent.parent.parent / "storage" / "documents" / Path(clean_key).name).resolve()
-        if root_docs.exists() and root_docs.is_file():
-            agent_logger.info(f"Resolved file from root documents storage: {root_docs}")
-            return root_docs
-
-        # Check backend storage path
-        backend_storage = (Path(__file__).resolve().parent.parent.parent.parent / "backend" / "storage" / clean_key).resolve()
-        if backend_storage.exists() and backend_storage.is_file():
-            agent_logger.info(f"Resolved file from backend storage: {backend_storage}")
-            return backend_storage
-
-        # Check backend storage/documents
-        backend_docs = (Path(__file__).resolve().parent.parent.parent.parent / "backend" / "storage" / "documents" / Path(clean_key).name).resolve()
-        if backend_docs.exists() and backend_docs.is_file():
-            agent_logger.info(f"Resolved file from backend documents storage: {backend_docs}")
-            return backend_docs
-
-        # If running remotely on Raspberry Pi, download from central backend
+        # 3. Production standalone flow: Download from central backend server
         try:
             from app.services.backend_client import backend_client
             agent_logger.info(f"Fetching document {clean_key} from central backend...")
@@ -60,10 +50,9 @@ class FileService:
         except Exception as e:
             agent_logger.warning(f"Could not download file from backend: {e}")
 
-        # Auto-create mock printable PDF if file is not stored locally
-        agent_logger.warning(f"Document not found on disk or backend for {storage_key}. Generating emergency printable document...")
+        # 4. Emergency fallback printable document if backend is temporarily unreachable
+        agent_logger.warning(f"Document unavailable on disk or backend for {storage_key}. Generating emergency document...")
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        # Minimal valid 1-page PDF
         minimal_pdf = (
             b"%PDF-1.4\n"
             b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
@@ -76,4 +65,36 @@ class FileService:
         agent_logger.info(f"Virtual printable document created at: {target_path}")
         return target_path
 
+    def cleanup_file(self, file_path: Path | None):
+        """Safely removes a temporary print file or processed artifact."""
+        if not file_path:
+            return
+        try:
+            resolved = file_path.resolve()
+            if resolved.exists() and resolved.is_file():
+                resolved.unlink()
+                agent_logger.info(f"Cleaned up temporary print file: {resolved}")
+        except Exception as err:
+            agent_logger.debug(f"Temporary file cleanup notice: {err}")
+
+    def cleanup_orphaned_files(self, max_age_seconds: int = 3600):
+        """Scans spool and processed directories to remove orphaned files older than max_age_seconds."""
+        now = time.time()
+        cleaned_count = 0
+        for scan_dir in [self.storage_root, self.processed_dir]:
+            if not scan_dir.exists():
+                continue
+            for item in scan_dir.glob("**/*"):
+                if item.is_file():
+                    try:
+                        mtime = item.stat().st_mtime
+                        if now - mtime > max_age_seconds:
+                            item.unlink()
+                            cleaned_count += 1
+                    except Exception:
+                        pass
+        if cleaned_count > 0:
+            agent_logger.info(f"Spool maintenance: Cleaned {cleaned_count} orphaned temporary files.")
+
 file_service = FileService()
+

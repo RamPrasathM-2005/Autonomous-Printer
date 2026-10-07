@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Achuppori Kiosk
+Comment=Autonomous Print Agent Kiosk Interface
+Exec=/bin/bash /home/pi/print-agent/deploy/kiosk/kiosk-session.sh
+Terminal=false
+Hidden=false
+X-GNOME-Autostart-enabled=true

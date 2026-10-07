@@ -18,9 +18,16 @@ class Config:
     BACKEND_URL: str = normalize_backend_url(os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api"))
     AGENT_TOKEN: str = os.getenv("AGENT_TOKEN", "test-agent-device-token-secret")
     STORAGE_ROOT: Path = Path(os.getenv("STORAGE_ROOT", "./storage")).resolve()
+    LOG_DIR: Path = Path(os.getenv("LOG_DIR", "./logs")).resolve()
 
-    POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "3"))
-    HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "15"))
+    # Optimized intervals for Raspberry Pi 3B continuous 24/7 operation
+    POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
+    HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
+    BACKOFF_MAX_SECONDS: int = int(os.getenv("BACKOFF_MAX_SECONDS", "30"))
+
+    # Memory and storage boundaries
+    MIN_FREE_DISK_MB: int = int(os.getenv("MIN_FREE_DISK_MB", "200"))
+    MAX_CACHE_JOBS: int = int(os.getenv("MAX_CACHE_JOBS", "100"))
 
     CUPS_SERVER: str = os.getenv("CUPS_SERVER", "localhost")
     PRINTER_NAME: str = os.getenv("PRINTER_NAME", "")
@@ -29,3 +36,4 @@ class Config:
     INTERNAL_AGENT_TOKEN: str = os.getenv("INTERNAL_AGENT_TOKEN", os.getenv("AGENT_TOKEN", "test-agent-device-token-secret"))
 
 config = Config()
+

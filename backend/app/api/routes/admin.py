@@ -17,6 +17,7 @@ from app.schemas.admin import (
     AdminPrintServerUpdate,
     AdminAgentCupsPrinterItem,
     AdminUserItem,
+    AdminUserCreate,
     AdminUserUpdate,
     PaginatedAdminUsersResponse,
     AdminSystemSettings,
@@ -208,6 +209,17 @@ def get_admin_users(
         is_active=is_active
     )
 
+@router.post("/users", response_model=AdminUserItem, status_code=status.HTTP_201_CREATED)
+def create_admin_user(
+    data: AdminUserCreate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Creates a new user account with specified department and role.
+    """
+    return admin_service.create_user(data, db)
+
 @router.patch("/users/{user_id}", response_model=AdminUserItem)
 def update_admin_user(
     user_id: int,
@@ -219,6 +231,19 @@ def update_admin_user(
     Updates user details: department assignment, role, or active status toggle.
     """
     return admin_service.update_user(user_id, data, db)
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
+def delete_admin_user(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes a user account from the system directory.
+    """
+    admin_service.delete_user(user_id, admin.id, db)
+    return {"message": "User deleted successfully."}
+
 
 # ----------------- SYSTEM SETTINGS -----------------
 

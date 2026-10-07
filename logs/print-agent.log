@@ -1,0 +1,63 @@
+[2026-10-07 19:11:52] [ERROR] [PrintAgent] Path traversal attempt detected in storage_key.
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Starting execution of job job_station_1 (Order ORD-123)
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 19:11:52] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Missing internal token from 127.0.0.1
+[2026-10-07 19:11:52] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Invalid token provided from 127.0.0.1
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Starting execution of job job_auth_test_3 (Order None)
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Starting execution of job job_auth_test_4 (Order None)
+[2026-10-07 19:11:52] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_3: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 19:11:52] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_4: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Starting execution of job job_123 (Order ORD-456)
+[2026-10-07 19:11:52] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 19:12:26] [WARNING] [PrintAgent] Error in prepare_printable_file (Stream has ended unexpectedly), falling back to original: C:\Users\Hari\AppData\Local\Temp\pytest-of-Hari\pytest-1\test_cups_mock_submission0\test.pdf
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Submitting test.pdf to target printer 'Default_Office_Printer' with options: {'copies': '1', 'print-color-mode': 'monochrome', 'sides': 'one-sided', 'Duplex': 'None', 'media': 'A4', 'PageSize': 'A4', 'fit-to-page': 'True', 'InputSlot': 'Auto', 'orientation-requested': '3'}
+[2026-10-07 19:12:26] [INFO] [PrintAgent] [MOCK_CUPS] Successfully submitted simulated print job ID: cups-3c310c94 to 'Default_Office_Printer'
+[2026-10-07 19:12:26] [ERROR] [PrintAgent] Path traversal attempt detected in storage_key.
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Starting execution of job job_station_1 (Order ORD-123)
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 19:12:26] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Missing internal token from 127.0.0.1
+[2026-10-07 19:12:26] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Invalid token provided from 127.0.0.1
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Starting execution of job job_auth_test_3 (Order None)
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Starting execution of job job_auth_test_4 (Order None)
+[2026-10-07 19:12:26] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_3: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 19:12:26] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_4: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Starting execution of job job_123 (Order ORD-456)
+[2026-10-07 19:12:26] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 20:44:15] [WARNING] [PrintAgent] Error in prepare_printable_file (Stream has ended unexpectedly), falling back to original: C:\Users\Hari\AppData\Local\Temp\pytest-of-Hari\pytest-2\test_cups_mock_submission0\test.pdf
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Submitting test.pdf to target printer 'Default_Office_Printer' with options: {'copies': '1', 'print-color-mode': 'monochrome', 'sides': 'one-sided', 'Duplex': 'None', 'media': 'A4', 'PageSize': 'A4', 'fit-to-page': 'True', 'InputSlot': 'Auto', 'orientation-requested': '3'}
+[2026-10-07 20:44:15] [INFO] [PrintAgent] [MOCK_CUPS] Successfully submitted simulated print job ID: cups-da13a109 to 'Default_Office_Printer'
+[2026-10-07 20:44:15] [ERROR] [PrintAgent] Path traversal attempt detected in storage_key.
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Starting execution of job job_station_1 (Order ORD-123)
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 20:44:15] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Missing internal token from 127.0.0.1
+[2026-10-07 20:44:15] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Invalid token provided from 127.0.0.1
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Starting execution of job job_auth_test_3 (Order None)
+[2026-10-07 20:44:15] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_3: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Starting execution of job job_auth_test_4 (Order None)
+[2026-10-07 20:44:15] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_4: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Starting execution of job job_123 (Order ORD-456)
+[2026-10-07 20:44:15] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 21:18:47] [WARNING] [PrintAgent] Error in prepare_printable_file (Stream has ended unexpectedly), falling back to original: C:\Users\Hari\AppData\Local\Temp\pytest-of-Hari\pytest-3\test_cups_mock_submission0\test.pdf
+[2026-10-07 21:18:47] [INFO] [PrintAgent] Submitting test.pdf to target printer 'Default_Office_Printer' with options: {'copies': '1', 'print-color-mode': 'monochrome', 'sides': 'one-sided', 'Duplex': 'None', 'media': 'A4', 'PageSize': 'A4', 'fit-to-page': 'True', 'InputSlot': 'Auto', 'orientation-requested': '3'}
+[2026-10-07 21:18:47] [INFO] [PrintAgent] [MOCK_CUPS] Successfully submitted simulated print job ID: cups-f43151dc to 'Default_Office_Printer'
+[2026-10-07 21:18:47] [ERROR] [PrintAgent] Path traversal attempt detected in storage_key.
+[2026-10-07 21:18:47] [INFO] [PrintAgent] Starting execution of job job_station_1 (Order ORD-123)
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Fetching document documents/1/doc.pdf from central backend...
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] Failed to download document from backend (404): {"error":"FILE_NOT_FOUND","message":"Document not found on disk."}
+[2026-10-07 21:18:48] [WARNING] [PrintAgent] Document unavailable on disk or backend for documents/1/doc.pdf. Generating emergency document...
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Virtual printable document created at: D:\storage\documents\1\doc.pdf
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Submitting proc_05f75699_doc.pdf to target printer 'Default_Office_Printer' with options: {'copies': '1', 'print-color-mode': 'monochrome', 'sides': 'one-sided', 'Duplex': 'None', 'media': 'A4', 'PageSize': 'A4', 'fit-to-page': 'True', 'InputSlot': 'Auto', 'orientation-requested': '3'}
+[2026-10-07 21:18:48] [INFO] [PrintAgent] [MOCK_CUPS] Successfully submitted simulated print job ID: cups-d38cb30d to 'Default_Office_Printer'
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] Failed to update job status (404): {"error":"NOT_FOUND","message":"Print job not found for this print server."}
+[2026-10-07 21:18:48] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Missing internal token from 127.0.0.1
+[2026-10-07 21:18:48] [WARNING] [PrintAgent] [SECURITY] Unauthorized request to /local/print-job: Invalid token provided from 127.0.0.1
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Starting execution of job job_auth_test_3 (Order None)
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_3: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Starting execution of job job_auth_test_4 (Order None)
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] File lookup failed for job job_auth_test_4: 'NoneType' object has no attribute 'lstrip'
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] Failed to update job status (404): {"error":"NOT_FOUND","message":"Print job not found for this print server."}
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] Failed to update job status (404): {"error":"NOT_FOUND","message":"Print job not found for this print server."}
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Starting execution of job job_123 (Order ORD-456)
+[2026-10-07 21:18:48] [INFO] [PrintAgent] Submitting proc_714711de_doc.pdf to target printer 'Default_Office_Printer' with options: {'copies': '1', 'print-color-mode': 'monochrome', 'sides': 'one-sided', 'Duplex': 'None', 'media': 'A4', 'PageSize': 'A4', 'fit-to-page': 'True', 'InputSlot': 'Auto', 'orientation-requested': '3'}
+[2026-10-07 21:18:48] [INFO] [PrintAgent] [MOCK_CUPS] Successfully submitted simulated print job ID: cups-eed08237 to 'Default_Office_Printer'
+[2026-10-07 21:18:48] [ERROR] [PrintAgent] Failed to update job status (404): {"error":"NOT_FOUND","message":"Print job not found for this print server."}

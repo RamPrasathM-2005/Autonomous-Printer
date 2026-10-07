@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class RecentPrintJob(BaseModel):
     id: str
@@ -187,11 +187,24 @@ class AdminUserItem(BaseModel):
     total_spent: float = 0.0
     created_at: str
 
+class AdminUserCreate(BaseModel):
+    email: str
+    full_name: str
+    roll_number: Optional[str] = None
+    department_id: Optional[int] = None
+    role: Optional[str] = "USER"
+    is_active: bool = True
+    password: Optional[str] = None
+
 class AdminUserUpdate(BaseModel):
     full_name: Optional[str] = None
+    email: Optional[str] = None
+    roll_number: Optional[str] = None
     department_id: Optional[int] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = None
+
 
 class PaginatedAdminUsersResponse(BaseModel):
     users: List[AdminUserItem]
@@ -239,5 +252,5 @@ class UserImportSummary(BaseModel):
     created: int
     updated: int
     failed: int
-    errors: List[str] = []
+    errors: List[str] = Field(default_factory=list)
 

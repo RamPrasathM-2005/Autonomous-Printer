@@ -32,6 +32,7 @@ from app.schemas.admin import (
     AdminPrintServerUpdate,
     AdminAgentCupsPrinterItem,
     AdminUserItem,
+    AdminUserCreate,
     AdminUserUpdate,
     PaginatedAdminUsersResponse,
     AdminSystemSettings,
@@ -880,6 +881,22 @@ class AdminService:
         if data.full_name is not None:
             user.full_name = data.full_name.strip()
 
+        if data.email is not None:
+            clean_email = data.email.strip().lower()
+            if clean_email and clean_email != (user.email or "").lower():
+                existing_email = db.query(User).filter(User.email == clean_email, User.id != user.id).first()
+                if existing_email:
+                    raise AppException("A user with this email address already exists.", status_code=400)
+                user.email = clean_email
+
+        if data.roll_number is not None:
+            clean_roll = data.roll_number.strip() if data.roll_number.strip() else None
+            if clean_roll and clean_roll != user.roll_number:
+                existing_roll = db.query(User).filter(User.roll_number == clean_roll, User.id != user.id).first()
+                if existing_roll:
+                    raise AppException(f"A user with roll number '{clean_roll}' already exists.", status_code=400)
+            user.roll_number = clean_roll
+
         if data.department_id is not None:
             if data.department_id > 0:
                 dept = db.query(Department).filter(Department.id == data.department_id).first()
@@ -897,8 +914,15 @@ class AdminService:
             except ValueError:
                 raise AppException(f"Invalid user role '{data.role}'", status_code=400)
 
+        if data.password is not None and data.password.strip():
+            from app.config.security import hash_password
+            user.password_hash = hash_password(data.password.strip())
+
         if data.is_active is not None:
             user.is_active = data.is_active
+            if data.is_active is False:
+                from app.db.models.refresh_token import RefreshToken
+                db.query(RefreshToken).filter(RefreshToken.user_id == user.id).update({"revoked": True})
 
         db.commit()
         db.refresh(user)
@@ -924,6 +948,89 @@ class AdminService:
             total_spent=0.0,
             created_at=user.created_at.strftime("%Y-%m-%d %H:%M:%S") if user.created_at else "",
         )
+
+    @staticmethod
+    def create_user(data: AdminUserCreate, db: Session) -> AdminUserItem:
+        from app.db.models.user import UserRole
+        from app.config.security import hash_password
+        import secrets
+
+        clean_email = data.email.strip().lower()
+        if not clean_email or "@" not in clean_email:
+            raise AppException("A valid email address is required.", status_code=400)
+
+        existing = db.query(User).filter(User.email == clean_email).first()
+        if existing:
+            raise AppException("A user with this email address already exists.", status_code=400)
+
+        clean_roll = data.roll_number.strip() if data.roll_number else None
+        if clean_roll:
+            existing_roll = db.query(User).filter(User.roll_number == clean_roll).first()
+            if existing_roll:
+                raise AppException(f"A user with roll number '{clean_roll}' already exists.", status_code=400)
+
+        dept_id = None
+        dept_name = None
+        if data.department_id and data.department_id > 0:
+            dept = db.query(Department).filter(Department.id == data.department_id).first()
+            if not dept:
+                raise AppException("Selected department does not exist.", status_code=400)
+            dept_id = dept.id
+            dept_name = dept.name
+
+        try:
+            role_val = UserRole(data.role.upper()) if data.role else UserRole.USER
+        except ValueError:
+            raise AppException(f"Invalid user role '{data.role}'", status_code=400)
+
+        raw_password = data.password.strip() if data.password else secrets.token_urlsafe(16)
+        pw_hash = hash_password(raw_password)
+
+        new_user = User(
+            email=clean_email,
+            full_name=data.full_name.strip(),
+            roll_number=clean_roll,
+            department_id=dept_id,
+            department=dept_name,
+            password_hash=pw_hash,
+            role=role_val,
+            is_active=data.is_active,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        return AdminUserItem(
+            id=new_user.id,
+            email=new_user.email,
+            phone=getattr(new_user, "phone", None),
+            full_name=new_user.full_name,
+            roll_number=new_user.roll_number,
+            department_id=new_user.department_id,
+            department_name=dept_name,
+            role=new_user.role.value if hasattr(new_user.role, "value") else str(new_user.role),
+            is_active=new_user.is_active,
+            total_orders=0,
+            total_pages=0,
+            total_spent=0.0,
+            created_at=new_user.created_at.strftime("%Y-%m-%d %H:%M:%S") if new_user.created_at else "",
+        )
+
+    @staticmethod
+    def delete_user(user_id: int, current_admin_id: int, db: Session) -> bool:
+        if user_id == current_admin_id:
+            raise AppException("Cannot delete your own administrator account.", status_code=400)
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise AppException(f"User with ID {user_id} not found.", status_code=404)
+
+        from app.db.models.idempotency import IdempotencyKey
+        db.query(IdempotencyKey).filter(IdempotencyKey.user_id == user_id).delete(synchronize_session=False)
+
+        db.delete(user)
+        db.commit()
+        return True
 
     @staticmethod
     def get_settings(current_admin_email: str) -> AdminSystemSettings:

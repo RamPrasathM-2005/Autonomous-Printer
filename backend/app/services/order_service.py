@@ -35,6 +35,12 @@ class OrderService:
             from app.db.models.user import User
             usr = db.query(User).filter(User.id == user_id).first()
             if usr:
+                if not usr.is_active:
+                    raise AppException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        error_code="USER_INACTIVE",
+                        message="Your user account has been deactivated. Orders cannot be created."
+                    )
                 roll_number = roll_number or usr.roll_number
                 department = department or usr.department
 

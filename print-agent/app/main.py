@@ -41,14 +41,25 @@ def create_app() -> Flask:
 
     return app
 
+import signal
+
 def run_agent():
+    def handle_shutdown(signum, frame):
+        agent_logger.info(f"Received termination signal ({signum}). Initiating graceful agent shutdown...")
+        job_poller.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_shutdown)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, handle_shutdown)
+
     agent_logger.info(f"Starting Flask Print Agent for station: {config.AGENT_ID} on port {config.PORT}")
     # Start background job poller and heartbeat
     job_poller.start()
 
     app = create_app()
-    # Accessible locally on Ubuntu PC and via LAN for phone QR scans / APK downloads
-    app.run(host="0.0.0.0", port=config.PORT, debug=False)
+    app.run(host="0.0.0.0", port=config.PORT, debug=False, threaded=True)
 
 if __name__ == "__main__":
     run_agent()
+

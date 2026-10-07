@@ -1,5 +1,6 @@
 import os
 import re
+import socket
 import subprocess
 import uuid
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import Dict, Any, Tuple
 from app.config import config
 from app.utils.errors import CupsException
 from app.utils.logging import agent_logger
+from app.services.file_service import file_service
+
 
 class CupsService:
     def __init__(self):
@@ -176,7 +179,7 @@ class CupsService:
         if not needs_processing:
             return file_path
 
-        out_dir = Path(__file__).resolve().parent.parent.parent / "storage" / "processed_jobs"
+        out_dir = file_service.processed_dir
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"proc_{uuid.uuid4().hex[:8]}_{file_path.stem}.pdf"
 
@@ -277,18 +280,7 @@ class CupsService:
 
         agent_logger.info(f"Submitting {printable_file.name} to target printer '{target_printer}' with options: {options}")
 
-        # Store a verified copy in system storage so the user can inspect printed files
-        try:
-            printed_dir = Path(__file__).resolve().parent.parent.parent.parent / "storage" / "printed_outputs"
-            printed_dir.mkdir(parents=True, exist_ok=True)
-            mode_tag = "COLOR" if options.get("print-color-mode") == "color" else "GRAYSCALE"
-            saved_copy = printed_dir / f"PRINTED_{mode_tag}_{printable_file.name}"
-            import shutil
-            if printable_file.exists() and printable_file.resolve() != saved_copy.resolve():
-                shutil.copy2(printable_file, saved_copy)
-                agent_logger.info(f"Preserved physical print file in storage: {saved_copy}")
-        except Exception as copy_err:
-            agent_logger.warning(f"Could not save copy to printed_outputs: {copy_err}")
+        self.last_prepared_file = printable_file if printable_file != file_path else None
 
         # If in Mock mode or Windows without native CUPS
         if self.mock_mode or (os.name == 'nt' and not self.has_pycups):

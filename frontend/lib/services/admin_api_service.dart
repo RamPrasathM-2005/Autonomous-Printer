@@ -682,6 +682,39 @@ class AdminApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  static Future<Map<String, dynamic>> createUser(Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final response = await http
+        .post(
+          Uri.parse('$origin/api/admin/users'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to create user.');
+      } catch (_) {
+        throw Exception('Failed to create user (HTTP ${response.statusCode}).');
+      }
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   static Future<Map<String, dynamic>> updateUser(int id, Map<String, dynamic> data) async {
     final origin = ApiConfig.backendUrl;
     final response = await http
@@ -708,6 +741,41 @@ class AdminApiService {
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  static Future<void> deleteUser(int id) async {
+    final origin = ApiConfig.backendUrl;
+    final token = AdminAuthService.accessToken;
+
+    if (token == null) {
+      throw Exception('Admin authentication token missing. Please sign in.');
+    }
+
+    final response = await http
+        .delete(
+          Uri.parse('$origin/api/admin/users/$id'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to delete user.');
+      } catch (_) {
+        throw Exception('Failed to delete user (HTTP ${response.statusCode}).');
+      }
+    }
+  }
+
+  static Future<Map<String, dynamic>> toggleUserStatus(int id, bool isActive) async {
+    return updateUser(id, {'is_active': isActive});
+  }
+
 
   // ----------------- SYSTEM SETTINGS -----------------
 

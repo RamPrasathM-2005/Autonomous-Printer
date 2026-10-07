@@ -101,6 +101,37 @@ def test_printers_users_settings_endpoints(db_session):
         assert patch_u.json()['department_id'] == dept.id
         assert patch_u.json()['is_active'] is False
 
+        # Test Create User (CRUD - Create)
+        create_u = client.post(
+            '/api/admin/users',
+            json={
+                'email': 'new_student@example.com',
+                'full_name': 'New Student',
+                'roll_number': '2026CSE100',
+                'department_id': dept.id,
+                'role': 'USER',
+                'is_active': True
+            },
+            headers=headers
+        )
+        assert create_u.status_code == 201
+        created_user_id = create_u.json()['id']
+        assert create_u.json()['email'] == 'new_student@example.com'
+        assert create_u.json()['department_id'] == dept.id
+
+        # Test Delete User (CRUD - Delete)
+        del_u = client.delete(
+            f'/api/admin/users/{created_user_id}',
+            headers=headers
+        )
+        assert del_u.status_code == 200
+
+        # Verify User is deleted
+        res_after_del = client.get(f'/api/admin/users?search=new_student@example.com', headers=headers)
+        assert res_after_del.status_code == 200
+        assert res_after_del.json()['total'] == 0
+
+
         # 3. Test Settings API
         res_settings = client.get('/api/admin/settings', headers=headers)
         assert res_settings.status_code == 200

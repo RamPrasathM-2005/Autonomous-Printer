@@ -55,6 +55,7 @@ def _sync_missing_columns():
                 db_cols = {c['name'] for c in insp.get_columns(table_name)}
                 for col in table.columns:
                     if col.name not in db_cols:
+                        col_type = col.type.compile(engine.dialect)
                         type_str = str(col_type).upper()
                         if "DATETIME" in type_str or "TIMESTAMP" in type_str:
                             if col.name == "updated_at":
@@ -294,8 +295,7 @@ from fastapi.responses import FileResponse
 # APK download routes
 downloads_dir = Path(__file__).resolve().parent.parent.parent / "downloads"
 
-@app.get("/api/downloads/apk", tags=["Downloads"])
-@app.get("/downloads/achuppori.apk", tags=["Downloads"])
+@app.get("/api/downloads/apk", tags=["Downloads"], operation_id="download_apk_api")
 def download_achuppori_apk():
     apk_file = downloads_dir / "achuppori.apk"
     if apk_file.exists():
@@ -309,6 +309,10 @@ def download_achuppori_apk():
         error_code="APK_NOT_FOUND",
         message="Android APK file is not available."
     )
+
+@app.get("/downloads/achuppori.apk", tags=["Downloads"], include_in_schema=False)
+def download_achuppori_apk_direct():
+    return download_achuppori_apk()
 
 
 # Frontends directory paths

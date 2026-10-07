@@ -1,0 +1,39 @@
+[Unit]
+Description=Autonomous Printer - Lightweight Print Agent Daemon
+After=network-online.target cups.service
+Wants=network-online.target cups.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=pi
+Group=lp
+WorkingDirectory=/home/pi/print-agent
+EnvironmentFile=/home/pi/print-agent/.env
+ExecStart=/home/pi/print-agent/venv/bin/python app/main.py
+Restart=always
+RestartSec=5s
+
+# Low-memory and process protection for Raspberry Pi 3 Model B (1GB RAM)
+MemoryMax=350M
+MemoryHigh=280M
+CPUQuota=85%
+TimeoutStopSec=15
+KillMode=mixed
+SendSIGKILL=yes
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/pi/print-agent/storage /home/pi/print-agent/logs
+
+# Standard output captured directly by journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=print-agent
+
+[Install]
+WantedBy=multi-user.target

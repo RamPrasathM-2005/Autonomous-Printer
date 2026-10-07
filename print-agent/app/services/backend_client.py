@@ -1,6 +1,9 @@
 import requests
+import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from app.config import config
 from app.utils.errors import BackendCommunicationException, OTPReleaseException
 from app.utils.logging import agent_logger
@@ -10,11 +13,27 @@ class BackendClient:
         self.base_url = config.BACKEND_URL
         self.token = config.AGENT_TOKEN
         self.session = requests.Session()
+        
+        # Configure connection pooling and HTTP keep-alive reuse for low CPU overhead
+        retries = Retry(
+            total=2,
+            backoff_factor=0.3,
+            status_forcelist=[502, 503, 504],
+            raise_on_status=False
+        )
+        adapter = HTTPAdapter(
+            pool_connections=5,
+            pool_maxsize=10,
+            max_retries=retries
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
         self.session.headers.update({
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
             "User-Agent": f"PrintAgent/{config.AGENT_ID}"
         })
+
 
     def send_heartbeat(self, printer_state: str = "READY", paper_state: str = "AVAILABLE") -> bool:
         url = f"{self.base_url}/agent/heartbeat"
@@ -110,9 +129,21 @@ class BackendClient:
         clean_key = storage_key.lstrip("/\\")
         url = f"{self.base_url}/agent/file/{clean_key}"
         try:
+            dest_dir = dest_path.parent
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            # Prevent SSD exhaustion: Check available disk space before download
+            free_space_bytes = shutil.disk_usage(dest_dir).free
+            required_space_bytes = config.MIN_FREE_DISK_MB * 1024 * 1024
+            if free_space_bytes < required_space_bytes:
+                agent_logger.critical(
+                    f"Download aborted: Insufficient disk space on station SSD! "
+                    f"Free: {free_space_bytes // (1024 * 1024)}MB, Required: {config.MIN_FREE_DISK_MB}MB"
+                )
+                return False
+
             resp = self.session.get(url, timeout=60, stream=True)
             if resp.status_code == 200:
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(dest_path, "wb") as f:
                     for chunk in resp.iter_content(chunk_size=8192):
                         if chunk:
@@ -124,5 +155,6 @@ class BackendClient:
         except Exception as e:
             agent_logger.error(f"Error downloading document file from backend: {e}")
             return False
+
 
 backend_client = BackendClient()
