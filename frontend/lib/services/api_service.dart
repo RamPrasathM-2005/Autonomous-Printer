@@ -189,7 +189,7 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> fetchDepartments() async {
     final response = await http
-        .get(Uri.parse('$_baseUrl/api/departments'))
+        .get(Uri.parse('$_baseUrl/api/departments/public'))
         .timeout(const Duration(seconds: 8));
     final decoded = _decode(response);
     if (decoded is List) {
