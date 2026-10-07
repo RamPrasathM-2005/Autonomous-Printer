@@ -57,4 +57,4 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     root = Path(__file__).resolve().parents[1] / 'frontend' / 'build' / 'web'
-    ThreadingHTTPServer(('127.0.0.1', 3000), partial(Handler, directory=str(root))).serve_forever()
+    ThreadingHTTPServer(('0.0.0.0', 3000), partial(Handler, directory=str(root))).serve_forever()
