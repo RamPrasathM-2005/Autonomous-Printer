@@ -50,7 +50,7 @@ def build(force=False):
         print("Web build is current.", flush=True)
         return
     run([flutter(), "pub", "get", "--enforce-lockfile"], FRONTEND)
-    run([flutter(), "build", "web", "--release", "--no-pub", "--no-web-resources-cdn", "--no-wasm-dry-run"], FRONTEND)
+    run([flutter(), "build", "web", "--release", "--no-web-resources-cdn", "--no-wasm-dry-run"], FRONTEND)
     STAMP.write_text(fingerprint())
 
 
