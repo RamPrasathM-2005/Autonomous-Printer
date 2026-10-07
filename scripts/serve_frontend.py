@@ -3,6 +3,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from functools import partial
 from pathlib import Path
 import json
+import os
 
 CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razorpay.com https://*.razorpay.in; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -41,6 +42,8 @@ class Handler(SimpleHTTPRequestHandler):
                             pass
                     if backend_url:
                         break
+            if not backend_url:
+                backend_url = "http://127.0.0.1:8000"
             payload = json.dumps({'BACKEND_URL': backend_url}).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

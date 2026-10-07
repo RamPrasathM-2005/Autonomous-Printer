@@ -47,7 +47,7 @@ qrcode==8.2
 razorpay==2.0.1
 reportlab==5.0.1
 requests==2.34.2
-sqlalchemy==2.1.1
+sqlalchemy==2.0.36
 starlette==1.7.0
 typing-extensions==4.16.0
 typing-inspection==0.4.4

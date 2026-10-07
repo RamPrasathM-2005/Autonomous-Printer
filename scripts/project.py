@@ -160,8 +160,9 @@ def serve(hot=False, force=False):
         print(f"App: http://127.0.0.1:3000/ | Keypad: http://127.0.0.1:{agent_port}/kiosk", flush=True)
         print("Logs: .runtime/ | Ctrl+C to stop", flush=True)
         while True:
-            if any(child.poll() is not None for child in children):
-                raise RuntimeError("A service exited. See .runtime logs.")
+            for child, name in zip(children, ["backend", "reconciliation", "agent", "frontend"]):
+                if child.poll() is not None:
+                    raise RuntimeError(f"Service '{name}' exited with code {child.poll()}. See .runtime/{name}.out.log.")
             time.sleep(1)
     except KeyboardInterrupt:
         pass

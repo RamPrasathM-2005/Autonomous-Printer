@@ -29,8 +29,8 @@ chmod +x "$CLOUDFLARED_BIN"
 if ! nc -z 127.0.0.1 8000 2>/dev/null && ! curl -s http://127.0.0.1:8000/health >/dev/null 2>&1; then
     echo -e "\033[1;33m[Notice] Backend on port 8000 is not active yet.\033[0m"
     echo -e "Starting backend in background..."
-    if [ -f "$SCRIPT_DIR/venv/bin/uvicorn" ]; then
-        "$SCRIPT_DIR/venv/bin/uvicorn" app.main:app --app-dir "$SCRIPT_DIR/backend" --host 0.0.0.0 --port 8000 &
+    if [ -f "$SCRIPT_DIR/.venv/bin/uvicorn" ]; then
+        "$SCRIPT_DIR/.venv/bin/uvicorn" app.main:app --app-dir "$SCRIPT_DIR/backend" --host 0.0.0.0 --port 8000 &
         sleep 2
     fi
 fi

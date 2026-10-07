@@ -55,9 +55,16 @@ def _sync_missing_columns():
                 db_cols = {c['name'] for c in insp.get_columns(table_name)}
                 for col in table.columns:
                     if col.name not in db_cols:
-                        col_type = col.type.compile(engine.dialect)
-                        nullable = "NULL" if col.nullable else "NOT NULL"
-                        sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} {nullable}"
+                        type_str = str(col_type).upper()
+                        if "DATETIME" in type_str or "TIMESTAMP" in type_str:
+                            if col.name == "updated_at":
+                                sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+                            else:
+                                sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        elif col.nullable:
+                            sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
+                        else:
+                            sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
                         logger.info("Auto-migrating column: %s", sql)
                         conn.execute(text(sql))
     except Exception as e:
