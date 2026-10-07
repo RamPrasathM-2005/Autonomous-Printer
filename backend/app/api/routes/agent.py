@@ -19,6 +19,9 @@ from app.api.dependencies import get_authenticated_agent
 
 from app.db.models.printer import Printer
 from app.db.models.discovered_printer import DiscoveredPrinter
+from fastapi.responses import FileResponse
+from app.services.storage_service import storage_service
+from app.utils.errors import AppException
 
 router = APIRouter(prefix="/api/agent", tags=["Agent Operations"])
 
@@ -215,3 +218,19 @@ def update_job_status(
         update=update
     )
     return MessageResponse(message="Job status updated successfully.")
+
+
+@router.get("/file/{storage_key:path}")
+def download_file_for_agent(
+    storage_key: str,
+    server: PrintServer = Depends(get_authenticated_agent)
+):
+    path = storage_service.resolve_storage_key(storage_key)
+    if not path.exists() or not path.is_file():
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code="FILE_NOT_FOUND",
+            message="Document not found on disk."
+        )
+    return FileResponse(path=str(path), filename=path.name)
+

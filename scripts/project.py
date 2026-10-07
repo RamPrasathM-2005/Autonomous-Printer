@@ -108,13 +108,14 @@ def sync_dependencies():
     stamp_file.write_text(current_hash)
 
 
-def serve(hot=False, force=False):
+def serve(hot=False, force=False, with_agent=True):
     if not PYTHON.exists():
         raise RuntimeError("Run python scripts/project.py setup first.")
     sync_dependencies()
     from dotenv import dotenv_values
     agent_port = int(dotenv_values(ROOT / "print-agent/.env").get("PORT") or 5001)
-    for port in (8000, agent_port, 3000):
+    ports_to_check = (8000, 3000) if not with_agent else (8000, agent_port, 3000)
+    for port in ports_to_check:
         with socket.socket() as sock:
             if sock.connect_ex(("127.0.0.1", port)) == 0:
                 raise RuntimeError(f"Port {port} is occupied. Stop its service first.")
@@ -152,15 +153,21 @@ def serve(hot=False, force=False):
         raise RuntimeError(f"{name} is unhealthy. See .runtime/{name}.out.log.")
 
     try:
-        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
+        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
         start("reconciliation", ROOT / "backend", ["-m", "app.worker"])
-        start("agent", ROOT / "print-agent", ["-m", "app.main"], f"http://127.0.0.1:{agent_port}/health")
+        if with_agent:
+            start("agent", ROOT / "print-agent", ["-m", "app.main"], f"http://127.0.0.1:{agent_port}/health")
         args = ["scripts/flutter_hot_watcher.py", "--serve", "--port", "3000"] if hot else ["scripts/serve_frontend.py"]
         start("frontend", ROOT, args, "http://127.0.0.1:3000/", 180 if hot else 45)
-        print(f"App: http://127.0.0.1:3000/ | Keypad: http://127.0.0.1:{agent_port}/kiosk", flush=True)
+        active_services = ["backend", "reconciliation", "frontend"]
+        if with_agent:
+            active_services.insert(2, "agent")
+            print(f"App: http://127.0.0.1:3000/ | Keypad: http://127.0.0.1:{agent_port}/kiosk", flush=True)
+        else:
+            print("App: http://127.0.0.1:3000/ (Print Agent running on external Raspberry Pi)", flush=True)
         print("Logs: .runtime/ | Ctrl+C to stop", flush=True)
         while True:
-            for child, name in zip(children, ["backend", "reconciliation", "agent", "frontend"]):
+            for child, name in zip(children, active_services):
                 if child.poll() is not None:
                     raise RuntimeError(f"Service '{name}' exited with code {child.poll()}. See .runtime/{name}.out.log.")
             time.sleep(1)
@@ -185,6 +192,7 @@ def main():
     parser.add_argument("command", choices=["setup", "build", "run"])
     parser.add_argument("--build", action="store_true", help="Force rebuilding the web bundle")
     parser.add_argument("--hot", action="store_true")
+    parser.add_argument("--no-agent", action="store_true", help="Do not run local print agent (use when agent runs on external Raspberry Pi)")
     args = parser.parse_args()
     if args.command == "setup":
         setup()
@@ -193,7 +201,7 @@ def main():
     else:
         if PYTHON.exists() and Path(sys.executable).resolve() != PYTHON.resolve():
             os.execv(str(PYTHON), [f'"{PYTHON}"', f'"{Path(__file__).resolve()}"', *sys.argv[1:]])
-        serve(args.hot, args.build)
+        serve(hot=args.hot, force=args.build, with_agent=not args.no_agent)
 
 
 if __name__ == "__main__":

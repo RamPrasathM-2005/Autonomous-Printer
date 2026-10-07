@@ -11,8 +11,9 @@ for arg in "$@"; do
     case "$arg" in
         --build|-build|-Build|-b) ARGS+=(--build) ;;
         --hot|--dev|-d|--hot-reload|--hotreload) ARGS+=(--hot) ;;
+        --no-agent|--noagent|-na) ARGS+=(--no-agent) ;;
         --no-tunnel|--notunnel|-nt|--prod|--static) ;;
-        *) echo "Unsupported option: $arg. Use --build or --hot; run start_tunnel.sh separately for a tunnel." >&2; exit 1 ;;
+        *) echo "Unsupported option: $arg. Use --build, --hot, or --no-agent." >&2; exit 1 ;;
     esac
 done
 exec "$PROJECT_ROOT/.venv/bin/python" scripts/project.py run "${ARGS[@]}"
