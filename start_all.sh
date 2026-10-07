@@ -8,8 +8,8 @@ if [[ ! -x "$PROJECT_ROOT/.venv/bin/python" ]]; then
 fi
 ARGS=()
 for arg in "$@"; do
-    case "$arg" in
-        --build|-build|-Build|-b) ARGS+=(--build) ;;
+    case "${arg,,}" in
+        --build|-build|-b) ARGS+=(--build) ;;
         --hot|--dev|-d|--hot-reload|--hotreload) ARGS+=(--hot) ;;
         --no-agent|--noagent|-na) ARGS+=(--no-agent) ;;
         --no-tunnel|--notunnel|-nt|--prod|--static) ;;
