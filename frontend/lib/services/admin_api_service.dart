@@ -470,6 +470,13 @@ class AdminApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  static Future<Map<String, dynamic>> togglePrinterActive(String id) async {
+    final current = await getPrinters();
+    final p = current.firstWhere((item) => item['id'].toString() == id, orElse: () => null);
+    final currentActive = p != null && p['is_active'] == true;
+    return await updatePrinter(id, {'is_active': !currentActive, 'is_enabled': !currentActive});
+  }
+
   static Future<List<dynamic>> getPrintAgents() async {
     final origin = ApiConfig.backendUrl;
     final response = await http

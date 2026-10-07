@@ -310,10 +310,10 @@ class AdminService:
             supports_color=data.supports_color,
             supports_duplex=data.supports_duplex,
             is_enabled=data.is_enabled,
-            is_active=False,
+            is_active=data.is_active if data.is_active is not None else False,
             printer_status="READY",
-            test_status="PENDING",
-            test_message="Awaiting test connection verification.",
+            test_status="VERIFIED" if (data.is_active is True) else "PENDING",
+            test_message="Registered and activated by administrator." if (data.is_active is True) else "Awaiting test connection verification.",
             has_mismatch=False,
             mismatch_details=None,
         )

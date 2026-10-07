@@ -87,6 +87,7 @@ class AdminPrinterCreate(BaseModel):
     supports_color: bool = True
     supports_duplex: bool = True
     is_enabled: bool = True
+    is_active: Optional[bool] = None
 
 class AdminPrinterUpdate(BaseModel):
     display_name: Optional[str] = None
