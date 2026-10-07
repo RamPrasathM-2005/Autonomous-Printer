@@ -426,12 +426,6 @@ def select_order_printer(
         if p:
             chosen_printer = p.cups_printer_name
 
-    # Canonicalize printer name
-    if any(k in str(chosen_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-        chosen_printer = "HP_LaserJet_400_M401dn_E9A0F4"
-    else:
-        chosen_printer = "HP_LaserJet_400_M401dn_F36EC0"
-
     current_settings["printer_name"] = chosen_printer
     current_settings["cups_printer_name"] = chosen_printer
     current_settings["selected_printer"] = chosen_printer
@@ -443,10 +437,10 @@ def select_order_printer(
     potps = current_settings.get("printer_otps", {})
     p_info = potps.get(chosen_printer)
     if not p_info:
-        if chosen_printer == "HP_LaserJet_400_M401dn_E9A0F4":
-            p_info = potps.get("Printer_2") or potps.get("HP_LaserJet_400_M401dn_E9A0F4")
-        else:
-            p_info = potps.get("HP_LaserJet_400_M401dn_F36EC0")
+        for k, v in potps.items():
+            if isinstance(v, dict) and (v.get("cups_printer_name") == chosen_printer or v.get("printer_id") == chosen_printer):
+                p_info = v
+                break
     if p_info and p_info.get("otp"):
         otp_rec = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
         if otp_rec:

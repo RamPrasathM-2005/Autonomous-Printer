@@ -150,22 +150,35 @@ def release_job_kiosk(
         "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
         "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
     }
-    for port in (5001, 5000):
-        try:
-            import requests
-            resp = requests.post(
-                f"http://127.0.0.1:{port}/local/print-job",
-                json=payload,
-                headers=dispatch_headers,
-                timeout=3
-            )
-            if resp.status_code == 200:
-                print(f"[KIOSK] Real print agent on {port} dispatched job {job.id} to physical printer.")
-                break
-            else:
-                print(f"[KIOSK] Print agent on {port} responded with status: {resp.status_code}")
-        except Exception as err:
-            print(f"[KIOSK] Direct agent dispatch on port {port} warning: {err}")
+    target_ips = []
+    if job.server_id:
+        srv = db.query(PrintServer).filter(PrintServer.id == job.server_id).first()
+        if srv and srv.ip_address:
+            clean_ip = srv.ip_address.strip().replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+            target_ips.append(clean_ip)
+    target_ips.append("127.0.0.1")
+
+    dispatched = False
+    for ip in target_ips:
+        if dispatched:
+            break
+        for port in (5001, 5000):
+            try:
+                import requests
+                resp = requests.post(
+                    f"http://{ip}:{port}/local/print-job",
+                    json=payload,
+                    headers=dispatch_headers,
+                    timeout=3
+                )
+                if resp.status_code == 200:
+                    print(f"[KIOSK] Real print agent on {ip}:{port} dispatched job {job.id} to physical printer.")
+                    dispatched = True
+                    break
+                else:
+                    print(f"[KIOSK] Print agent on {ip}:{port} responded with status: {resp.status_code}")
+            except Exception as err:
+                print(f"[KIOSK] Direct agent dispatch on {ip}:{port} warning: {err}")
 
     # Note: If direct HTTP dispatch was not reachable, job_poller polls every 3 seconds for RELEASED jobs.
     clean_settings = sanitize_print_settings(order.print_settings if order else {})

@@ -30,6 +30,7 @@ from app.schemas.admin import (
     AdminPrintAgentItem,
     AdminPrintAgentCreate,
     AdminPrintServerUpdate,
+    AdminAgentCupsPrinterItem,
     AdminUserItem,
     AdminUserUpdate,
     PaginatedAdminUsersResponse,
@@ -292,10 +293,12 @@ class AdminService:
         # Unique printer ID
         printer_id = f"PRN-{uuid.uuid4().hex[:8].upper()}"
 
+        dept_id = data.department_id if data.department_id is not None else server.department_id
+
         new_printer = Printer(
             id=printer_id,
             server_id=data.server_id,
-            department_id=data.department_id,
+            department_id=dept_id,
             cups_printer_name=data.cups_printer_name.strip(),
             display_name=data.display_name.strip(),
             ip_address=ip or None,
@@ -307,10 +310,10 @@ class AdminService:
             supports_color=data.supports_color,
             supports_duplex=data.supports_duplex,
             is_enabled=data.is_enabled,
-            is_active=False,  # Active ONLY after successful Test Connection
-            printer_status="OFFLINE",
+            is_active=False,
+            printer_status="READY",
             test_status="PENDING",
-            test_message="Registered. Awaiting connection test validation.",
+            test_message="Awaiting test connection verification.",
             has_mismatch=False,
             mismatch_details=None,
         )
@@ -605,17 +608,30 @@ class AdminService:
     @staticmethod
     def create_print_server(data: AdminPrintAgentCreate, db: Session) -> AdminPrintAgentItem:
         import hashlib
-        existing = db.query(PrintServer).filter(PrintServer.id == data.id).first()
+        import uuid
+
+        dept = None
+        if data.department_id:
+            dept = db.query(Department).filter(Department.id == data.department_id).first()
+
+        agent_id = (data.id or "").strip()
+        if not agent_id:
+            dept_code = dept.code if dept else "STATION"
+            agent_id = f"AGENT-{dept_code}-{uuid.uuid4().hex[:6].upper()}"
+
+        existing = db.query(PrintServer).filter(PrintServer.id == agent_id).first()
         if existing:
-            raise AppException(f"Print Agent with ID '{data.id}' already exists", status_code=400)
+            raise AppException(f"Print Agent with ID '{agent_id}' already exists", status_code=400)
 
         token = data.token or f"agent-sec-{secrets.token_hex(16)}"
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
+        location = data.location.strip() if data.location else (f"{dept.name} Station" if dept else data.name.strip())
+
         server = PrintServer(
-            id=data.id.strip(),
+            id=agent_id,
             name=data.name.strip(),
-            location=data.location.strip() if data.location else None,
+            location=location,
             device_token_hash=token_hash,
             department_id=data.department_id,
             hostname=data.hostname.strip() if data.hostname else None,
@@ -635,17 +651,93 @@ class AdminService:
         raise AppException("Failed to load created print agent", status_code=500)
 
     @staticmethod
+    def get_agent_cups_printers(server_id: str, db: Session) -> List[AdminAgentCupsPrinterItem]:
+        import requests
+        from app.config.settings import settings
+
+        server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
+        if not server:
+            raise AppException(f"Print Agent '{server_id}' not found", status_code=404)
+
+        registered_cups = {
+            p.cups_printer_name.strip().lower()
+            for p in db.query(Printer).filter(Printer.server_id == server_id).all()
+        }
+
+        agent_cups: List[dict] = []
+        dispatch_headers = {
+            "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
+            "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
+        }
+
+        urls = []
+        if server.ip_address:
+            clean_ip = server.ip_address.strip().replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+            urls.extend([
+                f"http://{clean_ip}:5001/local/cups-printers",
+                f"http://{clean_ip}:5000/local/cups-printers",
+                f"http://{clean_ip}:5001/local/detected-printers",
+            ])
+        urls.extend([
+            "http://127.0.0.1:5001/local/cups-printers",
+            "http://127.0.0.1:5000/local/cups-printers",
+        ])
+
+        for url in urls:
+            try:
+                resp = requests.get(url, headers=dispatch_headers, timeout=3)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        agent_cups = data
+                        break
+                    elif isinstance(data, dict) and "printers" in data:
+                        agent_cups = data["printers"]
+                        break
+            except Exception:
+                continue
+
+        # If direct HTTP request couldn't connect, fall back to DiscoveredPrinter records from heartbeats
+        if not agent_cups:
+            disc_printers = db.query(DiscoveredPrinter).filter(DiscoveredPrinter.server_id == server_id).all()
+            for d in disc_printers:
+                agent_cups.append({
+                    "cups_printer_name": d.cups_printer_name,
+                    "device_uri": d.device_uri,
+                    "ip_address": d.ip_address,
+                    "status": d.reported_status or "READY"
+                })
+
+        results: List[AdminAgentCupsPrinterItem] = []
+        seen = set()
+        for item in agent_cups:
+            c_name = item.get("cups_printer_name") or item.get("name") or ""
+            if not c_name or c_name.lower() in seen:
+                continue
+            seen.add(c_name.lower())
+            is_mapped = c_name.lower() in registered_cups
+            disp_name = c_name.replace("_", " ")
+            results.append(AdminAgentCupsPrinterItem(
+                cups_printer_name=c_name,
+                display_name=disp_name,
+                device_uri=item.get("device_uri"),
+                ip_address=item.get("ip_address") or server.ip_address,
+                status=item.get("status") or "READY",
+                is_mapped=is_mapped
+            ))
+
+        return results
+
+    @staticmethod
     def delete_print_server(server_id: str, db: Session) -> bool:
         server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
         if not server:
             raise AppException(f"Print Agent '{server_id}' not found", status_code=404)
 
-        printers_count = db.query(Printer).filter(Printer.server_id == server_id).count()
-        if printers_count > 0:
-            raise AppException(
-                f"Cannot delete Print Agent '{server_id}' because {printers_count} printer(s) are assigned to it. Reassign or delete printers first.",
-                status_code=400
-            )
+        # Automatically cascade delete or unmap assigned printers
+        printers = db.query(Printer).filter(Printer.server_id == server_id).all()
+        for p in printers:
+            db.delete(p)
 
         db.delete(server)
         db.commit()

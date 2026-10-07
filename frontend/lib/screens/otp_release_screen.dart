@@ -108,13 +108,19 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
       if (!mounted) return;
 
-      // Load active printers from database for this print station
+      // Load active printers from database for this print station or department
       List<Printer> loadedPrinters = [];
       try {
         loadedPrinters = await _apiService.fetchPrinters(
           serverId: order.printServerId,
         );
       } catch (_) {}
+
+      if (loadedPrinters.isEmpty) {
+        try {
+          loadedPrinters = await _apiService.fetchPrinters();
+        } catch (_) {}
+      }
 
       final existingPrinter =
           order.printSettings.toJson()['printer_name'] ??

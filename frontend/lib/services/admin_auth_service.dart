@@ -3,18 +3,22 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'session_store.dart';
 
-/// Admin credentials stay in memory and are separate from customer sessions.
+/// Admin credentials persist across browser refreshes via SessionStore.
 class AdminAuthService {
-  static String? _accessToken;
-  static String? _refreshToken;
-  static String? _origin;
+  static const _kAccessTokenKey = 'admin_access_token';
+  static const _kRefreshTokenKey = 'admin_refresh_token';
+  static const _kOriginKey = 'admin_origin';
 
-  static String? get accessToken => _accessToken;
-  static bool get isAuthenticated => _accessToken != null;
+  static String? get accessToken => SessionStore.read(_kAccessTokenKey);
+  static String? get refreshToken => SessionStore.read(_kRefreshTokenKey);
+  static String? get origin => SessionStore.read(_kOriginKey);
+  static bool get isAuthenticated => accessToken != null;
+
   static Map<String, String> get authHeaders => {
     'Content-Type': 'application/json',
-    if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
+    if (accessToken != null) 'Authorization': 'Bearer $accessToken',
   };
 
   static Future<Map<String, dynamic>> _decode(http.Response response) async {
@@ -46,51 +50,56 @@ class AdminAuthService {
         )
         .timeout(const Duration(seconds: 15));
     final tokens = await _decode(response);
+    final aToken = tokens['access_token'] as String;
+    final rToken = tokens['refresh_token'] as String;
+
     final profileResponse = await http
         .get(
           Uri.parse('$origin/api/auth/admin/me'),
-          headers: {'Authorization': 'Bearer ${tokens['access_token']}'},
+          headers: {'Authorization': 'Bearer $aToken'},
         )
         .timeout(const Duration(seconds: 15));
     final profile = await _decode(profileResponse);
-    _accessToken = tokens['access_token'] as String;
-    _refreshToken = tokens['refresh_token'] as String;
-    _origin = origin;
+
+    SessionStore.write(_kAccessTokenKey, aToken);
+    SessionStore.write(_kRefreshTokenKey, rToken);
+    SessionStore.write(_kOriginKey, origin);
     return profile;
   }
 
   static Future<void> logout() async {
-    final token = _refreshToken;
-    final origin = _origin;
-    _accessToken = null;
-    _refreshToken = null;
-    _origin = null;
-    if (token != null && origin != null) {
-      await http
-          .post(
-            Uri.parse('$origin/api/auth/logout'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'refresh_token': token}),
-          )
-          .timeout(const Duration(seconds: 10));
+    final token = refreshToken;
+    final orig = origin ?? ApiConfig.backendUrl;
+    SessionStore.clear(_kAccessTokenKey);
+    SessionStore.clear(_kRefreshTokenKey);
+    SessionStore.clear(_kOriginKey);
+    if (token != null) {
+      try {
+        await http
+            .post(
+              Uri.parse('$orig/api/auth/logout'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'refresh_token': token}),
+            )
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
     }
   }
 
   static Future<Map<String, dynamic>?> currentAdmin() async {
-    if (_accessToken == null || _origin != ApiConfig.backendUrl) return null;
+    final token = accessToken;
+    if (token == null) return null;
+    final orig = origin ?? ApiConfig.backendUrl;
     try {
       return await _decode(
         await http
             .get(
-              Uri.parse('$_origin/api/auth/admin/me'),
-              headers: {'Authorization': 'Bearer $_accessToken'},
+              Uri.parse('$orig/api/auth/admin/me'),
+              headers: {'Authorization': 'Bearer $token'},
             )
             .timeout(const Duration(seconds: 10)),
       );
     } catch (_) {
-      _accessToken = null;
-      _refreshToken = null;
-      _origin = null;
       return null;
     }
   }

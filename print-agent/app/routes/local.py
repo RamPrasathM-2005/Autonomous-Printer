@@ -107,12 +107,7 @@ def local_station_otp_release():
     order_id = release_data.get("orderId") or release_data.get("order_id")
     settings = release_data.get("settings") or {}
     raw_printer = settings.get("cups_printer_name") or settings.get("printer_name") or settings.get("selected_printer") or config.PRINTER_NAME
-    if any(k in str(raw_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-        raw_printer = "HP_LaserJet_400_M401dn_E9A0F4"
-        friendly_printer = "HP LaserJet 400 (Unit 2)"
-    else:
-        raw_printer = "HP_LaserJet_400_M401dn_F36EC0"
-        friendly_printer = "HP LaserJet 400 (Unit 1)"
+    friendly_printer = settings.get("printer_name") or (raw_printer.replace("_", " ") if raw_printer else "Station Printer")
 
     if job_id and not print_service.is_job_active_or_done(job_id):
         print_service.set_job_state(job_id, {
@@ -140,6 +135,16 @@ def local_station_otp_release():
         "printerName": raw_printer,
         "friendlyPrinter": friendly_printer
     }), 200
+
+@local_bp.route("/cups-printers", methods=["GET", "OPTIONS"])
+@local_bp.route("/detected-printers", methods=["GET", "OPTIONS"])
+def get_cups_printers():
+    if request.method == "OPTIONS":
+        return "", 200
+
+    from app.services.cups_service import cups_service
+    detected = cups_service.get_detected_printers()
+    return jsonify(detected), 200
 
 @local_bp.route("/job-status/<job_id>", methods=["GET", "OPTIONS"])
 def get_job_progress(job_id: str):

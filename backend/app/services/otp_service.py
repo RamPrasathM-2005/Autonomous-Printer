@@ -130,49 +130,114 @@ class OTPService:
         )
         db.add(otp_record)
 
-        # Store dual printer OTP structure in Order.print_settings
+        # Store dynamic printer OTP structure in Order.print_settings from registered DB printers
         order = db.query(Order).filter(Order.id == order_id).first()
         if order:
             cur_settings = dict(order.print_settings or {})
-            cur_settings["printer_otps"] = {
-                "HP_LaserJet_400_M401dn_F36EC0": {
-                    "printer_id": "printer_central_01",
-                    "printer_name": "HP LaserJet 400 M401dn",
-                    "cups_printer_name": "HP_LaserJet_400_M401dn_F36EC0",
-                    "description": "High-Speed Laser • Duplex B&W",
-                    "type": "B&W Laser",
-                    "badge": "Central Station - Tray 1",
-                    "otp": otp_p1,
-                    "otp_hash": hashed_p1,
+            
+            # Fetch active printers from DB
+            from app.db.models.printer import Printer
+            db_printers = []
+            if order.print_server_id:
+                db_printers = db.query(Printer).filter(
+                    Printer.server_id == order.print_server_id,
+                    Printer.is_enabled == True
+                ).all()
+            if not db_printers and getattr(order, "department", None):
+                from app.db.models.department import Department
+                dept_obj = db.query(Department).filter(
+                    (Department.name == order.department) | (Department.code == order.department)
+                ).first()
+                if dept_obj:
+                    db_printers = db.query(Printer).filter(
+                        Printer.department_id == dept_obj.id,
+                        Printer.is_enabled == True
+                    ).all()
+            if not db_printers:
+                db_printers = db.query(Printer).filter(Printer.is_enabled == True).all()
+
+            printer_otps_map = {}
+            first_cups = None
+            first_name = None
+
+            for idx, p in enumerate(db_printers):
+                p_otp = otp_p1 if idx == 0 else (otp_p2 if idx == 1 else OTPService.generate_secure_otp(length=6))
+                p_hash = hashed_p1 if idx == 0 else (hashed_p2 if idx == 1 else OTPService.hash_otp(p_otp))
+                info = {
+                    "printer_id": p.id,
+                    "printer_name": p.display_name or p.cups_printer_name,
+                    "cups_printer_name": p.cups_printer_name,
+                    "description": p.description or f"{p.model or 'Network Printer'} • {p.location or 'Station'}",
+                    "type": "Color Laser" if p.supports_color else "B&W Laser",
+                    "badge": p.location or f"Station {idx + 1}",
+                    "otp": p_otp,
+                    "otp_hash": p_hash,
                     "active": True
-                },
-                "HP_LaserJet_400_M401dn_E9A0F4": {
-                    "printer_id": "printer_central_02",
-                    "printer_name": "HP LaserJet 400 M401dn (Unit 2)",
-                    "cups_printer_name": "HP_LaserJet_400_M401dn_E9A0F4",
-                    "description": "High-Speed Laser • Duplex B&W",
-                    "type": "B&W Laser",
+                }
+                printer_otps_map[p.cups_printer_name] = info
+                printer_otps_map[p.id] = info
+                if not first_cups:
+                    first_cups = p.cups_printer_name
+                    first_name = p.display_name or p.cups_printer_name
+
+            if len(db_printers) == 1:
+                p_single = db_printers[0]
+                printer_otps_map["Printer_2"] = {
+                    "printer_id": f"{p_single.id}_alt",
+                    "printer_name": f"{p_single.display_name or p_single.cups_printer_name} (Unit 2)",
+                    "cups_printer_name": p_single.cups_printer_name,
+                    "description": "Secondary Station Unit",
+                    "type": "Laser",
                     "badge": "Station Unit 2",
                     "otp": otp_p2,
                     "otp_hash": hashed_p2,
                     "active": True
-                },
-                "Printer_2": {
-                    "printer_id": "printer_central_02",
-                    "printer_name": "HP LaserJet 400 M401dn (Unit 2)",
+                }
+
+            # Fallback if no printers registered in DB yet
+            if not printer_otps_map:
+                p1_info = {
+                    "printer_id": "default",
+                    "printer_name": "Default Printer",
+                    "cups_printer_name": "HP_LaserJet_400_M401dn_F36EC0",
+                    "description": "Station Printer",
+                    "type": "B&W Laser",
+                    "badge": "Station Unit",
+                    "otp": otp_p1,
+                    "otp_hash": hashed_p1,
+                    "active": True
+                }
+                p2_info = {
+                    "printer_id": "default_2",
+                    "printer_name": "Default Printer (Unit 2)",
                     "cups_printer_name": "HP_LaserJet_400_M401dn_E9A0F4",
-                    "description": "High-Speed Laser • Duplex B&W",
+                    "description": "Station Printer Unit 2",
                     "type": "B&W Laser",
                     "badge": "Station Unit 2",
                     "otp": otp_p2,
                     "otp_hash": hashed_p2,
                     "active": True
                 }
-            }
-            if "cups_printer_name" not in cur_settings:
-                cur_settings["cups_printer_name"] = "HP_LaserJet_400_M401dn_F36EC0"
-            if "printer_name" not in cur_settings:
-                cur_settings["printer_name"] = "HP_LaserJet_400_M401dn_F36EC0"
+                printer_otps_map["Default_Printer"] = p1_info
+                printer_otps_map["Printer_2"] = p2_info
+                printer_otps_map["HP_LaserJet_400_M401dn_F36EC0"] = p1_info
+                printer_otps_map["HP_LaserJet_400_M401dn_E9A0F4"] = p2_info
+                first_cups = "HP_LaserJet_400_M401dn_F36EC0"
+                first_name = "Default Printer"
+            else:
+                vals = list(printer_otps_map.values())
+                if "HP_LaserJet_400_M401dn_F36EC0" not in printer_otps_map and vals:
+                    printer_otps_map["HP_LaserJet_400_M401dn_F36EC0"] = vals[0]
+                if "Printer_2" not in printer_otps_map and vals:
+                    printer_otps_map["Printer_2"] = vals[1] if len(vals) > 1 else vals[0]
+                if "HP_LaserJet_400_M401dn_E9A0F4" not in printer_otps_map and vals:
+                    printer_otps_map["HP_LaserJet_400_M401dn_E9A0F4"] = printer_otps_map.get("Printer_2", vals[0])
+
+            cur_settings["printer_otps"] = printer_otps_map
+            if "cups_printer_name" not in cur_settings or not cur_settings["cups_printer_name"]:
+                cur_settings["cups_printer_name"] = first_cups
+            if "printer_name" not in cur_settings or not cur_settings["printer_name"]:
+                cur_settings["printer_name"] = first_name
             if "printer_switch_count" not in cur_settings:
                 cur_settings["printer_switch_count"] = 0
             if "printer_selection_locked" not in cur_settings:
@@ -194,6 +259,14 @@ class OTPService:
         printer_otps = settings.get("printer_otps", {})
 
         if not otp_record or not otp_record.encrypted_value:
+            if printer_otps:
+                selected_printer = settings.get("cups_printer_name") or settings.get("selected_printer")
+                if selected_printer and selected_printer in printer_otps:
+                    return str(printer_otps[selected_printer].get("otp")), None, printer_otps
+                for p_key, p_val in printer_otps.items():
+                    if isinstance(p_val, dict) and p_val.get("otp"):
+                        return str(p_val["otp"]), None, printer_otps
+
             raise AppException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 error_code="NOT_FOUND",
@@ -205,12 +278,16 @@ class OTPService:
         if selected_printer and printer_otps:
             p_data = printer_otps.get(selected_printer)
             if not p_data:
-                if any(k in str(selected_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-                    p_data = printer_otps.get("HP_LaserJet_400_M401dn_E9A0F4") or printer_otps.get("Printer_2")
-                else:
-                    p_data = printer_otps.get("HP_LaserJet_400_M401dn_F36EC0")
+                for p_key, p_val in printer_otps.items():
+                    if isinstance(p_val, dict) and (p_val.get("printer_id") == selected_printer or p_val.get("cups_printer_name") == selected_printer):
+                        p_data = p_val
+                        break
             if isinstance(p_data, dict) and p_data.get("otp"):
                 plaintext = str(p_data["otp"])
+            elif printer_otps:
+                first_val = next(iter(printer_otps.values()), None)
+                if isinstance(first_val, dict) and first_val.get("otp"):
+                    plaintext = str(first_val["otp"])
 
         return plaintext, None, printer_otps
 
@@ -275,7 +352,7 @@ class OTPService:
                     ord_cfg.get("cups_printer_name")
                     or ord_cfg.get("printer_name")
                     or ord_cfg.get("selected_printer")
-                    or "HP_LaserJet_400_M401dn_F36EC0"
+                    or "Default_Printer"
                 )
 
         # 2. If not matched in primary OTP row, check active orders' printer_otps dictionary
@@ -440,12 +517,8 @@ class OTPService:
         _otp_rate_limiter.reset(rate_key)
         logger.info(f"[SECURITY] OTP successfully verified and released for order {order_rec.id} (Identifier: {rate_key})")
 
-        # Determine target printer for this job
-        target_printer = matched_printer_name or order_settings.get("cups_printer_name") or "HP_LaserJet_400_M401dn_F36EC0"
-        if any(k in str(target_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-            target_printer = "HP_LaserJet_400_M401dn_E9A0F4"
-        else:
-            target_printer = "HP_LaserJet_400_M401dn_F36EC0"
+        # Determine target printer for this job dynamically
+        target_printer = matched_printer_name or order_settings.get("cups_printer_name") or order_settings.get("printer_name") or order_settings.get("selected_printer")
 
         # Apply state transitions
         validate_order_transition(order_rec.status, OrderStatus.RELEASED)

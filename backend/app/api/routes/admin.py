@@ -15,6 +15,7 @@ from app.schemas.admin import (
     AdminPrintAgentItem,
     AdminPrintAgentCreate,
     AdminPrintServerUpdate,
+    AdminAgentCupsPrinterItem,
     AdminUserItem,
     AdminUserUpdate,
     PaginatedAdminUsersResponse,
@@ -141,10 +142,22 @@ def delete_admin_print_agent(
     db: Session = Depends(get_db)
 ):
     """
-    Deletes a registered Print Agent if no printers are assigned.
+    Deletes a registered Print Agent and unmaps/cleans assigned printers.
     """
     admin_service.delete_print_server(server_id, db)
     return {"message": f"Print Agent '{server_id}' deleted successfully"}
+
+@router.get("/print-agents/{server_id}/cups-printers", response_model=List[AdminAgentCupsPrinterItem])
+def get_admin_agent_cups_printers(
+    server_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Queries the assigned Print Agent on the Raspberry Pi to retrieve
+    all physical CUPS printers detected on that machine.
+    """
+    return admin_service.get_agent_cups_printers(server_id, db)
 
 @router.get("/discovered-printers", response_model=List[AdminDiscoveredPrinterItem])
 def get_admin_discovered_printers(

@@ -254,8 +254,8 @@ async def proxy_local_status():
         except Exception:
             pass
     return {
-        "agent_id": "PRINT-SERVER-001",
-        "printer_name": "HP_LaserJet_400_M401dn_F36EC0",
+        "agent_id": "STATION-AGENT",
+        "printer_name": "Station Printer",
         "printer_state": "READY",
         "paper_state": "AVAILABLE",
         "active_jobs_count": 0

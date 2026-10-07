@@ -158,12 +158,12 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
     final nameCtrl = TextEditingController(text: prefill?['cups_printer_name']?.toString().replaceAll('_', ' ') ?? '');
     final ipCtrl = TextEditingController(text: prefill?['ip_address'] ?? '');
     final uriCtrl = TextEditingController(text: prefill?['device_uri'] ?? '');
-    final locationCtrl = TextEditingController();
-    final modelCtrl = TextEditingController();
+    final locationCtrl = TextEditingController(text: prefill?['location'] ?? '');
+    final modelCtrl = TextEditingController(text: prefill?['model'] ?? '');
 
-    String selectedProtocol = 'Socket';
+    String selectedProtocol = prefill?['protocol'] ?? 'Socket';
     String selectedServerId = prefill?['server_id'] ?? _agents.first['id'].toString();
-    int? selectedDeptId;
+    int? selectedDeptId = prefill?['department_id'] as int?;
     bool isEnabled = true;
     bool supportsColor = true;
     bool supportsDuplex = true;
@@ -440,8 +440,8 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Printer registered. Run "Test Connection" to verify and activate.'),
-            backgroundColor: AppTheme.primary,
+            content: Text('Printer registered and activated successfully.'),
+            backgroundColor: AppTheme.success,
           ),
         );
       }
@@ -1078,14 +1078,16 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
               headingRowColor: WidgetStateProperty.all(AppTheme.surfaceSubtle),
               columns: const [
                 DataColumn(label: Text('Agent ID', style: TextStyle(fontWeight: FontWeight.w700))),
-                DataColumn(label: Text('Name & Location', style: TextStyle(fontWeight: FontWeight.w700))),
-                DataColumn(label: Text('IP / Hostname', style: TextStyle(fontWeight: FontWeight.w700))),
+                DataColumn(label: Text('Name & Department', style: TextStyle(fontWeight: FontWeight.w700))),
+                DataColumn(label: Text('Static IP Address', style: TextStyle(fontWeight: FontWeight.w700))),
                 DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w700))),
                 DataColumn(label: Text('Printers', style: TextStyle(fontWeight: FontWeight.w700))),
                 DataColumn(label: Text('Last Heartbeat', style: TextStyle(fontWeight: FontWeight.w700))),
+                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700))),
               ],
               rows: _agents.map((a) {
                 final isOnline = (a['status'] ?? '').toString().toUpperCase() == 'ONLINE';
+                final deptName = a['department_name'] ?? 'General Campus';
                 return DataRow(
                   cells: [
                     DataCell(Text(a['id'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -1095,7 +1097,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(a['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          Text(a['location'] ?? 'Station', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          Text(deptName, style: const TextStyle(fontSize: 11, color: AppTheme.primary)),
                         ],
                       ),
                     ),
@@ -1115,6 +1117,33 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                     ),
                     DataCell(Text('${a['printer_count'] ?? 0}')),
                     DataCell(Text(a['last_heartbeat'] ?? 'Never', style: const TextStyle(fontSize: 12))),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton.tonalIcon(
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            icon: const Icon(Icons.print_outlined, size: 15),
+                            label: const Text('Open CUPS'),
+                            onPressed: () => _showAgentCupsPrintersDialog(a),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            tooltip: 'Edit Agent',
+                            onPressed: () => _showEditAgentDialog(a),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.danger),
+                            tooltip: 'Delete Agent',
+                            onPressed: () => _deleteAgent(a),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 );
               }).toList(),
@@ -1209,43 +1238,387 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
   }
 
   Future<void> _showAddAgentDialog() async {
-    final idCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
-    final locCtrl = TextEditingController();
     final ipCtrl = TextEditingController();
-    int? selectedDeptId;
+    int? selectedDeptId = _departments.isNotEmpty ? _departments.first['id'] as int? : null;
 
-    final created = await showDialog<bool>(
+    final createdAgent = await showDialog<Map<String, dynamic>?>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Register Print Agent'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySurface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.router_outlined, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Add Print Agent', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
           content: SizedBox(
-            width: 400,
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Connect a departmental Raspberry Pi Print Agent station.',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int?>(
+                    value: selectedDeptId,
+                    decoration: InputDecoration(
+                      labelText: 'Department *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      prefixIcon: const Icon(Icons.school_outlined, size: 20),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('All Campus / General'),
+                      ),
+                      ..._departments.map(
+                        (d) => DropdownMenuItem<int?>(
+                          value: d['id'] as int,
+                          child: Text('${d['name']} (${d['code']})'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setDialogState(() => selectedDeptId = val),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: ipCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Static IP Address *',
+                      hintText: 'e.g. 172.17.3.6',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      prefixIcon: const Icon(Icons.lan_outlined, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Print Agent Name *',
+                      hintText: 'e.g. CSE Department Print Station',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      prefixIcon: const Icon(Icons.badge_outlined, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final ip = ipCtrl.text.trim();
+                if (name.isEmpty || ip.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Please enter both Print Agent Name and Static IP.')),
+                  );
+                  return;
+                }
+                try {
+                  final result = await AdminApiService.createPrintAgent({
+                    'name': name,
+                    'department_id': selectedDeptId,
+                    'ip_address': ip,
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx, result);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger),
+                    );
+                  }
+                }
+              },
+              child: const Text('Add Agent'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (createdAgent != null) {
+      await _loadData();
+      if (mounted) {
+        // Automatically open the CUPS dialog for the newly created agent to add printers!
+        _showAgentCupsPrintersDialog(createdAgent);
+      }
+    }
+  }
+
+  Future<void> _showAgentCupsPrintersDialog(Map<String, dynamic> agent) async {
+    final agentId = agent['id'].toString();
+    final agentName = agent['name'] ?? agentId;
+    final agentIp = agent['ip_address'] ?? '127.0.0.1';
+    final deptId = agent['department_id'] as int?;
+
+    List<dynamic> cupsPrinters = [];
+    bool isLoadingCups = true;
+    String? cupsError;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          if (isLoadingCups) {
+            AdminApiService.getAgentCupsPrinters(agentId).then((data) {
+              if (ctx.mounted) {
+                setDialogState(() {
+                  cupsPrinters = data;
+                  isLoadingCups = false;
+                  cupsError = null;
+                });
+              }
+            }).catchError((err) {
+              if (ctx.mounted) {
+                setDialogState(() {
+                  isLoadingCups = false;
+                  cupsError = err.toString().replaceAll('Exception: ', '');
+                });
+              }
+            });
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primarySurface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.print_rounded, color: AppTheme.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$agentName — CUPS Printers', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                      Text('Raspberry Pi Station at $agentIp', style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Rescan Pi CUPS',
+                  onPressed: () {
+                    setDialogState(() {
+                      isLoadingCups = true;
+                      cupsError = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 580,
+              height: 380,
+              child: isLoadingCups
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Connecting to Print Agent at $agentIp...',
+                            style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Scanning CUPS queues on Raspberry Pi...',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    )
+                  : (cupsError != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 40, color: AppTheme.danger),
+                              const SizedBox(height: 12),
+                              Text(cupsError!, style: const TextStyle(color: AppTheme.danger, fontSize: 13), textAlign: TextAlign.center),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Try Again'),
+                                onPressed: () => setDialogState(() {
+                                  isLoadingCups = true;
+                                  cupsError = null;
+                                }),
+                              ),
+                            ],
+                          ),
+                        )
+                      : (cupsPrinters.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.devices_other_outlined, size: 40, color: AppTheme.textMuted),
+                                  const SizedBox(height: 12),
+                                  const Text('No CUPS printers reported by this Print Agent yet.', style: TextStyle(fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  const Text('Printers configured on this Raspberry Pi will appear here automatically.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                                  const SizedBox(height: 16),
+                                  FilledButton.tonalIcon(
+                                    icon: const Icon(Icons.add, size: 16),
+                                    label: const Text('Manually Add Printer to Agent'),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _showRegisterPrinterDialog(prefill: {
+                                        'server_id': agentId,
+                                        'department_id': deptId,
+                                        'ip_address': agentIp,
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: cupsPrinters.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1),
+                              itemBuilder: (ctx, i) {
+                                final p = cupsPrinters[i];
+                                final cupsName = p['cups_printer_name'] ?? '';
+                                final dispName = p['display_name'] ?? cupsName.replaceAll('_', ' ');
+                                final isMapped = p['is_mapped'] == true;
+                                final uri = p['device_uri'] ?? '';
+                                final stateStr = (p['status'] ?? 'READY').toString().toUpperCase();
+
+                                return ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isMapped ? AppTheme.success.withOpacity(0.12) : AppTheme.primarySurface,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.print,
+                                      color: isMapped ? AppTheme.success : AppTheme.primary,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  title: Text(dispName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  subtitle: Text(
+                                    'Queue: $cupsName • State: $stateStr\nURI: $uri',
+                                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                  ),
+                                  trailing: isMapped
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.success.withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.check, size: 14, color: AppTheme.success),
+                                              SizedBox(width: 4),
+                                              Text('Mapped', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.bold, fontSize: 11)),
+                                            ],
+                                          ),
+                                        )
+                                      : FilledButton.icon(
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: AppTheme.primary,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                          icon: const Icon(Icons.add, size: 14),
+                                          label: const Text('Add Printer'),
+                                          onPressed: () {
+                                            Navigator.pop(ctx);
+                                            _showRegisterPrinterDialog(prefill: {
+                                              'cups_printer_name': cupsName,
+                                              'display_name': dispName,
+                                              'server_id': agentId,
+                                              'department_id': deptId,
+                                              'ip_address': agentIp,
+                                              'device_uri': uri,
+                                            });
+                                          },
+                                        ),
+                                );
+                              },
+                            ))),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Custom Printer'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showRegisterPrinterDialog(prefill: {
+                    'server_id': agentId,
+                    'department_id': deptId,
+                    'ip_address': agentIp,
+                  });
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showEditAgentDialog(Map<String, dynamic> agent) async {
+    final nameCtrl = TextEditingController(text: agent['name'] ?? '');
+    final ipCtrl = TextEditingController(text: agent['ip_address'] ?? '');
+    final locCtrl = TextEditingController(text: agent['location'] ?? '');
+    int? selectedDeptId = agent['department_id'] as int?;
+
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Edit ${agent['name']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 420,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: idCtrl,
-                    decoration: const InputDecoration(labelText: 'Agent ID *', hintText: 'e.g. PRINT-AGENT-002'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Name *', hintText: 'e.g. Mechanical Lab Station'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
+                  DropdownButtonFormField<int?>(
                     value: selectedDeptId,
-                    decoration: const InputDecoration(labelText: 'Department (Optional)'),
+                    decoration: InputDecoration(
+                      labelText: 'Department',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                     items: [
-                      const DropdownMenuItem<int>(
-                        value: null,
-                        child: Text('No Specific Department (Campus General)'),
-                      ),
+                      const DropdownMenuItem<int?>(value: null, child: Text('All Campus / General')),
                       ..._departments.map(
-                        (d) => DropdownMenuItem<int>(
+                        (d) => DropdownMenuItem<int?>(
                           value: d['id'] as int,
                           child: Text('${d['name']} (${d['code']})'),
                         ),
@@ -1255,13 +1628,27 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: locCtrl,
-                    decoration: const InputDecoration(labelText: 'Location', hintText: 'e.g. Tech Block A'),
+                    controller: ipCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Static IP Address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: ipCtrl,
-                    decoration: const InputDecoration(labelText: 'IP Address', hintText: 'e.g. 192.168.1.102'),
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Print Agent Name',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Location / Notes',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
                 ],
               ),
@@ -1270,30 +1657,67 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
               onPressed: () async {
-                if (idCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) return;
                 try {
-                  await AdminApiService.createPrintAgent({
-                    'id': idCtrl.text.trim(),
+                  await AdminApiService.updatePrintAgent(agent['id'].toString(), {
                     'name': nameCtrl.text.trim(),
-                    'department_id': selectedDeptId,
-                    'location': locCtrl.text.trim().isNotEmpty ? locCtrl.text.trim() : null,
                     'ip_address': ipCtrl.text.trim().isNotEmpty ? ipCtrl.text.trim() : null,
+                    'department_id': selectedDeptId ?? 0,
+                    'location': locCtrl.text.trim().isNotEmpty ? locCtrl.text.trim() : null,
                   });
                   if (ctx.mounted) Navigator.pop(ctx, true);
                 } catch (e) {
                   if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Failed: $e'), backgroundColor: AppTheme.danger),
+                    );
                   }
                 }
               },
-              child: const Text('Create'),
+              child: const Text('Save Changes'),
             ),
           ],
         ),
       ),
     );
 
-    if (created == true) _loadData();
+    if (updated == true) _loadData();
+  }
+
+  Future<void> _deleteAgent(Map<String, dynamic> agent) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Print Agent'),
+        content: Text('Are you sure you want to delete "${agent['name']}"?\nAll associated printers will also be removed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await AdminApiService.deletePrintAgent(agent['id'].toString());
+        await _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Print Agent deleted successfully.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppTheme.danger),
+          );
+        }
+      }
+    }
   }
 }

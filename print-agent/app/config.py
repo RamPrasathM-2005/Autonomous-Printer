@@ -23,7 +23,7 @@ class Config:
     HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "15"))
 
     CUPS_SERVER: str = os.getenv("CUPS_SERVER", "localhost")
-    PRINTER_NAME: str = os.getenv("PRINTER_NAME", "HP_LaserJet_400_M401dn_E9A0F4")
+    PRINTER_NAME: str = os.getenv("PRINTER_NAME", "")
     PORT: int = int(os.getenv("PORT", "5001"))
     MOCK_CUPS: bool = os.getenv("MOCK_CUPS", "false").lower() in ("true", "1", "yes")
     INTERNAL_AGENT_TOKEN: str = os.getenv("INTERNAL_AGENT_TOKEN", os.getenv("AGENT_TOKEN", "test-agent-device-token-secret"))

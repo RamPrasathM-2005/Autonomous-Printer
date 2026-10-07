@@ -142,8 +142,16 @@ class AdminPrintAgentItem(BaseModel):
     printer_count: int = 0
     created_at: str
 
+class AdminAgentCupsPrinterItem(BaseModel):
+    cups_printer_name: str
+    display_name: str
+    device_uri: Optional[str] = None
+    ip_address: Optional[str] = None
+    status: str = "READY"
+    is_mapped: bool = False
+
 class AdminPrintAgentCreate(BaseModel):
-    id: str
+    id: Optional[str] = None
     name: str
     location: Optional[str] = None
     department_id: Optional[int] = None

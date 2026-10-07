@@ -55,7 +55,6 @@ def seed():
             {"code": "CIVIL", "name": "Civil Engineering", "description": "Department of Civil Engineering"},
             {"code": "IT", "name": "Information Technology", "description": "Department of Information Technology"},
             {"code": "AIDS", "name": "Artificial Intelligence and Data Science", "description": "Department of Artificial Intelligence and Data Science"},
-            {"code": "MBA", "name": "Management Studies", "description": "Department of Management Studies"},
             {"code": "S&H", "name": "Science and Humanities", "description": "Department of Science and Humanities"},
         ]
         depts = {}
@@ -130,34 +129,8 @@ def seed():
                 if not admin.department_id:
                     admin.department_id = depts["IT"].id
 
-        # 2. Print Server Station (Pi Station mapped to department)
-        server_id = settings.DEFAULT_PRINT_SERVER_ID
-        server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
-        agent_token = settings.INTERNAL_AGENT_TOKEN
-        token_hash = hash_token(agent_token)
-
-        if not server:
-            server = PrintServer(
-                id=server_id,
-                name=settings.DEFAULT_PRINT_SERVER_NAME,
-                location=settings.DEFAULT_PRINT_SERVER_LOCATION,
-                device_token_hash=token_hash,
-                department_id=depts["CSE"].id,
-                status=PrintServerStatus.ONLINE,
-                last_heartbeat=datetime.now(timezone.utc),
-                printer_state="READY",
-                paper_state="AVAILABLE"
-            )
-            db.add(server)
-            print(f"  - Created print station: {server_id} mapped to CSE Department")
-        else:
-            server.device_token_hash = token_hash
-            server.status = PrintServerStatus.ONLINE
-            if not server.department_id:
-                server.department_id = depts["CSE"].id
-
         db.commit()
-        print("[SUCCESS] Infrastructure database seeding complete! Master departments and admin created. Printers and agents are dynamically registered.")
+        print("[SUCCESS] Infrastructure database seeding complete! Master departments and admin created. Print agents and printers are managed strictly via Admin portal.")
 
     finally:
         db.close()

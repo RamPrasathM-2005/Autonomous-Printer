@@ -532,6 +532,57 @@ class AdminApiService {
     }
   }
 
+  static Future<List<dynamic>> getAgentCupsPrinters(String serverId) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .get(
+          Uri.parse('$origin/api/admin/print-agents/$serverId/cups-printers'),
+          headers: AdminAuthService.authHeaders,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to retrieve CUPS printers from Print Agent.');
+      } catch (_) {
+        throw Exception('Failed to retrieve CUPS printers from Print Agent.');
+      }
+    }
+
+    return jsonDecode(response.body) as List<dynamic>;
+  }
+
+  static Future<void> updatePrintAgent(String serverId, Map<String, dynamic> data) async {
+    final origin = ApiConfig.backendUrl;
+    final response = await http
+        .patch(
+          Uri.parse('$origin/api/admin/print-agents/$serverId'),
+          headers: AdminAuthService.authHeaders,
+          body: jsonEncode(data),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.logout();
+      throw Exception('Session expired or unauthorized. Please sign in again.');
+    }
+
+    if (response.statusCode >= 400) {
+      try {
+        final err = jsonDecode(response.body);
+        throw Exception(err['message'] ?? 'Failed to update print agent.');
+      } catch (_) {
+        throw Exception('Failed to update print agent.');
+      }
+    }
+  }
+
   static Future<List<dynamic>> getDiscoveredPrinters() async {
     final origin = ApiConfig.backendUrl;
     final response = await http
