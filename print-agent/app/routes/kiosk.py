@@ -157,7 +157,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      padding: 12px 28px;
+      padding: 8px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -174,8 +174,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .brand-icon {
-      width: 44px;
-      height: 44px;
+      width: 36px;
+      height: 36px;
       background: linear-gradient(135deg, #2563eb, #06b6d4);
       border-radius: 12px;
       display: flex;
@@ -263,18 +263,18 @@ KIOSK_HTML = """<!DOCTYPE html>
       justify-content: center;
       width: 100%;
       max-width: 1100px;
-      padding: 20px 24px;
+      padding: 8px 14px;
     }
 
     .kiosk-grid {
       display: grid;
-      grid-template-columns: 1fr 1.15fr;
-      gap: 28px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: 14px;
       width: 100%;
       align-items: stretch;
     }
 
-    @media (max-width: 880px) {
+    @media (max-width: 599px) {
       .kiosk-grid {
         grid-template-columns: 1fr;
       }
@@ -285,7 +285,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 26px 24px;
+      padding: 12px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
       display: flex;
       flex-direction: column;
@@ -312,28 +312,28 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .kiosk-card-left h2 {
-      font-size: 1.35rem;
+      font-size: 1.2rem;
       font-weight: 800;
       color: var(--text);
       margin-bottom: 6px;
     }
 
     .kiosk-card-left p {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
       max-width: 320px;
       line-height: 1.45;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
     }
 
     /* QR Code Display Frame */
     .qr-frame {
       background: #ffffff;
-      padding: 14px;
+      padding: 10px;
       border-radius: 18px;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08), 0 0 15px rgba(37, 99, 235, 0.08);
       border: 2px solid var(--border);
-      margin-bottom: 14px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -345,8 +345,8 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     .qr-frame img {
-      width: 200px;
-      height: 200px;
+      width: 184px;
+      height: 184px;
       display: block;
       image-rendering: pixelated;
     }
@@ -357,11 +357,11 @@ KIOSK_HTML = """<!DOCTYPE html>
       border-radius: 8px;
       padding: 6px 12px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
+      font-size: 0.7rem;
       color: #0284c7;
       word-break: break-all;
-      margin-bottom: 16px;
-      max-width: 340px;
+      margin-bottom: 8px;
+      max-width: 100%;
     }
 
     .kiosk-card-left .action-group {
@@ -379,9 +379,9 @@ KIOSK_HTML = """<!DOCTYPE html>
       justify-content: space-between;
       width: 100%;
       max-width: 340px;
-      margin-top: 14px;
+      margin-top: 0;
       border-top: 1px solid var(--border);
-      padding-top: 12px;
+      padding-top: 8px;
       gap: 6px;
     }
 
@@ -412,7 +412,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 26px 26px;
+      padding: 12px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
       display: flex;
       flex-direction: column;
@@ -422,11 +422,11 @@ KIOSK_HTML = """<!DOCTYPE html>
 
     .card-title-group {
       text-align: center;
-      margin-bottom: 18px;
+      margin-bottom: 8px;
     }
 
     .card-title-group h2 {
-      font-size: 1.45rem;
+      font-size: 1.2rem;
       font-weight: 800;
       letter-spacing: -0.02em;
       margin-bottom: 5px;
@@ -442,13 +442,13 @@ KIOSK_HTML = """<!DOCTYPE html>
     .otp-display-container {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      margin-bottom: 18px;
+      gap: 6px;
+      margin-bottom: 8px;
     }
 
     .otp-slot {
-      width: 50px;
-      height: 60px;
+      width: 44px;
+      height: 44px;
       background: #f8fafc;
       border: 2px solid #cbd5e1;
       border-radius: 12px;
@@ -456,7 +456,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 1.85rem;
+      font-size: 1.5rem;
       font-weight: 700;
       color: var(--text);
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
@@ -531,15 +531,15 @@ KIOSK_HTML = """<!DOCTYPE html>
     .keypad-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 16px;
+      gap: 6px;
+      margin-bottom: 8px;
     }
 
     .key-btn {
       background: var(--key-bg);
       border: 1.5px solid var(--border);
       border-radius: 12px;
-      height: 56px;
+      height: 44px;
       font-size: 1.45rem;
       font-weight: 700;
       color: var(--text);
@@ -590,7 +590,7 @@ KIOSK_HTML = """<!DOCTYPE html>
     /* Primary Print Button */
     .print-btn {
       width: 100%;
-      height: 56px;
+      height: 44px;
       background: linear-gradient(135deg, #2563eb, #1d4ed8);
       border: none;
       border-radius: 12px;
@@ -788,11 +788,63 @@ KIOSK_HTML = """<!DOCTYPE html>
     footer {
       width: 100%;
       text-align: center;
-      padding: 12px 20px;
+      padding: 6px 14px;
       font-size: 0.76rem;
       color: var(--text-dim);
       border-top: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.85);
+    }
+
+    .kiosk-card-left, .kiosk-card-right { min-width: 0; }
+    .printer-model-badge {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .key-btn:focus-visible, .print-btn:focus-visible {
+      outline: 3px solid var(--border-focus);
+      outline-offset: 2px;
+    }
+    /* Keep the 800x480 Pi touchscreen usable, including browser toolbars. */
+    @media (min-width: 600px) and (max-height: 520px) {
+      header { flex-wrap: nowrap; gap: 8px; }
+      .station-brand { gap: 8px; }
+      .brand-text p { display: none; }
+      .printer-model-badge { max-width: 200px; }
+      .kiosk-grid { gap: 12px; }
+      .card-title-group p { display: none; }
+      .keypad-grid { gap: 4px; }
+      .otp-slot { height: 40px; }
+      .qr-frame img { width: 168px; height: 168px; }
+      .qr-badge-pill { margin-bottom: 6px; }
+      .kiosk-card-left p { margin-bottom: 6px; }
+      .kiosk-card-left, .kiosk-card-right { padding: 10px; }
+      .card-title-group h2 { margin-bottom: 0; }
+      /* Errors replace the title area instead of pushing the keypad down. */
+      .alert-banner.error {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        z-index: 1;
+        margin: 0;
+        padding: 6px 10px;
+        background: #fef2f2;
+      }
+    }
+    @media (min-width: 600px) and (max-height: 420px) {
+      footer { display: none; }
+      header { padding: 6px 14px; }
+      .brand-icon { width: 32px; height: 32px; }
+      main { padding: 4px 14px; }
+      .qr-frame img { width: 152px; height: 152px; }
+    }
+    @media (max-width: 599px) {
+      header { padding: 10px 12px; }
+      .printer-model-badge { max-width: 180px; }
+      .otp-slot { flex: 0 1 44px; min-width: 0; }
+      .kiosk-card-left { gap: 8px; }
     }
   </style>
 </head>
@@ -806,7 +858,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       </div>
       <div class="brand-text">
         <h1>ACHUPPORI</h1>
-        <p>Self-Service Instant Release Terminal</p>
+        <p>Self-service printing</p>
       </div>
     </div>
 
@@ -828,14 +880,8 @@ KIOSK_HTML = """<!DOCTYPE html>
       <!-- LEFT COLUMN: Mobile QR Scan & APK Download -->
       <div class="kiosk-card-left">
         <div>
-          <div class="qr-badge-pill">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
-            </svg>
-            1. SCAN FROM PHONE
-          </div>
-          <h2>Print from your Phone</h2>
-          <p>Scan with your phone camera to open the Web App instantly.</p>
+          <h2>Scan to print</h2>
+          <p>Upload &amp; pay on your phone.</p>
         </div>
 
         <!-- High-Contrast QR Code -->
@@ -851,15 +897,12 @@ KIOSK_HTML = """<!DOCTYPE html>
         <div class="action-group">
           <div class="steps-list">
             <div class="step-micro">
-              <span class="num">1</span>
               <span>Scan QR Code</span>
             </div>
             <div class="step-micro">
-              <span class="num">2</span>
               <span>Upload & Pay</span>
             </div>
             <div class="step-micro">
-              <span class="num">3</span>
               <span>Enter OTP Here</span>
             </div>
           </div>
@@ -869,15 +912,12 @@ KIOSK_HTML = """<!DOCTYPE html>
       <!-- RIGHT COLUMN: 6-Digit Release Keypad -->
       <div class="kiosk-card-right">
         <div class="card-title-group">
-          <div class="qr-badge-pill" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); color: #34d399;">
-            2. INSTANT RELEASE
-          </div>
           <h2>Enter your 6-digit OTP</h2>
-          <p>Enter the release code from your phone to print immediately.</p>
+          <p>Use the code from your phone.</p>
         </div>
 
         <!-- Alert Banner for Errors or Notices -->
-        <div class="alert-banner" id="alertBanner">
+        <div class="alert-banner" id="alertBanner" role="alert" aria-live="polite">
           <h3 id="alertTitle">Invalid OTP</h3>
           <p id="alertMessage">Please check the OTP and try again.</p>
         </div>
@@ -908,7 +948,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
           <button class="key-btn action-btn clear-btn" data-action="clear">CLEAR</button>
           <button class="key-btn" data-key="0">0</button>
-          <button class="key-btn action-btn backspace-btn" data-action="backspace">
+          <button class="key-btn action-btn backspace-btn" data-action="backspace" aria-label="Delete last digit">
             <svg viewBox="0 0 24 24">
               <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/>
             </svg>
@@ -969,7 +1009,7 @@ KIOSK_HTML = """<!DOCTYPE html>
 
   <!-- Bottom Kiosk Footer -->
   <footer>
-    Station ID: {{ agent_id }} &bull; Printer: {{ printer_name }} &bull; OTP Valid for 24 Hours &bull; Achuppori
+    Station: {{ agent_id }} &bull; Scan, upload &amp; pay, then enter OTP to print
   </footer>
 
   <script>
