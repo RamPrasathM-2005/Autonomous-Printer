@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -35,16 +35,26 @@ def _update_server_offline_status(server: PrintServer, db: Session):
                 db.commit()
 
 @router.get("", response_model=List[PrintServerResponse])
-def list_print_servers(db: Session = Depends(get_db)):
-    servers = db.query(PrintServer).all()
+def list_print_servers(
+    department_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(PrintServer)
+    if department_id is not None:
+        query = query.filter(PrintServer.department_id == department_id)
+    servers = query.all()
     results = []
     for s in servers:
         _update_server_offline_status(s, db)
-        printers = db.query(Printer).filter(Printer.server_id == s.id, Printer.is_active == True).all()
+        printers = db.query(Printer).filter(
+            Printer.server_id == s.id,
+            Printer.is_enabled == True
+        ).all()
         results.append(PrintServerResponse(
             id=s.id,
             name=s.name,
             location=s.location,
+            department_id=s.department_id,
             status=s.status,
             last_heartbeat=s.last_heartbeat,
             printer_state=s.printer_state,
@@ -52,6 +62,24 @@ def list_print_servers(db: Session = Depends(get_db)):
             printers=[PrinterResponse.model_validate(p) for p in printers]
         ))
     return results
+
+@router.get("/printers", response_model=List[PrinterResponse])
+def list_all_printers(
+    department_id: Optional[int] = None,
+    server_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Printer).filter(Printer.is_enabled == True)
+    if department_id is not None:
+        # Either directly assigned to department or assigned to a station in that department
+        matching_servers = db.query(PrintServer.id).filter(PrintServer.department_id == department_id).subquery()
+        query = query.filter(
+            (Printer.department_id == department_id) | (Printer.server_id.in_(matching_servers))
+        )
+    if server_id is not None:
+        query = query.filter(Printer.server_id == server_id)
+    printers = query.all()
+    return [PrinterResponse.model_validate(p) for p in printers]
 
 @router.get("/{server_id}", response_model=PrintServerResponse)
 def get_print_server(server_id: str, db: Session = Depends(get_db)):
@@ -64,11 +92,12 @@ def get_print_server(server_id: str, db: Session = Depends(get_db)):
         )
 
     _update_server_offline_status(s, db)
-    printers = db.query(Printer).filter(Printer.server_id == s.id, Printer.is_active == True).all()
+    printers = db.query(Printer).filter(Printer.server_id == s.id, Printer.is_enabled == True).all()
     return PrintServerResponse(
         id=s.id,
         name=s.name,
         location=s.location,
+        department_id=s.department_id,
         status=s.status,
         last_heartbeat=s.last_heartbeat,
         printer_state=s.printer_state,

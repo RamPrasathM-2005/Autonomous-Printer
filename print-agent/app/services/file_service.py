@@ -50,8 +50,18 @@ class FileService:
             agent_logger.info(f"Resolved file from backend documents storage: {backend_docs}")
             return backend_docs
 
+        # If running remotely on Raspberry Pi, download from central backend
+        try:
+            from app.services.backend_client import backend_client
+            agent_logger.info(f"Fetching document {clean_key} from central backend...")
+            if backend_client.download_file(clean_key, target_path) and target_path.exists():
+                agent_logger.info(f"Successfully retrieved document from backend to {target_path}")
+                return target_path
+        except Exception as e:
+            agent_logger.warning(f"Could not download file from backend: {e}")
+
         # Auto-create mock printable PDF if file is not stored locally
-        agent_logger.info(f"Document not found on disk for {storage_key}. Generating virtual printable document...")
+        agent_logger.warning(f"Document not found on disk or backend for {storage_key}. Generating emergency printable document...")
         target_path.parent.mkdir(parents=True, exist_ok=True)
         # Minimal valid 1-page PDF
         minimal_pdf = (

@@ -63,6 +63,14 @@ def gateway(monkeypatch):
     return fake
 
 
+@pytest.fixture(autouse=True)
+def isolate_email_delivery(monkeypatch):
+    from app.services.email_service import email_service
+    monkeypatch.setattr(email_service, "send_otp", lambda *args, **kwargs: True)
+    yield
+
+
+
 def sign_payload(body, secret="unit-webhook-secret"):
     return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 

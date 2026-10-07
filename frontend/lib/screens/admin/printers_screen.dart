@@ -1213,60 +1213,84 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
     final nameCtrl = TextEditingController();
     final locCtrl = TextEditingController();
     final ipCtrl = TextEditingController();
+    int? selectedDeptId;
 
     final created = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Register Print Agent'),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: idCtrl,
-                decoration: const InputDecoration(labelText: 'Agent ID *', hintText: 'e.g. PRINT-AGENT-002'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Register Print Agent'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: idCtrl,
+                    decoration: const InputDecoration(labelText: 'Agent ID *', hintText: 'e.g. PRINT-AGENT-002'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Name *', hintText: 'e.g. Mechanical Lab Station'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    value: selectedDeptId,
+                    decoration: const InputDecoration(labelText: 'Department (Optional)'),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        value: null,
+                        child: Text('No Specific Department (Campus General)'),
+                      ),
+                      ..._departments.map(
+                        (d) => DropdownMenuItem<int>(
+                          value: d['id'] as int,
+                          child: Text('${d['name']} (${d['code']})'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setDialogState(() => selectedDeptId = val),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locCtrl,
+                    decoration: const InputDecoration(labelText: 'Location', hintText: 'e.g. Tech Block A'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ipCtrl,
+                    decoration: const InputDecoration(labelText: 'IP Address', hintText: 'e.g. 192.168.1.102'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Name *', hintText: 'e.g. Mechanical Lab Station'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: locCtrl,
-                decoration: const InputDecoration(labelText: 'Location', hintText: 'e.g. Tech Block A'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ipCtrl,
-                decoration: const InputDecoration(labelText: 'IP Address', hintText: 'e.g. 192.168.1.102'),
-              ),
-            ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              if (idCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) return;
-              try {
-                await AdminApiService.createPrintAgent({
-                  'id': idCtrl.text.trim(),
-                  'name': nameCtrl.text.trim(),
-                  'location': locCtrl.text.trim().isNotEmpty ? locCtrl.text.trim() : null,
-                  'ip_address': ipCtrl.text.trim().isNotEmpty ? ipCtrl.text.trim() : null,
-                });
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (idCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) return;
+                try {
+                  await AdminApiService.createPrintAgent({
+                    'id': idCtrl.text.trim(),
+                    'name': nameCtrl.text.trim(),
+                    'department_id': selectedDeptId,
+                    'location': locCtrl.text.trim().isNotEmpty ? locCtrl.text.trim() : null,
+                    'ip_address': ipCtrl.text.trim().isNotEmpty ? ipCtrl.text.trim() : null,
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
                 }
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
 

@@ -187,12 +187,36 @@ class ApiService {
     return false;
   }
 
-  Future<List<PrintServer>> fetchPrintServers() async {
+  Future<List<Map<String, dynamic>>> fetchDepartments() async {
     final response = await http
-        .get(Uri.parse('$_baseUrl/api/print-servers'))
+        .get(Uri.parse('$_baseUrl/api/departments/public'))
         .timeout(const Duration(seconds: 8));
+    final decoded = _decode(response);
+    if (decoded is List) {
+      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [];
+  }
+
+  Future<List<PrintServer>> fetchPrintServers({int? departmentId}) async {
+    final uri = departmentId != null
+        ? Uri.parse('$_baseUrl/api/print-servers?department_id=$departmentId')
+        : Uri.parse('$_baseUrl/api/print-servers');
+    final response = await http.get(uri).timeout(const Duration(seconds: 8));
     return (_decode(response) as List)
         .map((j) => PrintServer.fromJson(j))
+        .toList();
+  }
+
+  Future<List<Printer>> fetchPrinters({int? departmentId, String? serverId}) async {
+    final queryParams = <String, String>{};
+    if (departmentId != null) queryParams['department_id'] = departmentId.toString();
+    if (serverId != null && serverId.isNotEmpty) queryParams['server_id'] = serverId;
+    
+    final uri = Uri.parse('$_baseUrl/api/print-servers/printers').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+    final response = await http.get(uri).timeout(const Duration(seconds: 8));
+    return (_decode(response) as List)
+        .map((j) => Printer.fromJson(j))
         .toList();
   }
 

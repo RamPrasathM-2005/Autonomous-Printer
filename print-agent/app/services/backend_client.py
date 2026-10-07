@@ -1,4 +1,5 @@
 import requests
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from app.config import config
 from app.utils.errors import BackendCommunicationException, OTPReleaseException
@@ -103,6 +104,25 @@ class BackendClient:
             return False
         except Exception as e:
             agent_logger.error(f"Error reporting job status to backend: {e}")
+            return False
+
+    def download_file(self, storage_key: str, dest_path: Path) -> bool:
+        clean_key = storage_key.lstrip("/\\")
+        url = f"{self.base_url}/agent/file/{clean_key}"
+        try:
+            resp = self.session.get(url, timeout=60, stream=True)
+            if resp.status_code == 200:
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(dest_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                agent_logger.info(f"Downloaded document file from backend: {dest_path}")
+                return True
+            agent_logger.error(f"Failed to download document from backend ({resp.status_code}): {resp.text[:200]}")
+            return False
+        except Exception as e:
+            agent_logger.error(f"Error downloading document file from backend: {e}")
             return False
 
 backend_client = BackendClient()
