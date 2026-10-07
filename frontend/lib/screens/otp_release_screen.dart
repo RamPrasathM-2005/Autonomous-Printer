@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../config/theme.dart';
 import '../models/document.dart';
 import '../models/order.dart';
+import '../models/print_server.dart';
 import '../services/api_error.dart';
 import '../services/api_service.dart';
 import '../services/order_recovery_service.dart';
@@ -59,8 +60,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   String _printStatus = 'WAITING';
   double _printProgress = 0.0;
 
-  static const String _kPrinter1Id = 'HP_LaserJet_400_M401dn_F36EC0';
-  static const String _kPrinter2Id = 'HP_LaserJet_400_M401dn_E9A0F4';
+  List<Printer> _availablePrinters = [];
 
   Future<PrintOrder> _getOrder() =>
       widget.loadOrder?.call() ?? _apiService.getOrder(widget.orderId);
@@ -107,6 +107,15 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       }
 
       if (!mounted) return;
+
+      // Load active printers from database for this print station
+      List<Printer> loadedPrinters = [];
+      try {
+        loadedPrinters = await _apiService.fetchPrinters(
+          serverId: order.printServerId,
+        );
+      } catch (_) {}
+
       final existingPrinter =
           order.printSettings.toJson()['printer_name'] ??
           order.printSettings.toJson()['cups_printer_name'] ??
@@ -133,12 +142,18 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         );
       }
 
+      String? initialSelectedPrinter = _selectedPrinterName;
+      if (existingPrinter != null && existingPrinter.toString().isNotEmpty) {
+        initialSelectedPrinter = existingPrinter.toString();
+      } else if (initialSelectedPrinter == null && loadedPrinters.isNotEmpty) {
+        initialSelectedPrinter = loadedPrinters.first.cupsQueueName;
+      }
+
       setState(() {
         _order = order;
         _otpData = otp;
-        if (existingPrinter != null && existingPrinter.toString().isNotEmpty) {
-          _selectedPrinterName = existingPrinter.toString();
-        }
+        _availablePrinters = loadedPrinters;
+        _selectedPrinterName = initialSelectedPrinter;
         _isPrinterLocked = isLocked && _selectedPrinterName != null;
         if (_isPrinterLocked) {
           _otpRevealed = true;
@@ -733,28 +748,60 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _printerCard(
-                        name: _kPrinter1Id,
-                        label: 'Unit 1',
-                        tag: 'F36EC0',
-                        accentColor: AppTheme.primary,
-                      ),
+                if (_availablePrinters.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                    alignment: Alignment.center,
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.print_disabled_outlined,
+                          size: 36,
+                          color: AppTheme.textMuted,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'No Printers Found on this Station',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Printers configured by the administrator in the Admin Panel will appear here dynamically.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textMuted,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _printerCard(
-                        name: _kPrinter2Id,
-                        label: 'Unit 2',
-                        tag: 'E9A0F4',
-                        accentColor: AppTheme.success,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                  )
+                else
+                  LayoutBuilder(
+                    builder: (ctx, constraints) {
+                      final isWide = constraints.maxWidth > 400 && _availablePrinters.length > 1;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: _availablePrinters.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final p = entry.value;
+                          return SizedBox(
+                            width: isWide ? (constraints.maxWidth - 12) / 2 : double.infinity,
+                            child: _dynamicPrinterCard(
+                              printer: p,
+                              index: idx,
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                const SizedBox(height: 14),
                 // View OTP button
                 GestureDetector(
                   onTap: _isSubmittingPrinter ? null : _viewOtp,
@@ -808,14 +855,16 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     );
   }
 
-  Widget _printerCard({
-    required String name,
-    required String label,
-    required String tag,
-    required Color accentColor,
+  Widget _dynamicPrinterCard({
+    required Printer printer,
+    required int index,
   }) {
+    final name = printer.cupsQueueName;
     final isSelected = _selectedPrinterName == name;
     final isLocked = _isPrinterLocked;
+    final accentColor = index % 2 == 0 ? AppTheme.primary : AppTheme.success;
+    final tag = name.contains('_') ? name.split('_').last : (name.length > 8 ? name.substring(name.length - 6) : name);
+    final isReady = printer.state.toUpperCase() == 'READY' || printer.state.toLowerCase() == 'idle';
 
     return GestureDetector(
       onTap: isLocked
@@ -844,12 +893,25 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(
-                  Icons.print_rounded,
-                  size: 18,
-                  color: isSelected
-                      ? (isLocked ? AppTheme.success : accentColor)
-                      : AppTheme.textMuted,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.print_rounded,
+                      size: 18,
+                      color: isSelected
+                          ? (isLocked ? AppTheme.success : accentColor)
+                          : AppTheme.textMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: isReady ? AppTheme.success : AppTheme.textMuted,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -880,21 +942,62 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'HP LaserJet 400',
+              printer.displayName,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: isSelected
                     ? AppTheme.textPrimary
                     : AppTheme.textSecondary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 2),
             Text(
-              label,
+              printer.model != null && printer.model!.isNotEmpty
+                  ? printer.model!
+                  : (printer.location != null && printer.location!.isNotEmpty ? printer.location! : 'Unit ${index + 1}'),
               style: TextStyle(
                 fontSize: 11,
                 color: isSelected ? AppTheme.textSecondary : AppTheme.textMuted,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (printer.supportsColor)
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text('Color', style: TextStyle(fontSize: 9, color: Colors.purple, fontWeight: FontWeight.w600)),
+                  )
+                else
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text('B&W', style: TextStyle(fontSize: 9, color: Colors.black87, fontWeight: FontWeight.w600)),
+                  ),
+                if (printer.supportsDuplex)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: const Text('Duplex', style: TextStyle(fontSize: 9, color: Colors.blue, fontWeight: FontWeight.w600)),
+                  ),
+              ],
             ),
           ],
         ),
@@ -1218,9 +1321,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
 
   // 5. Steps Guide
   Widget _buildStepsGuide() {
-    final printerLabel = _selectedPrinterName == _kPrinter1Id
-        ? 'HP LaserJet 400 (Unit 1)'
-        : 'HP LaserJet 400 (Unit 2)';
+    final printerLabel = _selectedPrinterName != null
+        ? 'the selected printer ($_selectedPrinterName)'
+        : 'the station printer';
 
     const steps = [
       {

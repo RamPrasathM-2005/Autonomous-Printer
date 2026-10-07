@@ -3,9 +3,13 @@ class Printer {
   final String serverId;
   final String cupsQueueName;
   final String displayName;
+  final String? model;
+  final String? location;
+  final int? departmentId;
   final String driver;
   final bool isDefault;
   final bool isActive;
+  final bool isEnabled;
   final bool supportsColor;
   final bool supportsDuplex;
   final List<String> supportedMedia;
@@ -16,9 +20,13 @@ class Printer {
     required this.serverId,
     required this.cupsQueueName,
     required this.displayName,
+    this.model,
+    this.location,
+    this.departmentId,
     required this.driver,
     required this.isDefault,
     required this.isActive,
+    required this.isEnabled,
     required this.supportsColor,
     required this.supportsDuplex,
     required this.supportedMedia,
@@ -26,14 +34,20 @@ class Printer {
   });
 
   factory Printer.fromJson(Map<String, dynamic> json) {
+    final cupsName = json['cups_printer_name'] ?? json['cups_queue_name'] ?? '';
+    final name = json['display_name'] ?? (cupsName.isNotEmpty ? cupsName : 'Station Printer');
     return Printer(
-      id: json['id'] ?? '',
-      serverId: json['server_id'] ?? '',
-      cupsQueueName: json['cups_queue_name'] ?? '',
-      displayName: json['display_name'] ?? 'Station Printer',
+      id: json['id']?.toString() ?? '',
+      serverId: json['server_id']?.toString() ?? '',
+      cupsQueueName: cupsName,
+      displayName: name,
+      model: json['model']?.toString(),
+      location: json['location']?.toString(),
+      departmentId: json['department_id'] is int ? json['department_id'] : int.tryParse(json['department_id']?.toString() ?? ''),
       driver: json['driver'] ?? '',
       isDefault: json['is_default'] ?? false,
       isActive: json['is_active'] ?? true,
+      isEnabled: json['is_enabled'] ?? true,
       supportsColor: json['supports_color'] ?? false,
       supportsDuplex: json['supports_duplex'] ?? false,
       supportedMedia:
@@ -41,7 +55,7 @@ class Printer {
               ?.map((e) => e.toString())
               .toList() ??
           ['A4'],
-      state: json['state'] ?? 'idle',
+      state: json['printer_status'] ?? json['state'] ?? 'READY',
     );
   }
 }
@@ -50,6 +64,7 @@ class PrintServer {
   final String id;
   final String name;
   final String location;
+  final int? departmentId;
   final String status; // ONLINE, OFFLINE, MAINTENANCE, DISABLED
   final String? lastHeartbeat;
   final String printerState; // IDLE, PRINTING, ERROR, UNKNOWN
@@ -60,6 +75,7 @@ class PrintServer {
     required this.id,
     required this.name,
     required this.location,
+    this.departmentId,
     required this.status,
     this.lastHeartbeat,
     required this.printerState,
@@ -83,6 +99,7 @@ class PrintServer {
       id: json['id'] ?? '',
       name: json['name'] ?? 'Print Station',
       location: json['location'] ?? 'Unknown Location',
+      departmentId: json['department_id'] is int ? json['department_id'] : int.tryParse(json['department_id']?.toString() ?? ''),
       status: json['status'] ?? 'OFFLINE',
       lastHeartbeat: json['last_heartbeat'],
       printerState: json['printer_state'] ?? 'UNKNOWN',

@@ -147,12 +147,14 @@ class _UploadScreenState extends State<UploadScreen>
 
   PrintServer? _selectedStation;
   List<PrintServer> _stations = [];
+  List<Map<String, dynamic>> _departments = [];
+  Map<String, dynamic>? _selectedDepartment;
   bool _isLoadingStations = true;
 
   @override
   void initState() {
     super.initState();
-    _loadStations();
+    _loadDepartmentsAndStations();
     WebDragDropService.register(
       onDragStateChange: (dragging) {
         if (mounted && _isDragging != dragging) {
@@ -174,14 +176,17 @@ class _UploadScreenState extends State<UploadScreen>
     super.dispose();
   }
 
-  Future<void> _loadStations() async {
+  Future<void> _loadDepartmentsAndStations() async {
     setState(() => _isLoadingStations = true);
     try {
+      final depts = await _apiService.fetchDepartments();
+      final deptId = _selectedDepartment != null ? _selectedDepartment!['id'] as int? : null;
       final stations =
           await (widget.loadStations?.call() ??
-              _apiService.fetchPrintServers());
+              _apiService.fetchPrintServers(departmentId: deptId));
       if (!mounted) return;
       setState(() {
+        _departments = depts;
         _stations = stations;
         _selectedStation = null;
         if (stations.isNotEmpty) {
@@ -197,9 +202,11 @@ class _UploadScreenState extends State<UploadScreen>
       final recovered = await _apiService.probeAndSwitchWorkingBackend();
       if (recovered) {
         try {
+          final depts = await _apiService.fetchDepartments();
           final stations = await _apiService.fetchPrintServers();
           if (!mounted) return;
           setState(() {
+            _departments = depts;
             _stations = stations;
             _selectedStation = null;
             if (stations.isNotEmpty) {
@@ -223,13 +230,39 @@ class _UploadScreenState extends State<UploadScreen>
     }
   }
 
+  Future<void> _onDepartmentSelected(Map<String, dynamic>? dept) async {
+    setState(() {
+      _selectedDepartment = dept;
+      _isLoadingStations = true;
+    });
+    try {
+      final deptId = dept != null ? dept['id'] as int? : null;
+      final stations = await _apiService.fetchPrintServers(departmentId: deptId);
+      if (!mounted) return;
+      setState(() {
+        _stations = stations;
+        _selectedStation = null;
+        if (stations.isNotEmpty) {
+          _selectedStation = stations.firstWhere(
+            (s) => s.status.toLowerCase() == 'online',
+            orElse: () => stations.first,
+          );
+        }
+        _isLoadingStations = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingStations = false);
+    }
+  }
+
   Future<void> _showServerConfigDialog() async {
     final changed = await showServerConfigModal(context);
     if (changed == true && mounted) {
       setState(() {
         _uploadError = null;
       });
-      await _loadStations();
+      await _loadDepartmentsAndStations();
     }
   }
 
@@ -561,51 +594,53 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   Widget _buildStatusBar() {
+    final selectedDeptName = _selectedDepartment != null
+        ? '${_selectedDepartment!['code']} - ${_selectedDepartment!['name']}'
+        : 'All Departments';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(
-            child: PopupMenuButton<String>(
-              tooltip: 'Check nearby stations',
+            child: PopupMenuButton<Map<String, dynamic>?>(
+              tooltip: 'Select Department',
               enabled: !_isLoadingStations,
-              itemBuilder: (_) => _stations.isEmpty
-                  ? [
-                      const PopupMenuItem(
-                        enabled: false,
-                        value: '',
-                        child: Text('No stations available'),
+              onSelected: (dept) => _onDepartmentSelected(dept),
+              itemBuilder: (_) => [
+                const PopupMenuItem<Map<String, dynamic>?>(
+                  value: null,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.apartment_rounded, color: AppTheme.primary),
+                    title: Text('All Departments (Campus Wide)'),
+                    subtitle: Text('Show all stations across campus'),
+                  ),
+                ),
+                ..._departments.map(
+                  (d) => PopupMenuItem<Map<String, dynamic>?>(
+                    value: d,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.school_outlined, color: AppTheme.primary),
+                      title: Text('${d['code']} - ${d['name']}'),
+                      subtitle: Text(
+                        d['description'] != null && d['description'].toString().isNotEmpty
+                            ? d['description'].toString()
+                            : 'Department of ${d['name']}',
                       ),
-                    ]
-                  : _stations
-                        .map(
-                          (s) => PopupMenuItem<String>(
-                            enabled: false,
-                            value: s.id,
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                Icons.print_outlined,
-                                color: s.canAcceptJobs
-                                    ? AppTheme.success
-                                    : AppTheme.textMuted,
-                              ),
-                              title: Text(s.name),
-                              subtitle: Text(
-                                '${s.location} \u00b7 ${s.canAcceptJobs ? 'Available' : 'Unavailable'}',
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    ),
+                  ),
+                ),
+              ],
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      Icons.near_me_outlined,
+                      Icons.apartment_rounded,
                       size: 16,
                       color: AppTheme.primary,
                     ),
@@ -613,17 +648,20 @@ class _UploadScreenState extends State<UploadScreen>
                     Flexible(
                       child: Text(
                         _isLoadingStations
-                            ? 'Loading stations...'
-                            : 'Nearby stations',
+                            ? 'Loading departments...'
+                            : (_stations.isEmpty
+                                ? selectedDeptName
+                                : '$selectedDeptName (${_stations.where((s) => s.isOnline).length} online)'),
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(Icons.expand_more, size: 16),
+                    const Icon(Icons.expand_more, size: 16, color: AppTheme.primary),
                   ],
                 ),
               ),
@@ -695,7 +733,7 @@ class _UploadScreenState extends State<UploadScreen>
               GestureDetector(
                 onTap: () async {
                   setState(() => _uploadError = null);
-                  await _loadStations();
+                  await _loadDepartmentsAndStations();
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(

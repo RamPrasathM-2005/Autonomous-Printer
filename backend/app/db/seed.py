@@ -130,7 +130,7 @@ def seed():
                 if not admin.department_id:
                     admin.department_id = depts["IT"].id
 
-        # 2. Print Server Station
+        # 2. Print Server Station (Pi Station mapped to department)
         server_id = settings.DEFAULT_PRINT_SERVER_ID
         server = db.query(PrintServer).filter(PrintServer.id == server_id).first()
         agent_token = settings.INTERNAL_AGENT_TOKEN
@@ -142,25 +142,22 @@ def seed():
                 name=settings.DEFAULT_PRINT_SERVER_NAME,
                 location=settings.DEFAULT_PRINT_SERVER_LOCATION,
                 device_token_hash=token_hash,
+                department_id=depts["CSE"].id,
                 status=PrintServerStatus.ONLINE,
                 last_heartbeat=datetime.now(timezone.utc),
                 printer_state="READY",
                 paper_state="AVAILABLE"
             )
             db.add(server)
-            print(f"  - Created print station: {server_id}")
+            print(f"  - Created print station: {server_id} mapped to CSE Department")
         else:
             server.device_token_hash = token_hash
             server.status = PrintServerStatus.ONLINE
-
-        # 3. Existing printers mapping to real departments
-        existing_printers = db.query(Printer).all()
-        for p in existing_printers:
-            if not p.department_id or p.department_id not in [d.id for d in depts.values()]:
-                p.department_id = depts["IT"].id
+            if not server.department_id:
+                server.department_id = depts["CSE"].id
 
         db.commit()
-        print("[SUCCESS] Infrastructure database seeding complete! Student accounts & logs are created dynamically on user login.")
+        print("[SUCCESS] Infrastructure database seeding complete! Master departments and admin created. Printers and agents are dynamically registered.")
 
     finally:
         db.close()

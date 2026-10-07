@@ -10,9 +10,14 @@ class PrinterResponse(BaseModel):
     server_id: str
     cups_printer_name: str
     display_name: str
-    supports_color: bool
-    supports_duplex: bool
-    is_active: bool
+    model: Optional[str] = None
+    location: Optional[str] = None
+    department_id: Optional[int] = None
+    printer_status: Optional[str] = "READY"
+    supports_color: bool = True
+    supports_duplex: bool = True
+    is_active: bool = True
+    is_enabled: bool = True
 
 class PrintServerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -20,6 +25,7 @@ class PrintServerResponse(BaseModel):
     id: str
     name: str
     location: Optional[str] = None
+    department_id: Optional[int] = None
     status: PrintServerStatus
     last_heartbeat: Optional[datetime] = None
     printer_state: Optional[str] = None
