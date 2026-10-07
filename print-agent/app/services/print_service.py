@@ -99,6 +99,7 @@ class PrintService:
             "message": f"Preparing document for {friendly_printer}..."
         })
 
+        local_file = None
         # 1. Resolve and verify local file
         try:
             local_file = file_service.resolve_and_verify_file(storage_key)
@@ -188,6 +189,14 @@ class PrintService:
                     "message": f"Printing pages on {friendly_printer}..."
                 })
 
+        def _cleanup_temp_file():
+            try:
+                if local_file and local_file.exists() and str(file_service.storage_root) in str(local_file):
+                    local_file.unlink()
+                    agent_logger.info(f"Cleaned up temporary print file on Pi: {local_file}")
+            except Exception as ex:
+                agent_logger.debug(f"File cleanup ignored error: {ex}")
+
         cups_status = cups_service.monitor_job(cups_job_id, on_status_callback=status_callback, target_printer=raw_printer)
         if cups_status == "COMPLETED":
             self.set_job_state(job_id, {
@@ -205,6 +214,7 @@ class PrintService:
                 cups_job_id=cups_job_id
             )
             agent_logger.info(f"Successfully finished job {job_id} (CUPS ID {cups_job_id})")
+            _cleanup_temp_file()
             return True
         elif cups_status == "OUT_OF_PAPER":
             self.set_job_state(job_id, {
@@ -241,6 +251,7 @@ class PrintService:
                 error_code="PRINT_ERROR",
                 message=f"CUPS reported status: {cups_status}"
             )
+            _cleanup_temp_file()
             return False
 
 print_service = PrintService()
