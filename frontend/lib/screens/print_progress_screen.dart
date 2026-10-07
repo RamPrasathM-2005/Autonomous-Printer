@@ -131,32 +131,26 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                       // Progress Animation Card
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 36,
-                        ),
+                        padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceWhite,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: AppTheme.border.withValues(alpha: 0.85),
-                            width: 1.2,
-                          ),
+                          border: Border.all(color: AppTheme.border),
                           boxShadow: AppTheme.cardShadow,
                         ),
                         child: Column(
                           children: [
                             if (_isCompleted) ...[
                               Container(
-                                width: 88,
-                                height: 88,
+                                width: 84,
+                                height: 84,
                                 decoration: const BoxDecoration(
                                   color: AppTheme.successSurface,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.check_circle_rounded,
-                                  size: 58,
+                                  size: 56,
                                   color: AppTheme.success,
                                 ),
                               ),
@@ -165,7 +159,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 _mockPrinting
                                     ? 'Test print complete'
                                     : 'Print complete',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
                                   color: AppTheme.textPrimary,
@@ -185,21 +179,21 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                               RotationTransition(
                                 turns: _animController,
                                 child: Container(
-                                  width: 88,
-                                  height: 88,
+                                  width: 84,
+                                  height: 84,
                                   decoration: BoxDecoration(
                                     color: AppTheme.primarySurface,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: AppTheme.primary.withValues(
-                                        alpha: 0.35,
+                                        alpha: 0.3,
                                       ),
                                       width: 2,
                                     ),
                                   ),
                                   child: const Icon(
                                     Icons.print_rounded,
-                                    size: 48,
+                                    size: 46,
                                     color: AppTheme.primary,
                                   ),
                                 ),
@@ -209,17 +203,16 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 _statusMessage,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 17,
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.textPrimary,
-                                  letterSpacing: -0.2,
                                 ),
                               ),
                               const SizedBox(height: 20),
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(8),
                                 child: LinearProgressIndicator(
-                                  minHeight: 8,
+                                  minHeight: 10,
                                   backgroundColor: AppTheme.surfaceSubtle,
                                   valueColor:
                                       const AlwaysStoppedAnimation<Color>(
@@ -237,23 +230,17 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
 
                       // Order details
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 22,
-                        ),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceWhite,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: AppTheme.border.withValues(alpha: 0.85),
-                            width: 1.2,
-                          ),
+                          border: Border.all(color: AppTheme.border),
                           boxShadow: AppTheme.cardShadow,
                         ),
                         child: Column(
                           children: [
                             _buildRow('Order', widget.orderId),
-                            const Divider(height: 24),
+                            const Divider(height: 20),
                             _buildRow('Station', widget.printServerId),
                           ],
                         ),
@@ -307,7 +294,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                               backgroundColor: AppTheme.primary,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                           ),
@@ -326,11 +313,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
         ),
         const SizedBox(width: 12),
         Flexible(
@@ -338,7 +321,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
             value,
             textAlign: TextAlign.right,
             style: const TextStyle(
-              fontSize: 13.5,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppTheme.textPrimary,
             ),

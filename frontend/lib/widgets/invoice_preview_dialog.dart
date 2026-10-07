@@ -253,16 +253,15 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 880),
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 860),
           decoration: BoxDecoration(
             color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFCBD5E1), width: 1),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
-                blurRadius: 28,
-                offset: Offset(0, 12),
+                blurRadius: 24,
+                offset: Offset(0, 10),
               ),
             ],
           ),
@@ -272,14 +271,14 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
               // Top Action Header
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 14,
+                  horizontal: 20,
+                  vertical: 12,
                 ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
                   ),
                   border: Border(bottom: BorderSide(color: borderColor)),
                 ),
@@ -288,47 +287,46 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                     const Icon(
                       Icons.receipt_long_rounded,
                       color: primaryColor,
-                      size: 22,
+                      size: 20,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     const Text(
                       'Tax Invoice / Receipt',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: darkText,
-                        letterSpacing: -0.2,
                       ),
                     ),
                     const Spacer(),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 9,
+                          horizontal: 12,
+                          vertical: 8,
                         ),
-                        side: const BorderSide(color: borderColor, width: 1.1),
+                        side: const BorderSide(color: borderColor),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       onPressed: _handleOpenPdf,
                       icon: const Icon(Icons.open_in_new_rounded, size: 14),
                       label: const Text(
                         'Open PDF',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 12),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: primaryColor,
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 9,
+                          horizontal: 14,
+                          vertical: 8,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       onPressed: _isDownloading ? null : _handleDownload,
@@ -345,7 +343,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                       label: Text(
                         _isDownloading ? 'Downloading...' : 'Download PDF',
                         style: const TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -363,20 +361,20 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
               // Scrollable Invoice Body
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+                  padding: const EdgeInsets.all(20),
                   child: Center(
                     child: Container(
-                      constraints: const BoxConstraints(maxWidth: 630),
+                      constraints: const BoxConstraints(maxWidth: 620),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 36,
-                        vertical: 32,
+                        horizontal: 32,
+                        vertical: 30,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: const Color(0xFFE2E8F0),
-                          width: 1,
+                          color: const Color(0xFFCBD5E1),
+                          width: 0.8,
                         ),
                         boxShadow: const [
                           BoxShadow(
@@ -508,17 +506,16 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     'Order ID: ${widget.order.id}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      fontSize: 11.5,
+                                      fontSize: 10,
                                       color: darkText,
                                     ),
                                   ),
-                                  const SizedBox(height: 3),
+                                  const SizedBox(height: 2),
                                   Text(
                                     'Date: $formattedDate',
                                     style: const TextStyle(
-                                      fontSize: 10.5,
+                                      fontSize: 9,
                                       color: slateColor,
-                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -534,11 +531,11 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 18,
-                              vertical: 12,
+                              vertical: 11,
                             ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(6),
                               border: Border.all(
                                 color: borderColor,
                                 width: 0.8,
@@ -553,8 +550,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     Text(
                                       'Payment Status',
                                       style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 9,
                                         color: slateColor,
                                       ),
                                     ),
@@ -562,7 +558,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     Text(
                                       'PAID (Verified)',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         color: Color(0xFF16A34A),
                                       ),
@@ -575,8 +571,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     Text(
                                       'Payment Method',
                                       style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 9,
                                         color: slateColor,
                                       ),
                                     ),
@@ -584,7 +579,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     Text(
                                       'Razorpay Online',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         color: darkText,
                                       ),
@@ -597,8 +592,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     const Text(
                                       'Location',
                                       style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 9,
                                         color: slateColor,
                                       ),
                                     ),
@@ -606,7 +600,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                     Text(
                                       finalLocation,
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         fontWeight: FontWeight.w700,
                                         color: darkText,
                                       ),
@@ -617,7 +611,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                             ),
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
                           // Document Print Specifications & Summary
                           Row(
@@ -630,24 +624,20 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                   'Document Print Specifications:',
                                   style: TextStyle(
                                     color: primaryColor,
-                                    fontSize: 12.5,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                               Container(
-                                width: 200,
+                                width: 190,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 9,
+                                  horizontal: 12,
+                                  vertical: 8,
                                 ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF0F7FF),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFFD6E4FF),
-                                    width: 0.8,
-                                  ),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,21 +649,21 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         const Text(
                                           'Total Printed Pages:',
                                           style: TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 9,
                                             color: Color(0xFF334155),
                                           ),
                                         ),
                                         Text(
                                           '${widget.order.totalPages}',
                                           style: const TextStyle(
-                                            fontSize: 10.5,
+                                            fontSize: 9,
                                             fontWeight: FontWeight.w700,
                                             color: darkText,
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 3),
                                     Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
@@ -681,14 +671,14 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         const Text(
                                           'Copies Multiplier:',
                                           style: TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 9,
                                             color: Color(0xFF334155),
                                           ),
                                         ),
                                         Text(
                                           '${widget.order.copies}',
                                           style: const TextStyle(
-                                            fontSize: 10.5,
+                                            fontSize: 9,
                                             fontWeight: FontWeight.w700,
                                             color: darkText,
                                           ),
@@ -703,7 +693,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         const Text(
                                           'Total Paid:',
                                           style: TextStyle(
-                                            fontSize: 11.5,
+                                            fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                             color: primaryColor,
                                           ),
@@ -711,8 +701,8 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                                         Text(
                                           'Rs ${widget.order.amount.toStringAsFixed(2)}',
                                           style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
                                             color: primaryColor,
                                           ),
                                         ),
@@ -790,7 +780,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                             'Your Details:',
                             style: TextStyle(
                               color: primaryColor,
-                              fontSize: 12.5,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -814,29 +804,29 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                             ),
                           ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
 
                           // Your OTP Box
                           if (finalOtp.isNotEmpty)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 9,
+                                horizontal: 14,
+                                vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF0F9FF),
+                                color: Colors.white,
                                 border: Border.all(
                                   color: const Color(0xFF0284C7),
-                                  width: 1.2,
+                                  width: 1,
                                 ),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 'Your OTP: $finalOtp',
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0369A1),
+                                  color: darkText,
                                 ),
                               ),
                             ),
@@ -847,23 +837,23 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
                           Center(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 7,
+                                horizontal: 28,
+                                vertical: 6,
                               ),
                               decoration: BoxDecoration(
                                 border: Border.all(
                                   color: coralColor,
                                   width: 1.2,
                                 ),
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(2),
                               ),
                               child: const Text(
                                 'THANK YOU',
                                 style: TextStyle(
                                   color: primaryColor,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.5,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
                                 ),
                               ),
                             ),
@@ -885,12 +875,12 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
   Widget _tableHeaderCell(String text) {
     return Container(
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Text(
         text,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 10,
+          fontSize: 8.5,
           fontWeight: FontWeight.w700,
         ),
         textAlign: TextAlign.center,
@@ -901,14 +891,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
   Widget _tableDataCell(String text, Alignment alignment) {
     return Container(
       alignment: alignment,
-      padding: const EdgeInsets.symmetric(vertical: 7.5, horizontal: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 10,
-          color: Color(0xFF0F172A),
-          fontWeight: FontWeight.w500,
-        ),
+        style: const TextStyle(fontSize: 8.5, color: Color(0xFF0F172A)),
       ),
     );
   }
@@ -917,11 +903,11 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
     return Row(
       children: [
         SizedBox(
-          width: 86,
+          width: 80,
           child: Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 9.5,
               fontWeight: FontWeight.w700,
               color: Color(0xFF0F172A),
             ),
@@ -929,11 +915,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog> {
         ),
         Text(
           value.isNotEmpty ? ' $value' : '',
-          style: const TextStyle(
-            fontSize: 11,
-            color: Color(0xFF334155),
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 9.5, color: Color(0xFF0F172A)),
         ),
       ],
     );
