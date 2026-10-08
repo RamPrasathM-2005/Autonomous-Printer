@@ -75,5 +75,6 @@ downloads/
 frontend/android/.kotlin/
 
 # Current setup and audit documentation
+!AGENTS.md
 !README.md
 !docs/*.md
