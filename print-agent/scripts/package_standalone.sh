@@ -29,7 +29,7 @@ tar -czvf "$OUTPUT_DIR/$ARCHIVE_NAME" \
     --exclude="dist" \
     --exclude=".git*" \
     -C "$AGENT_DIR" \
-    app deploy scripts .env.example requirements.txt DEPLOYMENT.md README.md
+    app deploy scripts .env.example requirements.txt
 
 echo "Standalone deployment package created: $OUTPUT_DIR/$ARCHIVE_NAME"
 ls -lh "$OUTPUT_DIR/$ARCHIVE_NAME"
