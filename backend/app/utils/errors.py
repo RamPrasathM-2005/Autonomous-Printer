@@ -51,7 +51,8 @@ def validation_exception_handler(request: Request, exc: RequestValidationError) 
         content={
             "error": "VALIDATION_ERROR",
             "message": error_msg,
-            "details": jsonable_encoder(exc.errors())
+            "details": [{"loc": list(error["loc"]), "type": error["type"], "msg": error["msg"]}
+                        for error in exc.errors()]
         }
     )
 

@@ -8,6 +8,9 @@ from fastapi import UploadFile, status
 from sqlalchemy.orm import Session
 from pypdf import PdfReader
 from PIL import Image
+import threading
+from functools import wraps
+from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import settings
 from app.db.models.document import Document, DocumentStatus
@@ -16,13 +19,30 @@ from app.utils.crypto import compute_file_sha256
 from app.utils.file_security import validate_file_content, generate_safe_filename
 from app.services.storage_service import storage_service
 
+_inspection_slots = threading.BoundedSemaphore(2)
+
+
+def bounded_inspection(function):
+    @wraps(function)
+    def inspect(*args, **kwargs):
+        if not _inspection_slots.acquire(blocking=False):
+            raise AppException(429, "UPLOAD_BUSY", "Document processing is busy. Please try again shortly.")
+        try:
+            return function(*args, **kwargs)
+        finally:
+            _inspection_slots.release()
+    return inspect
+
 class DocumentService:
     @staticmethod
+    @bounded_inspection
     def inspect_and_count_pages(file_path: Path, mime_type: str) -> int:
         if mime_type == "application/pdf":
             try:
                 reader = PdfReader(str(file_path))
                 page_count = len(reader.pages)
+                if page_count > 1000:
+                    raise AppException(413, "DOCUMENT_TOO_LARGE", "PDF exceeds the 1000-page limit.")
                 if page_count < 1:
                     raise AppException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -41,8 +61,12 @@ class DocumentService:
         elif mime_type in ["image/jpeg", "image/png"]:
             try:
                 with Image.open(str(file_path)) as img:
+                    if img.width * img.height > 16000000:
+                        raise AppException(413, "IMAGE_TOO_LARGE", "Image exceeds the 16 megapixel limit.")
                     img.verify()
                 return 1
+            except AppException:
+                raise
             except Exception:
                 raise AppException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,7 +133,7 @@ class DocumentService:
 
         # Inspect pages and integrity
         try:
-            pages = cls.inspect_and_count_pages(temp_file_path, validated_mime)
+            pages = await run_in_threadpool(cls.inspect_and_count_pages, temp_file_path, validated_mime)
         except Exception as e:
             if temp_file_path.exists():
                 temp_file_path.unlink()

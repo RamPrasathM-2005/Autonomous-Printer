@@ -66,3 +66,5 @@ flutter test
 ```
 
 The HTTP smoke uses isolated temporary SQLite, a pre-captured payment fixture and explicit CUPS simulation. Physical printing, touchscreen interaction, SMTP, live refunds and MySQL require deployment testing. [AUDIT.md](docs/AUDIT.md) records corrections and limits.
+
+For the security audit, fixes and automatic/manual LAN simulation commands, see [SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md). Run `python scripts/verify_station_flow.py --lan` with the project virtual environment for an isolated test through this PC's LAN address.

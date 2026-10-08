@@ -7,7 +7,7 @@ import 'admin_auth_service.dart';
 class AdminApiService {
   static Future<Map<String, dynamic>> getDashboardMetrics() async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -16,7 +16,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/dashboard'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -39,7 +39,7 @@ class AdminApiService {
 
   static Future<List<Map<String, dynamic>>> getDepartments({String? search}) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -49,7 +49,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/departments$query'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -73,7 +73,7 @@ class AdminApiService {
 
   static Future<Map<String, dynamic>> getDepartmentDetail(int id) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -82,7 +82,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/departments/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -109,7 +109,7 @@ class AdminApiService {
     String? description,
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -118,7 +118,7 @@ class AdminApiService {
     final response = await http
         .post(
           Uri.parse('$origin/api/departments'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode({
             'code': code.trim(),
             'name': name.trim(),
@@ -146,7 +146,7 @@ class AdminApiService {
     String? description,
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -160,7 +160,7 @@ class AdminApiService {
     final response = await http
         .put(
           Uri.parse('$origin/api/departments/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 15));
@@ -179,7 +179,7 @@ class AdminApiService {
 
   static Future<void> deleteDepartment(int id) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -188,7 +188,7 @@ class AdminApiService {
     final response = await http
         .delete(
           Uri.parse('$origin/api/departments/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -212,7 +212,7 @@ class AdminApiService {
     bool? isColor,
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -232,7 +232,7 @@ class AdminApiService {
     final response = await http
         .get(
           uri,
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -268,7 +268,7 @@ class AdminApiService {
     String sortOrder = 'desc',
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -294,7 +294,7 @@ class AdminApiService {
     final response = await http
         .get(
           uri,
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -317,7 +317,7 @@ class AdminApiService {
 
   static Future<Map<String, dynamic>> getPrintJobDetail(String jobId) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -326,7 +326,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/reports/jobs/$jobId'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -351,7 +351,7 @@ class AdminApiService {
 
   static Future<List<dynamic>> getPrinters() async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -360,7 +360,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/printers'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -386,7 +386,7 @@ class AdminApiService {
     final response = await http
         .post(
           Uri.parse('$origin/api/admin/printers'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -408,7 +408,7 @@ class AdminApiService {
     final response = await http
         .post(
           Uri.parse('$origin/api/admin/printers/$id/test-connection'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -429,7 +429,7 @@ class AdminApiService {
     final response = await http
         .delete(
           Uri.parse('$origin/api/admin/printers/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -448,7 +448,7 @@ class AdminApiService {
     final response = await http
         .patch(
           Uri.parse('$origin/api/admin/printers/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -482,7 +482,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/print-agents'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -503,7 +503,7 @@ class AdminApiService {
     final response = await http
         .post(
           Uri.parse('$origin/api/admin/print-agents'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -525,7 +525,7 @@ class AdminApiService {
     final response = await http
         .delete(
           Uri.parse('$origin/api/admin/print-agents/$serverId'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -544,7 +544,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/print-agents/$serverId/cups-printers'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -570,7 +570,7 @@ class AdminApiService {
     final response = await http
         .patch(
           Uri.parse('$origin/api/admin/print-agents/$serverId'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -595,7 +595,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/discovered-printers'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -611,7 +611,7 @@ class AdminApiService {
     await http
         .delete(
           Uri.parse('$origin/api/admin/discovered-printers/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
   }
@@ -621,7 +621,7 @@ class AdminApiService {
     final response = await http
         .patch(
           Uri.parse('$origin/api/admin/print-agents/$serverId'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -661,7 +661,7 @@ class AdminApiService {
     final response = await http
         .get(
           uri,
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -684,7 +684,7 @@ class AdminApiService {
 
   static Future<Map<String, dynamic>> createUser(Map<String, dynamic> data) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -693,7 +693,7 @@ class AdminApiService {
     final response = await http
         .post(
           Uri.parse('$origin/api/admin/users'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -720,7 +720,7 @@ class AdminApiService {
     final response = await http
         .patch(
           Uri.parse('$origin/api/admin/users/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -744,7 +744,7 @@ class AdminApiService {
 
   static Future<void> deleteUser(int id) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
 
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
@@ -753,7 +753,7 @@ class AdminApiService {
     final response = await http
         .delete(
           Uri.parse('$origin/api/admin/users/$id'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -784,7 +784,7 @@ class AdminApiService {
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/settings'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
 
@@ -810,7 +810,7 @@ class AdminApiService {
     final response = await http
         .patch(
           Uri.parse('$origin/api/admin/settings'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
           body: jsonEncode(data),
         )
         .timeout(const Duration(seconds: 15));
@@ -844,7 +844,7 @@ class AdminApiService {
     bool? isColor,
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
     }
@@ -860,7 +860,7 @@ class AdminApiService {
 
     final uri = Uri.parse('$origin/api/reports/export/excel').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http
-        .get(uri, headers: AdminAuthService.authHeaders)
+        .get(uri, headers: (await AdminAuthService.getAuthenticatedHeaders()))
         .timeout(const Duration(seconds: 45));
 
     if (response.statusCode >= 400) {
@@ -880,7 +880,7 @@ class AdminApiService {
     bool? isColor,
   }) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
     }
@@ -896,7 +896,7 @@ class AdminApiService {
 
     final uri = Uri.parse('$origin/api/reports/export/pdf').replace(queryParameters: params.isNotEmpty ? params : null);
     final response = await http
-        .get(uri, headers: AdminAuthService.authHeaders)
+        .get(uri, headers: (await AdminAuthService.getAuthenticatedHeaders()))
         .timeout(const Duration(seconds: 45));
 
     if (response.statusCode >= 400) {
@@ -908,14 +908,14 @@ class AdminApiService {
 
   static Future<Map<String, dynamic>> getDatabaseStatus() async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
     }
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/database/status'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode >= 400) {
@@ -926,14 +926,14 @@ class AdminApiService {
 
   static Future<Uint8List> downloadRosterTemplate() async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
     }
     final response = await http
         .get(
           Uri.parse('$origin/api/admin/users/import/template'),
-          headers: AdminAuthService.authHeaders,
+          headers: (await AdminAuthService.getAuthenticatedHeaders()),
         )
         .timeout(const Duration(seconds: 30));
     if (response.statusCode >= 400) {
@@ -944,7 +944,7 @@ class AdminApiService {
 
   static Future<Map<String, dynamic>> importUserRoster(Uint8List fileBytes, String filename) async {
     final origin = ApiConfig.backendUrl;
-    final token = AdminAuthService.accessToken;
+    final token = await AdminAuthService.getValidAccessToken();
     if (token == null) {
       throw Exception('Admin authentication token missing. Please sign in.');
     }
@@ -952,7 +952,7 @@ class AdminApiService {
       'POST',
       Uri.parse('$origin/api/admin/users/import'),
     );
-    request.headers.addAll(AdminAuthService.authHeaders);
+    request.headers.addAll((await AdminAuthService.getAuthenticatedHeaders()));
     request.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: filename));
 
     final streamedResponse = await request.send().timeout(const Duration(seconds: 60));

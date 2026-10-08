@@ -73,7 +73,10 @@ def get_my_orders(
             error_code="UNAUTHENTICATED",
             message="Invalid or expired session."
         )
-    user_id = int(payload["sub"])
+    try:
+        user_id = int(payload["sub"])
+    except (ValueError, TypeError):
+        raise AppException(401, "INVALID_TOKEN", "Invalid token identity.")
     orders = order_service.get_orders_for_user(db=db, user_id=user_id)
     result = []
     for o in orders:

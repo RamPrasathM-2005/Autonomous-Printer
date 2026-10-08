@@ -15,11 +15,64 @@ class AdminAuthService {
   static String? get refreshToken => SessionStore.read(_kRefreshTokenKey);
   static String? get origin => SessionStore.read(_kOriginKey);
   static bool get isAuthenticated => accessToken != null;
+  static Future<String?>? _refreshing;
+
+  static Future<String?> getValidAccessToken() async {
+    final token = accessToken;
+    if (token == null) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(token.split('.')[1]))),
+      ) as Map<String, dynamic>;
+      final expiry = (payload['exp'] as num).toInt();
+      if (expiry > DateTime.now().millisecondsSinceEpoch ~/ 1000 + 45) {
+        return token;
+      }
+    } catch (_) {
+      return token; // The API will reject malformed tokens.
+    }
+    _refreshing ??= _refreshAccessToken();
+    try {
+      return await _refreshing;
+    } finally {
+      _refreshing = null;
+    }
+  }
+
+  static Future<String?> _refreshAccessToken() async {
+    final previousRefresh = refreshToken;
+    if (previousRefresh == null) return null;
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${origin ?? ApiConfig.backendUrl}/api/auth/refresh'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': previousRefresh}),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200 || refreshToken != previousRefresh) {
+        return null;
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final updated = data['access_token'] as String;
+      SessionStore.write(_kAccessTokenKey, updated);
+      return updated;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Map<String, String> get authHeaders => {
     'Content-Type': 'application/json',
     if (accessToken != null) 'Authorization': 'Bearer $accessToken',
   };
+
+  static Future<Map<String, String>> getAuthenticatedHeaders() async {
+    if (await getValidAccessToken() == null) {
+      throw Exception('Administrator session expired. Please sign in.');
+    }
+    return authHeaders;
+  }
 
   static Future<Map<String, dynamic>> _decode(http.Response response) async {
     if (response.statusCode >= 400) {
@@ -30,6 +83,10 @@ class AdminAuthService {
           throw Exception('An active administrator account is required.');
         case 422:
           throw Exception('Enter a valid email and password.');
+        case 429:
+          throw Exception(
+            'Too many attempts. Please wait before signing in again.',
+          );
         default:
           throw Exception('Unable to sign in. Please try again.');
       }
@@ -87,7 +144,7 @@ class AdminAuthService {
   }
 
   static Future<Map<String, dynamic>?> currentAdmin() async {
-    final token = accessToken;
+    final token = await getValidAccessToken();
     if (token == null) return null;
     final orig = origin ?? ApiConfig.backendUrl;
     try {

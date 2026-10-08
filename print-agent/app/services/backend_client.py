@@ -34,7 +34,9 @@ class BackendClient:
         self.session.headers.update({
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
-            "User-Agent": f"PrintAgent/{config.AGENT_ID}"
+            "User-Agent": f"PrintAgent/{config.AGENT_ID}",
+            "X-Print-Simulation": "true" if config.MOCK_CUPS else "false",
+            "X-Station-ID": config.AGENT_ID,
         })
 
 

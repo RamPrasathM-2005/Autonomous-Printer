@@ -1,9 +1,12 @@
 """Ownership checks for both signed-in customers and anonymous session holders."""
 import hmac
+import re
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.config.security import decode_token
+from app.config.security import hash_token
+from app.db.models.revoked_session import RevokedSession
 from app.db.models.order import Order
 from app.db.models.document import Document
 from app.db.models.user import User, UserRole
@@ -17,6 +20,10 @@ def identity(request: Request, db: Session):
     if len(session) > 512:
         raise AppException(422, "VALIDATION_ERROR", "Invalid customer session.")
     payload = decode_token(bearer) if bearer else None
+    if session and session != bearer and not re.fullmatch(r"sess_[A-Za-z0-9_-]{16,128}", session):
+        raise AppException(422, "VALIDATION_ERROR", "Invalid customer session format.")
+    if bearer.startswith('sess_') and not re.fullmatch(r"sess_[A-Za-z0-9_-]{16,128}", bearer):
+        raise AppException(422, "VALIDATION_ERROR", "Invalid customer session format.")
     user = None
     if payload and payload.get("type") == "access":
         try:
@@ -25,10 +32,14 @@ def identity(request: Request, db: Session):
             pass
         if user and not user.is_active:
             user = None
+        if user and user.role in (UserRole.ADMIN, UserRole.SUPER_ADMIN) and payload.get('role') not in ('ADMIN', 'SUPER_ADMIN'):
+            raise AppException(401, 'ADMIN_SIGN_IN_REQUIRED', 'Sign in again with administrator credentials.')
     if bearer and not bearer.startswith("sess_") and not user:
         raise AppException(401, "UNAUTHENTICATED", "Invalid or inactive customer account.")
     if not session and not user:
         raise AppException(401, "UNAUTHENTICATED", "Start a customer session to continue.")
+    if session and db.get(RevokedSession, hash_token(session)):
+        raise AppException(401, "SESSION_REVOKED", "This customer session has ended.")
     return session, user
 
 

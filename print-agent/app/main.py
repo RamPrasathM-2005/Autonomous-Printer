@@ -7,7 +7,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
+import ipaddress
+from urllib.parse import urlsplit
 from app.config import config
 from app.routes.health import health_bp
 from app.routes.local import local_bp
@@ -17,9 +19,34 @@ from app.utils.logging import agent_logger
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.config['MAX_CONTENT_LENGTH'] = 65536
+
+    @app.before_request
+    def protect_local_controls():
+        if not request.path.startswith('/local/'):
+            return
+        try:
+            loopback = ipaddress.ip_address(request.remote_addr or '').is_loopback
+        except ValueError:
+            loopback = False
+        if not loopback:
+            return jsonify(error='LOCAL_ACCESS_REQUIRED', message='Use the station touchscreen.'), 403
+        if urlsplit(request.host_url).hostname not in {'localhost', '127.0.0.1', '::1'}:
+            return jsonify(error='HOST_REJECTED'), 403
+        origin = request.headers.get('Origin')
+        if origin and origin != request.host_url.rstrip('/'):
+            return jsonify(error='ORIGIN_REJECTED'), 403
+        if request.headers.get('Sec-Fetch-Site') == 'cross-site':
+            return jsonify(error='ORIGIN_REJECTED'), 403
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and not request.is_json:
+            return jsonify(error='JSON_REQUIRED'), 415
 
     @app.after_request
     def add_cors_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        response.headers['Cache-Control'] = 'no-store'
         origin = request.headers.get("Origin", "")
         allowed = {request.host_url.rstrip("/")} | set(filter(None, os.getenv("ALLOWED_ORIGINS", "").split(",")))
         if origin in allowed:

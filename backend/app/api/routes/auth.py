@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -24,6 +24,27 @@ from app.config.settings import settings
 from app.api.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+async def throttle_auth(request: Request):
+    if request.method != "POST":
+        return
+    from app.utils.rate_limit import auth_limiter
+    address = request.client.host if request.client else "unknown"
+    # Never trust a caller-supplied forwarded IP here. Nginx/Uvicorn handle the
+    # explicitly trusted proxy configuration before request.client is populated.
+    auth_limiter.check(("auth-ip", address), 60, 60)
+    if request.url.path.endswith(("/login", "/send-otp", "/verify-otp")):
+        try:
+            body = await request.json()
+        except ValueError:
+            return
+        email = str(body.get("email", "")).strip().lower() if isinstance(body, dict) else ""
+        if email:
+            auth_limiter.check((request.url.path, email), 10, 300)
+
+
+router.dependencies.append(Depends(throttle_auth))
 
 @router.get("/departments", response_model=List[PublicDepartmentItem])
 def get_auth_departments(db: Session = Depends(get_db)):

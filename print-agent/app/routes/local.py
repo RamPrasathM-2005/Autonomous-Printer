@@ -1,5 +1,7 @@
 import time
 import re
+import hmac
+import threading
 from collections import deque
 from flask import Blueprint, jsonify, request
 from app.config import config
@@ -16,6 +18,7 @@ local_bp = Blueprint("local", __name__, url_prefix="/local")
 _recent_attempts = deque()
 MAX_LOCAL_ATTEMPTS = 10
 LOCAL_WINDOW_SECONDS = 60
+_attempt_lock = threading.Lock()
 
 @local_bp.route("/status", methods=["GET", "OPTIONS"])
 def get_local_status():
@@ -39,24 +42,20 @@ def local_station_otp_release():
     Receives OTP entered physically at the print kiosk.
     """
     now = time.time()
-    # Clean sliding window
-    while _recent_attempts and _recent_attempts[0] < now - LOCAL_WINDOW_SECONDS:
-        _recent_attempts.popleft()
-
-    from flask import current_app
-    is_testing = current_app.config.get("TESTING", False) if current_app else False
-    if not is_testing and len(_recent_attempts) >= MAX_LOCAL_ATTEMPTS:
-        return jsonify({
-            "error": "TOO_MANY_ATTEMPTS",
-            "message": "Too many attempts entered. Please wait a moment before trying again."
-        }), 429
+    with _attempt_lock:
+        while _recent_attempts and _recent_attempts[0] < now - LOCAL_WINDOW_SECONDS:
+            _recent_attempts.popleft()
+        if len(_recent_attempts) >= MAX_LOCAL_ATTEMPTS:
+            return jsonify(error="TOO_MANY_ATTEMPTS", message="Too many attempts. Please wait a minute."), 429
+        _recent_attempts.append(now)
 
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify(error='INVALID_REQUEST'), 400
     otp = str(data.get("otp", "")).strip()
 
     # OTP validation: exactly 6 digits
     if not otp or not re.match(r"^\d{6}$", otp):
-        _recent_attempts.append(now)
         return jsonify({
             "error": "INVALID_OTP",
             "message": "Invalid OTP. Please check the OTP and try again."
@@ -64,7 +63,7 @@ def local_station_otp_release():
 
     # Verify physical printer is online
     printer_state, _ = printer_monitor.get_printer_status()
-    if printer_state == "ERROR":
+    if printer_state not in {"READY", "BUSY"}:
         return jsonify({
             "error": "PRINTER_OFFLINE",
             "message": "Printer is currently offline or in an error state. Please notify station attendant."
@@ -74,7 +73,6 @@ def local_station_otp_release():
         # Submit to central FastAPI backend
         release_data = backend_client.release_job(otp)
     except OTPReleaseException as e:
-        _recent_attempts.append(now)
         err_code = e.error_code
         err_msg = e.message
         if err_code == "INVALID_OTP":
@@ -96,7 +94,6 @@ def local_station_otp_release():
         }), 500
 
     if not release_data:
-        _recent_attempts.append(now)
         return jsonify({
             "error": "RELEASE_FAILED",
             "message": "OTP verification failed or no queued job."
@@ -160,7 +157,7 @@ def _verify_internal_token() -> tuple[bool, str]:
     if not token:
         agent_logger.warning(f"[SECURITY] Unauthorized request to {request.path}: Missing internal token from {request.remote_addr}")
         return False, "Missing internal authentication token."
-    if token != expected:
+    if not expected or not hmac.compare_digest(token, expected):
         agent_logger.warning(f"[SECURITY] Unauthorized request to {request.path}: Invalid token provided from {request.remote_addr}")
         return False, "Invalid internal authentication token."
     return True, ""

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Auth & Tokens
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     STORAGE_ROOT: str = "./storage"
@@ -87,6 +87,10 @@ class Settings(BaseSettings):
                 self.ALLOWED_ORIGINS = [s.strip() for s in self.ALLOWED_ORIGINS.split(",") if s.strip()]
 
         is_prod = self.ENVIRONMENT.lower() in ("production", "prod")
+        if self.EMAIL_PROVIDER not in {"smtp", "mock"}:
+            raise RuntimeError("EMAIL_PROVIDER must be smtp or mock.")
+        if is_prod and self.EMAIL_PROVIDER != "smtp":
+            raise RuntimeError("Production requires SMTP; mock email delivery is for isolated development only.")
         insecure_keys = {
             "CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS",
             "secret",

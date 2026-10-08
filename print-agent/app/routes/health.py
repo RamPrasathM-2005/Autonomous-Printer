@@ -8,6 +8,7 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "agent_id": config.AGENT_ID,
+        "simulation": config.MOCK_CUPS,
         "cups_server": config.CUPS_SERVER,
         "printer_name": config.PRINTER_NAME
     }), 200

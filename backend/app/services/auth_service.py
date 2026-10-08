@@ -1,5 +1,8 @@
 import secrets
 import uuid
+import threading
+import hmac
+from functools import wraps
 from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -26,9 +29,20 @@ from app.schemas.auth import (
 )
 from app.utils.errors import AppException
 
+_email_lock = threading.RLock()
+
+
+def serialized_email_operation(function):
+    @wraps(function)
+    def locked(*args, **kwargs):
+        with _email_lock:
+            return function(*args, **kwargs)
+    return locked
+
 class AuthService:
     @staticmethod
     def register(db: Session, req: RegisterRequest) -> User:
+        AuthService.verify_email_otp(req.email, req.otp, purpose="signup")
         existing = db.query(User).filter(User.email == req.email.lower()).first()
         if existing:
             raise AppException(
@@ -52,9 +66,18 @@ class AuthService:
     _email_otps: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
+    @serialized_email_operation
     def send_email_otp(cls, db: Session, email: str, purpose: str = "login") -> str:
         clean_email = email.strip().lower()
         clean_purpose = (purpose or "login").lower().strip()
+        if clean_purpose not in {"login", "signup"}:
+            raise AppException(422, "VALIDATION_ERROR", "Invalid verification purpose.")
+        now = datetime.now(timezone.utc)
+        for key, value in list(cls._email_otps.items()):
+            if now - value.get("window_start", now) > timedelta(minutes=5):
+                cls._email_otps.pop(key, None)
+        if len(cls._email_otps) >= 10000 and clean_email not in cls._email_otps:
+            raise AppException(429, "RATE_LIMIT_EXCEEDED", "Please try again later.")
 
         # Check existing user registration status
         existing_user = db.query(User).filter(User.email == clean_email).first()
@@ -72,6 +95,8 @@ class AuthService:
                     error_code="USER_INACTIVE",
                     message="Account has been deactivated. Please contact your administrator."
                 )
+            if existing_user.role != UserRole.USER:
+                raise AppException(403, "ADMIN_PASSWORD_REQUIRED", "Use administrator password sign-in.")
         elif clean_purpose == "signup":
             if existing_user:
                 raise AppException(
@@ -103,6 +128,7 @@ class AuthService:
         # Cryptographically secure 6-digit OTP
         otp = f"{secrets.randbelow(900000) + 100000}"
         record["otp"] = otp
+        record["purpose"] = clean_purpose
         record["expires_at"] = now + timedelta(minutes=5)
         record["attempts"] = 0
         cls._email_otps[clean_email] = record
@@ -118,13 +144,10 @@ class AuthService:
         return otp
 
     @classmethod
-    def verify_email_otp(cls, email: str, otp: str, consume: bool = True) -> bool:
+    @serialized_email_operation
+    def verify_email_otp(cls, email: str, otp: str, consume: bool = True, purpose: str = None) -> bool:
         clean_email = email.strip().lower()
         clean_otp = str(otp).strip()
-
-        # Automated test environment bypass only
-        if settings.ENVIRONMENT == "test" and clean_otp == "123456":
-            return True
 
         record = cls._email_otps.get(clean_email)
         if not record:
@@ -151,7 +174,8 @@ class AuthService:
                 message="Maximum verification attempts exceeded. Please request a new code."
             )
 
-        if record.get("otp") != clean_otp:
+        if (not hmac.compare_digest(str(record.get("otp", "")), clean_otp) or
+                (purpose is not None and record.get("purpose") != purpose)):
             record["attempts"] = record.get("attempts", 0) + 1
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -187,6 +211,7 @@ class AuthService:
         return user, access_token, refresh_token, expires_in
 
     @classmethod
+    @serialized_email_operation
     def student_register(
         cls,
         db: Session,
@@ -209,7 +234,7 @@ class AuthService:
                 message="An account with this roll number already exists."
             )
 
-        cls.verify_email_otp(clean_email, req.otp, consume=False)
+        cls.verify_email_otp(clean_email, req.otp, consume=False, purpose="signup")
 
         # Resolve department ID and canonical name if department exists in catalog
         dept_id = None
@@ -258,6 +283,7 @@ class AuthService:
         return cls._issue_tokens(db, user)
 
     @classmethod
+    @serialized_email_operation
     def student_login(
         cls,
         db: Session,
@@ -271,7 +297,7 @@ class AuthService:
                 message="Email address is required."
             )
 
-        cls.verify_email_otp(target_email, req.otp, consume=False)
+        cls.verify_email_otp(target_email, req.otp, consume=False, purpose="login")
 
         user = db.query(User).filter(User.email == target_email).first()
         if not user:
@@ -287,6 +313,9 @@ class AuthService:
                 error_code="USER_INACTIVE",
                 message="Account has been deactivated."
             )
+
+        if user.role != UserRole.USER:
+            raise AppException(403, "ADMIN_PASSWORD_REQUIRED", "Use administrator password sign-in.")
 
         res = cls._issue_tokens(db, user)
         # Authentication succeeded; consume OTP
@@ -324,6 +353,8 @@ class AuthService:
                 user.department = dept_match.name
         if req.email is not None and req.email.strip() and req.email.strip().lower() != (user.email or "").lower():
             clean_email = req.email.strip().lower()
+            cls_otp = req.email_otp
+            AuthService.verify_email_otp(clean_email, cls_otp or "", purpose="signup")
             existing = db.query(User).filter(User.email == clean_email, User.id != user.id).first()
             if existing:
                 raise AppException(

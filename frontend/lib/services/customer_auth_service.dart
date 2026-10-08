@@ -329,6 +329,7 @@ class CustomerAuthService {
     String? fullName,
     String? department,
     String? email,
+    String? emailOtp,
   }) async {
     final token = await getValidAccessToken();
     if (token == null) {
@@ -338,6 +339,7 @@ class CustomerAuthService {
       if (fullName != null) 'full_name': fullName.trim(),
       if (department != null) 'department': department.trim(),
       if (email != null) 'email': email.trim().toLowerCase(),
+      if (emailOtp != null) 'email_otp': emailOtp.trim(),
     };
 
     final res = await _client

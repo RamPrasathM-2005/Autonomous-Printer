@@ -105,6 +105,8 @@ def db_session():
 
 @pytest.fixture
 def client(db_session):
+    from app.utils.rate_limit import auth_limiter
+    auth_limiter.entries.clear()
     def override_get_db():
         try:
             yield db_session

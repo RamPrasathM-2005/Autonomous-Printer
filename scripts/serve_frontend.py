@@ -17,10 +17,21 @@ CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razor
        "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 
 class Handler(SimpleHTTPRequestHandler):
+    def list_directory(self, path):
+        self.send_error(404)
+        return None
+
     def proxy_api(self):
         if not self.path.split('?')[0].startswith(('/api/', '/health')):
             return False
-        size = int(self.headers.get('Content-Length', '0'))
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            self.send_error(400)
+            return True
+        if size < 0 or self.headers.get('Transfer-Encoding'):
+            self.send_error(400)
+            return True
         if size > 60 * 1024 * 1024:
             self.send_error(413)
             return True
@@ -55,6 +66,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Security-Policy', CSP)
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('X-Frame-Options', 'DENY')
         self.send_header('Cache-Control', 'no-store')
         super().end_headers()
 

@@ -141,6 +141,8 @@ class OrderService:
                 document.page_count
             )
             total_pages = len(selected_pages)
+            if total_pages * item.settings.copies > 1000:
+                raise AppException(413, "ORDER_TOO_LARGE", "An order may contain at most 1000 printed pages including copies.")
 
             amount = pricing_service.calculate_price(
                 selected_pages_count=total_pages,
@@ -215,6 +217,8 @@ class OrderService:
 
             total_amount += item_price
             total_print_pages += (item_pages * item.settings.copies)
+            if total_print_pages > 1000:
+                raise AppException(413, "ORDER_TOO_LARGE", "An order may contain at most 1000 printed pages including copies.")
             if item.settings.colour:
                 any_colour = True
 

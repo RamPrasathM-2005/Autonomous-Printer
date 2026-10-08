@@ -66,8 +66,7 @@ def _ensure_admin_user():
         else:
             changed = False
             if admin.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
-                admin.role = UserRole.ADMIN
-                changed = True
+                raise RuntimeError('Configured administrator email belongs to a customer. Resolve it with the explicit admin seed command.')
             if not admin.is_active:
                 admin.is_active = True
                 changed = True
@@ -79,6 +78,7 @@ def _ensure_admin_user():
                 logger.info("Synchronized administrator credentials from environment: %s", admin_email)
     except Exception as e:
         logger.warning("Could not auto-sync admin user: %s", e)
+        raise
     finally:
         db.close()
 
@@ -127,12 +127,26 @@ import subprocess
 
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
+    from fastapi.responses import JSONResponse
+    maximum = (settings.MAX_UPLOAD_MB + 1) * 1024 * 1024
+    length = request.headers.get('content-length')
+    if length:
+        try:
+            if int(length) < 0 or int(length) > maximum:
+                return JSONResponse(status_code=413, content={'error': 'REQUEST_TOO_LARGE', 'message': 'Request exceeds upload limit.'})
+        except ValueError:
+            return JSONResponse(status_code=400, content={'error': 'INVALID_CONTENT_LENGTH'})
     start = time.time()
     method = request.method
     path = request.url.path
     print(f"[BACKEND_LOG] >>> {method} {path}")
     try:
         response = await call_next(request)
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+        if path.startswith('/api/'):
+            response.headers['Cache-Control'] = 'no-store'
         duration_ms = (time.time() - start) * 1000
         print(f"[BACKEND_LOG] <<< {method} {path} - Status: {response.status_code} ({duration_ms:.1f}ms)")
         if path == "/" or path.endswith(".html") or path.endswith(".js") or "flutter" in path:
@@ -148,8 +162,7 @@ async def log_requests_middleware(request: Request, call_next):
 # Exception handlers
 app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-if settings.ENVIRONMENT != "development":
-    app.add_exception_handler(Exception, general_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Routers
 app.include_router(auth_router)

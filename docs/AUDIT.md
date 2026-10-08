@@ -55,4 +55,4 @@ Residual operational constraints: process-local OTP rate limiting (use the provi
 
 The HTTP smoke now includes frontend API proxying and customer isolation, and starts the agent through its production entry point. Payment capture remains a fixture and printing remains explicitly simulated.
 
-Final validation: 97 backend tests, 31 agent tests and 44 Flutter tests passed. Flutter analysis, release web build, HTTP smoke, Python compilation, shell syntax checks and Git whitespace checks passed. Ubuntu/Pi systemd installation and MySQL execution require the actual deployment machines.
+Latest security follow-up: 113 backend tests, 37 agent tests and 44 Flutter tests passed. Flutter analysis, release web build, LAN HTTP smoke, Python compilation and Git whitespace checks passed. See [the security audit](SECURITY_AUDIT.md) for corrected findings, local-network simulation commands and remaining deployment checks. Ubuntu/Pi systemd installation and MySQL execution require the actual deployment machines.

@@ -13,6 +13,8 @@ def agent_client(agent_app):
 
 @pytest.fixture(autouse=True)
 def isolate_station_workers(monkeypatch, tmp_path):
+    from app.routes.local import _recent_attempts
+    _recent_attempts.clear()
     from app.services import backend_client, print_service, job_journal
     journal = job_journal.JobJournal(tmp_path / "journal.sqlite3")
     monkeypatch.setattr(backend_client, "job_journal", journal)

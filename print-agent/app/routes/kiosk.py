@@ -798,6 +798,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       </div>
       <div class="brand-text">
         <h1>ACHUPPORI</h1>
+        {% if simulation %}<div style="color:#b45309;font-weight:700">SIMULATION — no physical pages will print</div>{% endif %}
         <p>Self-service printing</p>
       </div>
     </div>
@@ -1549,6 +1550,7 @@ def render_kiosk():
         KIOSK_HTML,
         printer_name=config.PRINTER_NAME,
         agent_id=config.AGENT_ID,
+        simulation=config.MOCK_CUPS,
         web_url=web_url,
         qr_data_uri=qr_data_uri,
         is_tunneled=False

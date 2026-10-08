@@ -159,7 +159,7 @@ class AdminPrintAgentCreate(BaseModel):
     hostname: Optional[str] = None
     ip_address: Optional[str] = None
     software_version: Optional[str] = None
-    token: Optional[str] = None
+    token: Optional[str] = Field(default=None, min_length=32, max_length=256)
 
 class AdminPrintServerUpdate(BaseModel):
     name: Optional[str] = None

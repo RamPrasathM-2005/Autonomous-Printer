@@ -34,7 +34,8 @@ def validate_email_address(value: str) -> str:
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str = Field(..., max_length=254)
-    password: str
+    password: str = Field(min_length=12, max_length=1024)
+    otp: str = Field(pattern=r"^[0-9]{6}$")
     full_name: Optional[str] = None
 
     @field_validator("email")
@@ -96,9 +97,10 @@ class StudentLoginRequest(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    full_name: Optional[str] = None
-    department: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=100)
+    department: Optional[str] = Field(default=None, max_length=100)
     email: Optional[str] = None
+    email_otp: Optional[str] = Field(default=None, pattern=r"^[0-9]{6}$")
 
     @field_validator("email")
     @classmethod

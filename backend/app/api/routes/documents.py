@@ -93,15 +93,20 @@ def get_document_preview(
             total = len(pdf)
             page_idx = max(0, min(page - 1, total - 1)) if total > 0 else 0
             pdf_page = pdf.load_page(page_idx)
+            if pdf_page.rect.width * pdf_page.rect.height * (dpi / 72) ** 2 > 16000000:
+                pdf.close()
+                raise AppException(413, "PREVIEW_TOO_LARGE", "Page dimensions exceed the preview limit.")
             pix = pdf_page.get_pixmap(dpi=dpi)
             png_bytes = pix.tobytes("png")
             pdf.close()
             return Response(content=png_bytes, media_type="image/png")
-        except Exception as e:
+        except AppException:
+            raise
+        except Exception:
             raise AppException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 error_code="PREVIEW_RENDER_ERROR",
-                message=f"Failed to render PDF preview: {e}"
+                message="Failed to render PDF preview."
             )
     else:
         return FileResponse(str(file_path), media_type=mime or "image/png")

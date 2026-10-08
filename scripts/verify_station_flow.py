@@ -4,6 +4,7 @@ Uses temporary SQLite databases/storage and loopback ports. No real payment,
 printer, current database, or running station is touched.
 """
 import json
+import argparse
 import os
 from pathlib import Path
 import socket
@@ -15,6 +16,8 @@ import time
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
+http = requests.Session()
+http.trust_env = False
 
 
 def free_port():
@@ -94,16 +97,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
 from serve_frontend import Handler
 import os
-ThreadingHTTPServer(("127.0.0.1", int(os.environ["FRONTEND_TEST_PORT"])), partial(Handler, directory=sys.argv[1])).serve_forever()
+web_root = Path(sys.argv[1]) / 'frontend/build/web'
+ThreadingHTTPServer((os.environ.get("FRONTEND_BIND", "127.0.0.1"), int(os.environ["FRONTEND_TEST_PORT"])), partial(Handler, directory=str(web_root))).serve_forever()
 '''
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--lan', action='store_true', help='Exercise the frontend and outbound agent through this PC LAN address.')
+    args = parser.parse_args()
+    lan_address = '127.0.0.1'
+    if args.lan:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(('8.8.8.8', 80))
+            lan_address = probe.getsockname()[0]
     processes = []
     with tempfile.TemporaryDirectory(prefix="achuppori-http-check-") as temp:
         workspace = Path(temp)
         backend_port, agent_port, frontend_port = free_port(), free_port(), free_port()
         backend_url, agent_url = f"http://127.0.0.1:{backend_port}", f"http://127.0.0.1:{agent_port}"
+        website = f"http://{lan_address}:{frontend_port}"
         common = {**os.environ, "ENVIRONMENT": "development", "JWT_SECRET_KEY": "isolated-http-test-secret-32-characters",
                   "ADMIN_PASSWORD": "", "RAZORPAY_KEY_ID": "", "RAZORPAY_KEY_SECRET": ""}
         backend_env = {**common, "PYTHONPATH": str(ROOT / "backend"),
@@ -111,11 +124,12 @@ def main():
                        "STORAGE_ROOT": str(workspace / "backend-storage"),
                        "FIXTURE_PATH": str(workspace / "fixture.json"), "HTTP_TEST_PORT": str(backend_port)}
         agent_env = {**common, "PYTHONPATH": str(ROOT / "print-agent"), "AGENT_ID": "HTTP-STATION",
-                     "AGENT_TOKEN": "http-test-device-token", "BACKEND_URL": backend_url + "/api",
-                     "KIOSK_WEB_URL": backend_url, "MOCK_CUPS": "true", "PRINTER_NAME": "HTTP_Test_Queue",
+                     "AGENT_TOKEN": "http-test-device-token", "BACKEND_URL": website + "/api",
+                     "KIOSK_WEB_URL": website, "MOCK_CUPS": "true", "PRINTER_NAME": "HTTP_Test_Queue",
                      "STORAGE_ROOT": str(workspace / "agent-storage"), "LOG_DIR": str(workspace / "agent-logs"),
                      "POLL_INTERVAL_SECONDS": "1", "HEARTBEAT_INTERVAL_SECONDS": "1", "PORT": str(agent_port)}
-        frontend_env = {**common, "BACKEND_PROXY_PORT": str(backend_port), "FRONTEND_TEST_PORT": str(frontend_port)}
+        frontend_env = {**common, "BACKEND_PROXY_PORT": str(backend_port), "FRONTEND_TEST_PORT": str(frontend_port),
+                        "FRONTEND_BIND": '0.0.0.0' if args.lan else '127.0.0.1'}
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         with (workspace / "processes.log").open("w", encoding="utf-8") as log:
             try:
@@ -124,25 +138,25 @@ def main():
                         cwd=workspace, stdout=log, stderr=log, creationflags=flags))
                 processes.append(subprocess.Popen([sys.executable, "-c", FRONTEND_BOOTSTRAP, str(ROOT)], env=frontend_env,
                     cwd=workspace, stdout=log, stderr=log, creationflags=flags))
-                wait_for(lambda: requests.get(backend_url + "/health", timeout=2).status_code == 200, "backend startup")
-                wait_for(lambda: requests.get(agent_url + "/health", timeout=2).status_code == 200, "agent startup")
+                wait_for(lambda: http.get(backend_url + "/health", timeout=2).status_code == 200, "backend startup")
+                wait_for(lambda: http.get(agent_url + "/health", timeout=2).status_code == 200, "agent startup")
                 code = json.loads((workspace / "fixture.json").read_text())["otp"]
-                released = requests.post(agent_url + "/local/release", json={"otp": code}, timeout=15)
+                released = http.post(agent_url + "/local/release", json={"otp": code}, timeout=15)
                 assert released.status_code == 200, released.text
                 customer_headers = {"X-Customer-Session": "sess_http_verification"}
-                website = f"http://127.0.0.1:{frontend_port}"
-                wait_for(lambda: requests.get(website + "/health", timeout=2).status_code == 200, "frontend API proxy")
-                assert requests.get(website + "/api/orders/HTTP-ORDER", headers=customer_headers, timeout=3).status_code == 200
-                assert requests.get(website + "/api/orders/HTTP-ORDER", timeout=3).status_code in (401, 403)
+                assert http.get(agent_url + '/kiosk/qr-status', timeout=3).json()['target_url'].startswith(website)
+                wait_for(lambda: http.get(website + "/health", timeout=2).status_code == 200, "frontend API proxy")
+                assert http.get(website + "/api/orders/HTTP-ORDER", headers=customer_headers, timeout=3).status_code == 200
+                assert http.get(website + "/api/orders/HTTP-ORDER", timeout=3).status_code in (401, 403)
                 def completed():
-                    response = requests.get(backend_url + "/api/orders/HTTP-ORDER", headers=customer_headers, timeout=3)
+                    response = http.get(backend_url + "/api/orders/HTTP-ORDER", headers=customer_headers, timeout=3)
                     return response.status_code == 200 and response.json()["status"] == "COMPLETED"
                 wait_for(completed, "CUPS simulation and backend completion")
-                assert requests.get(agent_url + "/local/job-status/HTTP-JOB", timeout=3).json()["status"] == "COMPLETED"
-                repeated = requests.post(agent_url + "/local/release", json={"otp": code}, timeout=15)
+                assert http.get(agent_url + "/local/job-status/HTTP-JOB", timeout=3).json()["status"] == "COMPLETED"
+                repeated = http.post(agent_url + "/local/release", json={"otp": code}, timeout=15)
                 assert repeated.status_code == 400 and repeated.json()["error"] == "ALREADY_PRINTED"
                 assert not (workspace / "agent-storage" / "documents" / "http-flow.pdf").exists()
-                print("PASS: backend/agent HTTP, frontend API proxy/customer isolation, OTP release, download, exclusive claim, simulated CUPS completion, status propagation, duplicate rejection, spool cleanup.")
+                print(f"PASS ({website}): backend/agent HTTP, frontend API proxy/customer isolation, OTP release, download, exclusive claim, simulated CUPS completion, status propagation, duplicate rejection, spool cleanup.")
             except Exception:
                 log.flush()
                 print((workspace / "processes.log").read_text(encoding="utf-8"), file=sys.stderr)

@@ -7,7 +7,7 @@ class PrintSettingsSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     copies: int = Field(default=1, ge=1, le=100)
-    pageRange: Optional[str] = Field(default=None, alias="pageRange", serialization_alias="pageRange")
+    pageRange: Optional[str] = Field(default=None, alias="pageRange", serialization_alias="pageRange", max_length=2048)
     colour: bool = Field(default=False)
     sides: Literal["one-sided", "two-sided-long-edge", "two-sided-short-edge"] = Field(default="one-sided")
     paperSize: Literal["A4", "Letter", "Legal"] = Field(default="A4", alias="paperSize", serialization_alias="paperSize")
@@ -60,7 +60,7 @@ class OrderCreateRequest(BaseModel):
     rollNumber: Optional[str] = Field(default=None, alias="rollNumber")
     department: Optional[str] = Field(default=None, alias="department")
     settings: Optional[PrintSettingsSchema] = None
-    items: Optional[List[OrderItemConfig]] = None
+    items: Optional[List[OrderItemConfig]] = Field(default=None, max_length=10)
 
     @model_validator(mode="before")
     @classmethod

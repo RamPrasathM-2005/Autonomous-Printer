@@ -10,12 +10,7 @@ class StorageService:
         configured = storage_root or settings.STORAGE_ROOT
         conf_path = Path(configured)
         if not conf_path.is_absolute():
-            # Check if root project storage directory exists
-            project_root_storage = Path(__file__).resolve().parent.parent.parent.parent / "storage"
-            if project_root_storage.exists() and project_root_storage.is_dir():
-                self.storage_root = project_root_storage.resolve()
-            else:
-                self.storage_root = conf_path.resolve()
+            self.storage_root = (Path(__file__).resolve().parents[2] / conf_path).resolve()
         else:
             self.storage_root = conf_path.resolve()
         self._ensure_directories()
@@ -38,13 +33,6 @@ class StorageService:
         primary_path = resolve_safe_storage_path(self.storage_root, storage_key)
         if primary_path.exists():
             return primary_path
-        # Check backend/storage fallback if exists
-        alt_storage = Path(__file__).resolve().parent.parent.parent / "storage"
-        if alt_storage.exists():
-            clean_key = storage_key.lstrip("/\\")
-            alt_path = resolve_safe_storage_path(alt_storage, clean_key)
-            if alt_path.exists():
-                return alt_path
         return primary_path
 
     def save_file_atomically(self, source_temp_path: Path, target_storage_key: str) -> Path:

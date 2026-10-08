@@ -60,6 +60,7 @@
             var loadingTask = pdfjsLib.getDocument({
                 data: uint8Array,
                 isEvalSupported: false,
+                enableScripting: false,
                 disableRange: true,
                 disableStream: true
             });
@@ -72,6 +73,13 @@
 
                     var context = targetCanvas.getContext('2d');
                     var viewport = page.getViewport({ scale: 1.5 });
+                    var pixelCount = viewport.width * viewport.height;
+                    if (!Number.isFinite(pixelCount) || pixelCount <= 0) {
+                        throw new Error('Invalid PDF page dimensions');
+                    }
+                    var reduction = Math.min(1, 8192 / viewport.width, 8192 / viewport.height,
+                        Math.sqrt(16000000 / pixelCount));
+                    if (reduction < 1) viewport = page.getViewport({ scale: 1.5 * reduction });
 
                     // Cancel any active render task on this canvas before starting a new one
                     if (window._activePdfRenderTasks[canvasId]) {

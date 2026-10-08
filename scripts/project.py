@@ -122,7 +122,13 @@ def serve(hot=False, force=False, with_agent=True, server=False):
         raise RuntimeError("Run python scripts/project.py setup first.")
     sync_dependencies(with_agent)
     from dotenv import dotenv_values
-    agent_port = int(dotenv_values(ROOT / "print-agent/.env").get("PORT") or 5001)
+    agent_values = {**dotenv_values(ROOT / "print-agent/.env"), **os.environ}
+    backend_values = {**dotenv_values(ROOT / "backend/.env"), **os.environ}
+    agent_port = int(agent_values.get("PORT") or 5001)
+    if with_agent and agent_values.get('MOCK_CUPS', 'false').lower() in {'true', '1', 'yes'}:
+        if (backend_values.get('ENVIRONMENT', '').lower() in {'production', 'prod'} or
+                backend_values.get('RAZORPAY_KEY_ID', '').startswith('rzp_live_')):
+            raise RuntimeError('Local simulation requires development mode and Razorpay test keys, never live payments.')
     ports_to_check = (8000, 3000) if not with_agent else (8000, agent_port, 3000)
     for port in ports_to_check:
         with socket.socket() as sock:
@@ -162,7 +168,7 @@ def serve(hot=False, force=False, with_agent=True, server=False):
         raise RuntimeError(f"{name} is unhealthy. See .runtime/{name}.out.log.")
 
     try:
-        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", ("127.0.0.1" if server else "0.0.0.0"), "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
+        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
         start("reconciliation", ROOT / "backend", ["-m", "app.worker"])
         if with_agent:
             start("agent", ROOT / "print-agent", ["-m", "app.main"], f"http://127.0.0.1:{agent_port}/health")
