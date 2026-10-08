@@ -4,6 +4,9 @@ from functools import partial
 from pathlib import Path
 import json
 import os
+import http.client
+
+BACKEND_PROXY_PORT = int(os.environ.get('BACKEND_PROXY_PORT', '8000'))
 
 CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razorpay.com https://*.razorpay.in; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -14,6 +17,40 @@ CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razor
        "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 
 class Handler(SimpleHTTPRequestHandler):
+    def proxy_api(self):
+        if not self.path.split('?')[0].startswith(('/api/', '/health')):
+            return False
+        size = int(self.headers.get('Content-Length', '0'))
+        if size > 60 * 1024 * 1024:
+            self.send_error(413)
+            return True
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection', 'transfer-encoding')}
+        connection = http.client.HTTPConnection('127.0.0.1', BACKEND_PROXY_PORT, timeout=120)
+        try:
+            connection.request(self.command, self.path, body=self.rfile.read(size) if size else None, headers=headers)
+            response = connection.getresponse()
+            self.send_response(response.status)
+            for key, value in response.getheaders():
+                if key.lower() not in ('connection', 'transfer-encoding'):
+                    self.send_header(key, value)
+            self.end_headers()
+            while chunk := response.read(64 * 1024):
+                self.wfile.write(chunk)
+        except OSError:
+            self.send_error(502, 'Backend unavailable')
+        finally:
+            connection.close()
+        return True
+
+    def do_POST(self):
+        if not self.proxy_api():
+            self.send_error(404)
+
+    do_PUT = do_POST
+    do_PATCH = do_POST
+    do_DELETE = do_POST
+    do_OPTIONS = do_POST
+
     def end_headers(self):
         self.send_header('Content-Security-Policy', CSP)
         self.send_header('X-Content-Type-Options', 'nosniff')
@@ -22,6 +59,8 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        if self.proxy_api():
+            return
         clean_path = self.path.split('?')[0].rstrip('/')
         if clean_path in ('/env.json', '/config.json'):
             backend_url = os.environ.get("BACKEND_URL") or os.environ.get("API_BASE_URL") or ""
@@ -42,8 +81,8 @@ class Handler(SimpleHTTPRequestHandler):
                             pass
                     if backend_url:
                         break
-            if not backend_url:
-                backend_url = "http://127.0.0.1:8000"
+            # An empty URL selects the current web origin. /api is proxied above,
+            # so mobile LAN browsers never receive an unreachable localhost URL.
             payload = json.dumps({'BACKEND_URL': backend_url}).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

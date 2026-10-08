@@ -3,6 +3,7 @@ import re
 import socket
 import subprocess
 import uuid
+import threading
 from pathlib import Path
 from typing import Dict, Any, Tuple
 from app.config import config
@@ -13,6 +14,7 @@ from app.services.file_service import file_service
 
 class CupsService:
     def __init__(self):
+        self._local = threading.local()
         self.printer_name = config.PRINTER_NAME
         self.mock_mode = config.MOCK_CUPS
 
@@ -24,6 +26,14 @@ class CupsService:
             self.has_pycups = True
         except (ImportError, ModuleNotFoundError):
             self.cups = None
+
+    @property
+    def last_prepared_file(self):
+        return getattr(self._local, "prepared_file", None)
+
+    @last_prepared_file.setter
+    def last_prepared_file(self, value):
+        self._local.prepared_file = value
 
     def build_cups_options(self, settings: Dict[str, Any]) -> Dict[str, str]:
         """Maps business print settings to standard CUPS PPD options."""
@@ -258,20 +268,12 @@ class CupsService:
 
         # Dynamic printer selection
         target_printer = settings.get("cups_printer_name") or settings.get("printer_name") or self.printer_name
-        if any(k in str(target_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-            target_printer = "HP_LaserJet_400_M401dn_E9A0F4"
-        elif any(k in str(target_printer) for k in ["F36EC0", "Unit 1", "central_01"]):
-            target_printer = "HP_LaserJet_400_M401dn_F36EC0"
-
-        if self.has_pycups:
-            try:
-                conn = self.cups.Connection(host=config.CUPS_SERVER)
-                available = conn.getPrinters()
-                if target_printer not in available:
-                    agent_logger.warning(f"Selected printer '{target_printer}' not found in CUPS. Available: {list(available.keys())}. Falling back to '{self.printer_name}'.")
-                    target_printer = self.printer_name
-            except Exception:
-                pass
+        if not target_printer:
+            raise CupsException("No CUPS printer is assigned to this job.")
+        if self.has_pycups and not self.mock_mode:
+            conn = self.cups.Connection(host=config.CUPS_SERVER)
+            if target_printer not in conn.getPrinters():
+                raise CupsException(f"Assigned printer '{target_printer}' does not exist in CUPS.")
 
         # If printable_file was already sliced with custom/odd/even ranges, remove page-ranges / page-set from CUPS options
         if printable_file != file_path:
@@ -283,7 +285,7 @@ class CupsService:
         self.last_prepared_file = printable_file if printable_file != file_path else None
 
         # If in Mock mode or Windows without native CUPS
-        if self.mock_mode or (os.name == 'nt' and not self.has_pycups):
+        if self.mock_mode:
             mock_id = f"cups-{uuid.uuid4().hex[:8]}"
             agent_logger.info(f"[MOCK_CUPS] Successfully submitted simulated print job ID: {mock_id} to '{target_printer}'")
             return mock_id
@@ -301,7 +303,7 @@ class CupsService:
                 agent_logger.info(f"pycups successfully submitted job ID: {job_id} to '{target_printer}'")
                 return str(job_id)
             except Exception as e:
-                agent_logger.warning(f"pycups printFile failed ({e}). Attempting CLI lp fallback...")
+                raise CupsException(f"CUPS submission outcome is unknown: {e}. Inspect the queue before retrying.", error_code="SUBMISSION_UNKNOWN") from e
 
         # 2. CLI 'lp' command fallback
         cmd = ["lp", "-d", target_printer]
@@ -340,48 +342,38 @@ class CupsService:
             time.sleep(2)
             return "COMPLETED"
 
-        for _ in range(90):  # Poll up to 180 seconds
-            job_in_queue = False
-            job_state = None
-
-            if self.has_pycups:
-                try:
+        # Missing queue entries and timeouts are not proof of completion.
+        last_reported = None
+        while True:
+            try:
+                if self.has_pycups:
                     conn = self.cups.Connection(host=config.CUPS_SERVER)
-                    jobs = conn.getJobs()
-                    if int(cups_job_id) in jobs:
-                        job_in_queue = True
-                        job_state = jobs[int(cups_job_id)].get("job-state", 0)
-                except Exception:
-                    pass
-            else:
-                try:
-                    res = subprocess.run(["lpstat", "-o", printer_name], capture_output=True, text=True)
-                    if cups_job_id in res.stdout:
-                        job_in_queue = True
-                except Exception:
-                    pass
-
-            if not job_in_queue:
-                agent_logger.info(f"CUPS job {cups_job_id} cleared printer queue.")
-                return "COMPLETED"
-
-            if job_state in (7, 8):
-                return "FAILED"
-
-            if self.is_printer_out_of_paper():
-                agent_logger.warning(f"Printer '{printer_name}' is OUT OF PAPER for job {cups_job_id}!")
-                if on_status_callback:
-                    on_status_callback(
-                        status="PRINTING",
-                        error_code="OUT_OF_PAPER",
-                        message=f"Printer '{printer_name}' is out of paper. Please load paper into the tray to continue printing."
-                    )
+                    job_id = int(str(cups_job_id).rsplit("-", 1)[-1])
+                    attrs = conn.getJobAttributes(job_id)
+                    job_state = attrs.get("job-state")
+                    if job_state == 9:
+                        return "COMPLETED"
+                    if job_state in (7, 8):
+                        return "FAILED"
+                    reasons = conn.getPrinterAttributes(printer_name).get("printer-state-reasons", [])
+                    paper_empty = any("media-empty" in str(reason) for reason in reasons)
+                else:
+                    # CLI fallback consults retained completed-job history as well as active jobs.
+                    res = subprocess.run(["lpstat", "-h", config.CUPS_SERVER, "-W", "completed", "-o", printer_name], capture_output=True, text=True, timeout=10)
+                    if res.returncode != 0:
+                        raise CupsException(res.stderr or "Cannot read CUPS job history")
+                    if any(line.split()[0] == str(cups_job_id) for line in res.stdout.splitlines() if line.split()):
+                        # lpstat completed includes canceled/aborted jobs: require pycups for reliable outcomes.
+                        return "STATUS_UNKNOWN"
+                    paper_empty = self.is_printer_out_of_paper()
+                if on_status_callback and paper_empty != last_reported:
+                    on_status_callback(status="PRINTING", error_code="OUT_OF_PAPER" if paper_empty else None,
+                                       message="Load paper to continue printing." if paper_empty else None)
+                    last_reported = paper_empty
+            except Exception as exc:
+                agent_logger.warning(f"Cannot confirm CUPS job {cups_job_id}: {exc}")
+                return "STATUS_UNKNOWN"
             time.sleep(2)
-
-        if self.is_printer_out_of_paper():
-            return "OUT_OF_PAPER"
-
-        return "COMPLETED"
 
     def get_detected_printers(self) -> list:
         """

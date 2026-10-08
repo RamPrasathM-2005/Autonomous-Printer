@@ -42,7 +42,7 @@ class StorageService:
         alt_storage = Path(__file__).resolve().parent.parent.parent / "storage"
         if alt_storage.exists():
             clean_key = storage_key.lstrip("/\\")
-            alt_path = (alt_storage / clean_key).resolve()
+            alt_path = resolve_safe_storage_path(alt_storage, clean_key)
             if alt_path.exists():
                 return alt_path
         return primary_path

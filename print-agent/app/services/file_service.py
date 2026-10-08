@@ -50,20 +50,7 @@ class FileService:
         except Exception as e:
             agent_logger.warning(f"Could not download file from backend: {e}")
 
-        # 4. Emergency fallback printable document if backend is temporarily unreachable
-        agent_logger.warning(f"Document unavailable on disk or backend for {storage_key}. Generating emergency document...")
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        minimal_pdf = (
-            b"%PDF-1.4\n"
-            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-            b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-            b"3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R>>endobj\n"
-            b"xref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\n"
-            b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n"
-        )
-        target_path.write_bytes(minimal_pdf)
-        agent_logger.info(f"Virtual printable document created at: {target_path}")
-        return target_path
+        raise StorageException("Document could not be downloaded from the backend. Printing was not started.")
 
     def cleanup_file(self, file_path: Path | None):
         """Safely removes a temporary print file or processed artifact."""
@@ -85,7 +72,7 @@ class FileService:
             if not scan_dir.exists():
                 continue
             for item in scan_dir.glob("**/*"):
-                if item.is_file():
+                if item.is_file() and not item.name.startswith("agent-journal.sqlite3"):
                     try:
                         mtime = item.stat().st_mtime
                         if now - mtime > max_age_seconds:

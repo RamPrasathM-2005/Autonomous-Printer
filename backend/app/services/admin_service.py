@@ -384,81 +384,20 @@ class AdminService:
                 tested_at=printer.last_tested_at.strftime("%Y-%m-%d %H:%M:%S")
             )
 
-        # 1. Attempt to instruct assigned Print Agent via HTTP endpoint
-        agent_responded = False
-        agent_result = {}
-        dispatch_headers = {
-            "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
-            "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
-        }
-        test_payload = {
-            "cups_printer_name": printer.cups_printer_name,
-            "ip_address": printer.ip_address,
-            "device_uri": printer.device_uri,
-            "protocol": printer.protocol or "Socket"
-        }
-
-        candidate_urls = []
-        if server.ip_address:
-            candidate_urls.extend([
-                f"http://{server.ip_address}:5001/local/test-printer",
-                f"http://{server.ip_address}:5000/local/test-printer"
-            ])
-        candidate_urls.extend([
-            "http://127.0.0.1:5001/local/test-printer",
-            "http://127.0.0.1:5000/local/test-printer"
-        ])
-
-        for url in candidate_urls:
-            try:
-                resp = requests.post(url, json=test_payload, headers=dispatch_headers, timeout=3)
-                if resp.status_code == 200:
-                    agent_result = resp.json()
-                    agent_responded = True
-                    break
-            except Exception:
-                continue
-
-        # 2. Evaluate connection test
-        if agent_responded:
-            success = bool(agent_result.get("success", False))
-            cups_exists = bool(agent_result.get("cups_exists", False))
-            reachable = bool(agent_result.get("reachable", False))
-            available = bool(agent_result.get("available", False))
-            message = str(agent_result.get("message") or "")
-        else:
-            # Fallback probe if print agent HTTP endpoint was unreachable:
-            port = 9100
-            proto_lower = (printer.protocol or "").lower()
-            if "ipp" in proto_lower or (printer.device_uri and "631" in printer.device_uri):
-                port = 631
-            elif "lpd" in proto_lower or (printer.device_uri and "515" in printer.device_uri):
-                port = 515
-
-            target_ip = (printer.ip_address or "").strip()
-            if target_ip:
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    s.settimeout(2.0)
-                    s.connect((target_ip, port))
-                    s.close()
-                    reachable = True
-                    cups_exists = True
-                    available = True
-                    success = True
-                    message = f"Network probe verified connection to {target_ip}:{port} ({printer.protocol})."
-                except Exception as ex:
-                    reachable = False
-                    cups_exists = False
-                    available = False
-                    success = False
-                    message = f"Connection failed to {target_ip}:{port} ({ex}). Printer is unreachable or offline."
-            else:
-                reachable = False
-                cups_exists = False
-                available = False
-                success = False
-                message = "Assigned Print Agent is offline and no static IP address is configured for direct probe."
+        # Use observations sent by the assigned station over outbound HTTPS.
+        # A public server cannot probe a printer on a department's private LAN.
+        from app.config.settings import settings
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        last_seen = printer.last_seen
+        if last_seen and last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        recent = bool(last_seen and last_seen >= now - timedelta(seconds=settings.HEARTBEAT_TIMEOUT_SECONDS))
+        cups_exists = recent and not printer.has_mismatch
+        reachable = recent and printer.printer_status in ("READY", "BUSY")
+        available = cups_exists and reachable and printer.is_enabled
+        success = available
+        message = "Assigned agent reports the registered CUPS queue ready." if success else "No recent matching, ready CUPS queue reported by the assigned agent. Check its heartbeat and printer assignment."
 
         # 3. Only after a successful validation should the printer be marked as Active
         now = datetime.now(timezone.utc)
@@ -553,7 +492,7 @@ class AdminService:
         # Prevent deletion if active jobs are printing
         active_jobs = db.query(PrintJob).filter(
             PrintJob.printer_id == printer_id,
-            PrintJob.status.in_([PrintJobStatus.PRINTING, PrintJobStatus.PROCESSING])
+            PrintJob.status.in_([PrintJobStatus.PRINTING, PrintJobStatus.RELEASED])
         ).count()
         if active_jobs > 0:
             raise AppException("Cannot delete printer while active print jobs are in progress.", status_code=400)
@@ -665,49 +604,19 @@ class AdminService:
             for p in db.query(Printer).filter(Printer.server_id == server_id).all()
         }
 
-        agent_cups: List[dict] = []
-        dispatch_headers = {
-            "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
-            "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
-        }
-
-        urls = []
-        if server.ip_address:
-            clean_ip = server.ip_address.strip().replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
-            urls.extend([
-                f"http://{clean_ip}:5001/local/cups-printers",
-                f"http://{clean_ip}:5000/local/cups-printers",
-                f"http://{clean_ip}:5001/local/detected-printers",
-            ])
-        urls.extend([
-            "http://127.0.0.1:5001/local/cups-printers",
-            "http://127.0.0.1:5000/local/cups-printers",
-        ])
-
-        for url in urls:
-            try:
-                resp = requests.get(url, headers=dispatch_headers, timeout=3)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if isinstance(data, list):
-                        agent_cups = data
-                        break
-                    elif isinstance(data, dict) and "printers" in data:
-                        agent_cups = data["printers"]
-                        break
-            except Exception:
-                continue
-
-        # If direct HTTP request couldn't connect, fall back to DiscoveredPrinter records from heartbeats
-        if not agent_cups:
-            disc_printers = db.query(DiscoveredPrinter).filter(DiscoveredPrinter.server_id == server_id).all()
-            for d in disc_printers:
-                agent_cups.append({
-                    "cups_printer_name": d.cups_printer_name,
-                    "device_uri": d.device_uri,
-                    "ip_address": d.ip_address,
-                    "status": d.reported_status or "READY"
-                })
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=settings.HEARTBEAT_TIMEOUT_SECONDS)
+        agent_cups = []
+        def recent(ts):
+            return ts is not None and (ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts) >= cutoff
+        for d in db.query(DiscoveredPrinter).filter(DiscoveredPrinter.server_id == server_id).all():
+            if recent(d.last_seen):
+                agent_cups.append({"cups_printer_name": d.cups_printer_name, "device_uri": d.device_uri,
+                                   "ip_address": d.ip_address, "status": d.reported_status or "UNKNOWN"})
+        for p in db.query(Printer).filter(Printer.server_id == server_id).all():
+            if recent(p.last_seen):
+                agent_cups.append({"cups_printer_name": p.cups_printer_name, "device_uri": p.device_uri,
+                                   "ip_address": p.ip_address, "status": p.printer_status or "UNKNOWN"})
 
         results: List[AdminAgentCupsPrinterItem] = []
         seen = set()

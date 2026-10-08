@@ -1,18 +1,33 @@
 import logging
 import sys
+import os
+import json
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from app.config import config
+
+
+class AgentFormatter(logging.Formatter):
+    def format(self, record):
+        event = {
+            "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+            "level": record.levelname,
+            "station_id": config.AGENT_ID,
+            "pid": os.getpid(),
+            "thread": record.threadName,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            event["exception"] = self.formatException(record.exc_info)
+        return json.dumps(event, ensure_ascii=True)
 
 def setup_agent_logger(name: str = "PrintAgent") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        formatter = logging.Formatter(
-            fmt="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        formatter = AgentFormatter()
 
         # Standard console handler for systemd journald capture
         stream_handler = logging.StreamHandler(sys.stdout)

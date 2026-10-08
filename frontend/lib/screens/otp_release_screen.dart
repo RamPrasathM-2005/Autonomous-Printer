@@ -49,6 +49,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _pollingTimer;
+  bool _pollingInFlight = false;
 
   String? _selectedPrinterName;
   bool _isPrinterLocked = false;
@@ -82,7 +83,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     super.dispose();
   }
 
-  void _startPolling({int intervalMs = 700}) {
+  void _startPolling({int intervalMs = 2000}) {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
       _pollOrderStatus();
@@ -116,15 +117,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         );
       } catch (_) {}
 
-      if (loadedPrinters.isEmpty) {
-        try {
-          loadedPrinters = await _apiService.fetchPrinters();
-        } catch (_) {}
-      }
-
       final existingPrinter =
-          order.printSettings.toJson()['printer_name'] ??
           order.printSettings.toJson()['cups_printer_name'] ??
+          order.printSettings.toJson()['selected_printer'] ??
           otp?.selectedPrinter;
 
       final isLocked =
@@ -180,10 +175,16 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   }
 
   Future<void> _pollOrderStatus() async {
+    if (_pollingInFlight) return;
+    _pollingInFlight = true;
     try {
       final updated = await _getOrder();
       if (!mounted) return;
       final status = updated.status.toUpperCase();
+      setState(() {
+        _order = updated;
+        _errorMessage = updated.errorMessage;
+      });
 
       if (status == 'PRINTING' || status == 'RELEASED') {
         OrderRecoveryService().updateActiveStage('PRINTING');
@@ -192,7 +193,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
             _printStatus = 'PRINTING';
             _printProgress = status == 'RELEASED' ? 0.40 : 0.75;
           });
-          _startPolling(intervalMs: 400);
+          _startPolling(intervalMs: 2000);
         }
       } else if (status == 'COMPLETED' || status == 'SUCCESS') {
         OrderRecoveryService().markCompleted(widget.orderId);
@@ -203,45 +204,33 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
           });
           _pollingTimer?.cancel();
         }
+      } else if (['FAILED', 'REFUNDED', 'CANCELLED', 'EXPIRED'].contains(status)) {
+        setState(() {
+          _printStatus = status;
+          _printProgress = 0;
+          _errorMessage = updated.errorMessage ?? 'Order ${status.toLowerCase()}. Check your payment status or contact the attendant.';
+          _otpData = null;
+        });
+        _pollingTimer?.cancel();
       }
-    } catch (_) {}
+    } catch (_) {} finally {
+      _pollingInFlight = false;
+    }
   }
 
-  bool get _isUnit2 =>
-      _selectedPrinterName != null &&
-      (_selectedPrinterName!.contains('E9A0F4') ||
-          _selectedPrinterName!.contains('Unit 2') ||
-          _selectedPrinterName!.contains('Printer_2'));
+  String get _friendlyPrinterName {
+    for (final printer in _availablePrinters) {
+      if (printer.cupsQueueName == _selectedPrinterName) return printer.displayName;
+    }
+    return _selectedPrinterName ?? 'Station printer';
+  }
 
-  String get _friendlyPrinterName => _isUnit2
-      ? 'HP LaserJet 400 M401dn (Unit 2)'
-      : 'HP LaserJet 400 M401dn (Unit 1)';
-
-  String get _fullPrinterWithHardwareTag => _isUnit2
-      ? 'HP LaserJet 400 M401dn (Unit 2 - E9A0F4)'
-      : 'HP LaserJet 400 M401dn (Unit 1 - F36EC0)';
+  String get _fullPrinterWithHardwareTag => _friendlyPrinterName;
 
   String _getResolvedOtpCode() {
     if (_otpData == null) return '------';
-    if (_otpData!.printerOtps != null && _selectedPrinterName != null) {
-      final pInfo = _otpData!.printerOtps![_selectedPrinterName!];
-      if (pInfo is Map && pInfo['otp'] != null) {
-        return pInfo['otp'].toString();
-      }
-      if (_isUnit2) {
-        final p2 =
-            _otpData!.printerOtps!['HP_LaserJet_400_M401dn_E9A0F4'] ??
-            _otpData!.printerOtps!['Printer_2'];
-        if (p2 is Map && p2['otp'] != null) {
-          return p2['otp'].toString();
-        }
-      } else {
-        final p1 = _otpData!.printerOtps!['HP_LaserJet_400_M401dn_F36EC0'];
-        if (p1 is Map && p1['otp'] != null) {
-          return p1['otp'].toString();
-        }
-      }
-    }
+    final info = _otpData!.printerOtps?[_selectedPrinterName];
+    if (info is Map && info['otp'] != null) return info['otp'].toString();
     return _otpData!.otpCode;
   }
 
@@ -1224,6 +1213,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     if (_printStatus == 'WAITING') return const SizedBox.shrink();
 
     final isCompleted = _printStatus == 'COMPLETED';
+    final isStopped = ['FAILED', 'REFUNDED', 'CANCELLED', 'EXPIRED'].contains(_printStatus);
 
     return Container(
       decoration: BoxDecoration(
@@ -1263,7 +1253,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isCompleted ? 'Print Complete' : 'Printing...',
+                      isCompleted ? 'Print Complete' : (isStopped ? 'Order ${_printStatus.toLowerCase()}' : 'Printing...'),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1275,7 +1265,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                     Text(
                       isCompleted
                           ? 'Collect your pages from $_friendlyPrinterName.'
-                          : 'Job running on $_friendlyPrinterName.',
+                          : (isStopped ? (_errorMessage ?? 'Contact the attendant.') : 'Job running on $_friendlyPrinterName.'),
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textMuted,

@@ -55,11 +55,9 @@ class ApiService {
     final saved = readSessionValue(_sessionKey);
     if (saved != null) {
       final value = jsonDecode(saved);
-      if (DateTime.parse(value['expiresAt']).isAfter(DateTime.now())) {
-        return value['token'];
-      }
-      clearSessionValue(_sessionKey);
-      throw const ApiError('Session expired. Refresh to continue.');
+      // Guest capabilities remain tied to paid orders until explicitly cleared.
+      // The backend does not expire these opaque session identifiers.
+      return value['token'];
     }
     _pendingSession ??= () async {
       final response = await http
@@ -77,16 +75,19 @@ class ApiService {
   }
 
   Future<Map<String, String>> _headers() async {
+    final session = await _token();
     final customerAuth = CustomerAuthService();
     final token = await customerAuth.getValidAccessToken();
     if (token != null) {
       return {
         'Authorization': 'Bearer $token',
+        'X-Customer-Session': session,
         'Content-Type': 'application/json',
       };
     }
     return {
-      'Authorization': 'Bearer ${await _token()}',
+      'Authorization': 'Bearer $session',
+      'X-Customer-Session': session,
       'Content-Type': 'application/json',
     };
   }
@@ -241,6 +242,7 @@ class ApiService {
         ? customerAuth.accessToken!
         : await _token();
     request.headers['Authorization'] = 'Bearer $authToken';
+    request.headers['X-Customer-Session'] = await _token();
     final extension = filename.split('.').last.toLowerCase();
     final mime = extension == 'png'
         ? 'image/png'

@@ -120,8 +120,8 @@ class PricingService:
         if per_page_rate is not None:
             rate = per_page_rate
         else:
-            rate = 10.00 if is_colour else 2.00
-        fee = base_fee if base_fee is not None else 0.00
+            rate = 10.00 if is_colour else settings.PER_PAGE_RATE
+        fee = base_fee if base_fee is not None else settings.BASE_FEE
         amount = round((selected_pages_count * copies * rate) + fee, 2)
         return amount
 

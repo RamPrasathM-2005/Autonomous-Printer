@@ -21,6 +21,7 @@ class PrintJob(Base):
     printer_id = Column(String(64), ForeignKey("printers.id", ondelete="SET NULL"), nullable=True, index=True)
     
     cups_job_id = Column(String(128), nullable=True)
+    last_status_event = Column(String(64), nullable=True)
     status = Column(Enum(PrintJobStatus), default=PrintJobStatus.QUEUED, nullable=False, index=True)
     retry_count = Column(Integer, default=0, nullable=False)
     error_code = Column(String(128), nullable=True)

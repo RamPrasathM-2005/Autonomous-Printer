@@ -13,10 +13,37 @@ from app.utils.state_machine import validate_order_transition, validate_refund_t
 
 class RefundService:
     @staticmethod
+    def reconcile_pending(db):
+        from app.services.payment_service import payment_service
+        pending = db.query(Refund).filter(Refund.status == RefundStatus.PROCESSING,
+                                         Refund.razorpay_refund_id != None).all()
+        if not pending:
+            return
+        gateway = payment_service._gateway_client()
+        for refund in pending:
+            entity = payment_service._gateway_call(gateway.refund.fetch, refund.razorpay_refund_id)
+            payment = db.get(Payment, refund.payment_id)
+            if (entity.get("id") != refund.razorpay_refund_id or
+                    entity.get("payment_id") != payment.razorpay_payment_id or
+                    entity.get("amount") != int(Decimal(str(refund.amount)) * 100)):
+                raise AppException(409, "REFUND_REVIEW_REQUIRED", "Gateway refund does not match the recorded payment.")
+            if entity.get("status") == "processed":
+                refund.status = RefundStatus.COMPLETED
+                refund.refund_completed_at = datetime.now(timezone.utc)
+                payment.status = PaymentStatus.REFUNDED
+                order = db.get(Order, refund.order_id)
+                if order.status in (OrderStatus.CANCELLED, OrderStatus.FAILED, OrderStatus.EXPIRED):
+                    order.status = OrderStatus.REFUNDED
+            elif entity.get("status") == "failed":
+                refund.status = RefundStatus.FAILED
+                refund.error_message = "Gateway reports refund failed. Manual review required."
+            db.commit()
+
+    @staticmethod
     def process_refund(db: Session, order_id: str, reason: str = "Print failed") -> Refund:
         # Check if refund already exists
         existing = db.query(Refund).filter(Refund.order_id == order_id).first()
-        if existing and existing.status == RefundStatus.COMPLETED:
+        if existing and existing.status in (RefundStatus.COMPLETED, RefundStatus.PROCESSING):
             return existing
 
         order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
@@ -52,56 +79,43 @@ class RefundService:
             refund = existing
 
         # Process with Razorpay if payment_id exists
+        if refund.status == RefundStatus.FAILED:
+            raise AppException(409, "REFUND_REVIEW_REQUIRED", "Check the gateway for an existing refund before retrying.")
         validate_refund_transition(refund.status, RefundStatus.PROCESSING)
         refund.status = RefundStatus.PROCESSING
-        db.flush()
+        # Persist the attempt before gateway I/O. After a crash the outcome needs
+        # review rather than issuing a second refund for the same payment.
+        db.commit()
 
-        rzp_refund_id = f"rfnd_{uuid.uuid4().hex[:14]}"
-        success = True
-
-        is_test_payment = (
-            payment.razorpay_payment_id.startswith("pay_test_")
-            or payment.razorpay_payment_id.startswith("pay_simulated_")
-            or settings.RAZORPAY_KEY_ID in ["rzp_test_key_id", "test_key"]
-            or settings.RAZORPAY_KEY_ID.startswith("rzp_test_")
-            or settings.ENVIRONMENT == "development"
-        )
-
-        if payment.razorpay_payment_id and not is_test_payment:
-            try:
-                import razorpay
-                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                amount_paise = int(Decimal(str(order.amount)) * 100)
-                rzp_resp = client.payment.refund(payment.razorpay_payment_id, {
-                    "amount": amount_paise,
-                    "notes": {"reason": reason, "orderId": order.id}
-                })
-                rzp_refund_id = rzp_resp.get("id", rzp_refund_id)
-            except Exception as e:
-                success = False
-                refund.status = RefundStatus.FAILED
-                refund.error_message = str(e)
+        # Test gateway payments also require a real gateway refund response.
+        # Never invent a successful refund after a network error.
+        if not payment.razorpay_payment_id:
+            refund.status = RefundStatus.FAILED
+            refund.error_message = "Captured payment has no gateway payment ID. Manual review required."
+            db.commit()
+            raise AppException(409, "REFUND_REVIEW_REQUIRED", refund.error_message)
+        try:
+            from app.services.payment_service import payment_service
+            gateway = payment_service._gateway_client()
+            response = payment_service._gateway_call(gateway.payment.refund, payment.razorpay_payment_id, {
+                "amount": int(Decimal(str(refund.amount)) * 100),
+                "notes": {"reason": reason, "orderId": order.id},
+            })
+            rzp_refund_id = response.get("id")
+            if not rzp_refund_id or response.get("status") not in ("processed", "pending"):
+                raise ValueError("Gateway refund response is incomplete")
+            refund.razorpay_refund_id = rzp_refund_id
+            if response["status"] == "pending":
                 db.commit()
-                raise AppException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    error_code="REFUND_FAILED",
-                    message=f"Razorpay refund processing failed: {str(e)}"
-                )
-        elif is_test_payment and payment.razorpay_payment_id:
-            # Try real refund if key is provided, but don't fail test flow if test account has zero balance
-            try:
-                import razorpay
-                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                amount_paise = int(Decimal(str(order.amount)) * 100)
-                rzp_resp = client.payment.refund(payment.razorpay_payment_id, {
-                    "amount": amount_paise,
-                    "notes": {"reason": reason, "orderId": order.id}
-                })
-                rzp_refund_id = rzp_resp.get("id", rzp_refund_id)
-            except Exception as test_e:
-                print(f"[TEST REFUND] Razorpay test refund notice: {test_e}. Simulating successful test refund.")
-                rzp_refund_id = f"rfnd_test_{uuid.uuid4().hex[:12]}"
+                db.refresh(refund)
+                return refund
+        except Exception as exc:
+            refund.status = RefundStatus.FAILED
+            refund.error_message = "Gateway refund outcome needs review. Check Razorpay before retrying."
+            db.commit()
+            raise AppException(502, "REFUND_FAILED", refund.error_message) from exc
 
+        success = True
         if success:
             validate_refund_transition(refund.status, RefundStatus.COMPLETED)
             refund.status = RefundStatus.COMPLETED

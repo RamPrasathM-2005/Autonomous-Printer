@@ -79,7 +79,7 @@ def get_authenticated_agent(
             message="Unrecognized agent device token."
         )
 
-    if server.status == PrintServerStatus.DISABLED:
+    if server.status == PrintServerStatus.DISABLED or not server.is_enabled:
         raise AppException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             error_code="PRINT_SERVER_DISABLED",

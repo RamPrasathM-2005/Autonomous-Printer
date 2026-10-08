@@ -14,6 +14,11 @@ class ApiError implements Exception {
       'Print station offline. Please wait for it to reconnect.',
     'PRINT_SERVER_DISABLED' =>
       'This print station is disabled. Select another station.',
+    'WRONG_STATION' => 'Enter the code at the station selected for this order.',
+    'PRINTER_UNAVAILABLE' || 'INVALID_PRINTER' => 'The selected printer is unavailable at this station.',
+    'STATION_RELEASE_REQUIRED' => 'Enter your code on the department touchscreen.',
+    'PAYMENT_NOT_COMPLETED' => 'Complete payment before requesting a release code.',
+    'REFUND_FAILED' || 'REFUND_REVIEW_REQUIRED' => 'Order cancelled. Refund needs review by the attendant.',
     'MISSING_DOCUMENT' => 'Select a document.',
     'UNSUPPORTED_TYPE' => 'Choose a PDF, PNG or JPG file.',
     'INVALID_FILENAME' => 'Rename the file and try again.',

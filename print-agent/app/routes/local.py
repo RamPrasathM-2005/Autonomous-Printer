@@ -119,13 +119,7 @@ def local_station_otp_release():
             "friendly_printer": friendly_printer,
             "message": f"Preparing document for {friendly_printer}..."
         })
-        job_poller.processing_jobs.add(job_id)
-        import threading
-        threading.Thread(
-            target=job_poller._execute_job_safely,
-            args=(release_data,),
-            daemon=True
-        ).start()
+        job_poller.enqueue_job(release_data)
 
     return jsonify({
         "status": "RELEASED",
@@ -189,13 +183,14 @@ def direct_print_job():
         return jsonify({"error": "MISSING_JOB_ID"}), 400
 
     if not print_service.is_job_active_or_done(job_id):
-        job_poller.processing_jobs.add(job_id)
-        import threading
-        threading.Thread(
-            target=job_poller._execute_job_safely,
-            args=(data,),
-            daemon=True
-        ).start()
+        # Use the backend's authoritative document and settings, never caller replacements.
+        try:
+            canonical = next((job for job in backend_client.poll_jobs() if (job.get("jobId") or job.get("job_id")) == job_id), None)
+        except BackendCommunicationException:
+            return jsonify({"error": "BACKEND_UNAVAILABLE"}), 503
+        if canonical is None:
+            return jsonify({"error": "JOB_NOT_RELEASED", "message": "No released job at this station."}), 409
+        job_poller.enqueue_job(canonical)
         return jsonify({"status": "PRINTING", "job_id": job_id}), 200
     return jsonify({"status": "ALREADY_ACTIVE", "job_id": job_id}), 200
 

@@ -1,46 +1,35 @@
-import sys
-from pathlib import Path
-
-# Ensure backend root is in sys.path
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from sqlalchemy import text
+"""Destructive reset of the configured dedicated SQLite/MySQL database."""
+import argparse
+from sqlalchemy import inspect, text
 from app.config.database import engine
 from app.db.base import Base
-from app.db.seed import seed
+from app.db.seed import seed, validate_admin
+
 
 def reset_database():
-    print("[RESET] Starting database reset for 'printer' database...")
+    validate_admin()
+    dialect = engine.dialect.name
+    if dialect not in ("sqlite", "mysql", "mariadb"):
+        raise RuntimeError("Reset supports SQLite and MySQL/MariaDB only.")
     with engine.connect() as conn:
-        print("[RESET] Disabling foreign key checks...")
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+        switch = "PRAGMA foreign_keys" if dialect == "sqlite" else "SET FOREIGN_KEY_CHECKS"
+        conn.execute(text(f"{switch} = 0"))
         conn.commit()
-
-        # Get all table names in the current database
-        result = conn.execute(text(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE();"
-        ))
-        tables = [row[0] for row in result.fetchall()]
-        print(f"[RESET] Found {len(tables)} tables to drop: {tables}")
-
-        for table in tables:
-            print(f"  - Dropping table: {table}")
-            conn.execute(text(f"DROP TABLE IF EXISTS `{table}`;"))
-        conn.commit()
-
-        print("[RESET] Re-enabling foreign key checks...")
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
-        conn.commit()
-
-    print("[RESET] Creating all database tables with updated schema...")
-    Base.metadata.create_all(bind=engine)
-    print("[RESET] All tables created successfully!")
-
-    print("[RESET] Running database seeder...")
+        try:
+            quote = engine.dialect.identifier_preparer.quote
+            for name in inspect(conn).get_table_names():
+                conn.execute(text(f"DROP TABLE {quote(name)}"))
+            conn.commit()
+        finally:
+            conn.execute(text(f"{switch} = 1"))
+            conn.commit()
+    Base.metadata.create_all(engine)
     seed()
-    print("[RESET] Complete! Database has been cleanly reset and initialized.")
+    print("Database reset: one administrator; all other tables empty.")
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--yes", action="store_true", required=True, help="Permanent deletion; stop services first.")
+    parser.parse_args()
     reset_database()

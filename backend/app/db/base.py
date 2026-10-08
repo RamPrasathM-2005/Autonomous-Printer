@@ -16,6 +16,7 @@ from app.db.models.refund import Refund, RefundStatus
 from app.db.models.idempotency import IdempotencyKey
 from app.db.models.audit_log import AuditLog
 from app.db.models.discovered_printer import DiscoveredPrinter
+from app.db.models.platform_setting import PlatformSetting
 
 __all__ = [
     "Base",

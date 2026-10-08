@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Literal, Optional, Dict, Any, List
 from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator, field_serializer
 from app.db.models.order import OrderStatus
 
@@ -9,9 +9,9 @@ class PrintSettingsSchema(BaseModel):
     copies: int = Field(default=1, ge=1, le=100)
     pageRange: Optional[str] = Field(default=None, alias="pageRange", serialization_alias="pageRange")
     colour: bool = Field(default=False)
-    sides: str = Field(default="one-sided")
-    paperSize: str = Field(default="A4", alias="paperSize", serialization_alias="paperSize")
-    orientation: str = Field(default="portrait")
+    sides: Literal["one-sided", "two-sided-long-edge", "two-sided-short-edge"] = Field(default="one-sided")
+    paperSize: Literal["A4", "Letter", "Legal"] = Field(default="A4", alias="paperSize", serialization_alias="paperSize")
+    orientation: Literal["portrait", "landscape"] = Field(default="portrait")
 
     @model_validator(mode="before")
     @classmethod
@@ -98,10 +98,12 @@ def sanitize_print_settings(settings: Any) -> Dict[str, Any]:
     if not settings or not isinstance(settings, dict):
         return {}
     clean = copy.deepcopy(settings)
+    clean.pop("session_token", None)
     if "printer_otps" in clean and isinstance(clean["printer_otps"], dict):
         for _, p_val in clean["printer_otps"].items():
             if isinstance(p_val, dict):
                 p_val.pop("otp", None)
+                p_val.pop("otp_hash", None)
     return clean
 
 class OrderResponse(BaseModel):

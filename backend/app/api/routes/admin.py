@@ -249,22 +249,29 @@ def delete_admin_user(
 
 @router.get("/settings", response_model=AdminSystemSettings)
 def get_admin_settings(
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
 ):
     """
     Returns platform runtime configurations, rates, and operational parameters.
     """
+    from app.services.settings_service import load_platform_settings
+    load_platform_settings(db)
     return admin_service.get_settings(admin.email)
 
 @router.patch("/settings", response_model=AdminSystemSettings)
 def update_admin_settings(
     data: AdminSystemSettingsUpdate,
-    admin: User = Depends(get_current_admin)
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
 ):
     """
     Updates platform operational parameters (pricing rates, quotas, timeouts).
     """
-    return admin_service.update_settings(data, admin.email)
+    from app.services.settings_service import save_platform_settings
+    result = admin_service.update_settings(data, admin.email)
+    save_platform_settings(db, data)
+    return result
  
 # ----------------- DATABASE & PRODUCTION DATA -----------------
 

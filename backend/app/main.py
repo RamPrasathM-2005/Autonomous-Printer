@@ -37,39 +37,8 @@ from app.api.routes.departments import router as departments_router
 from app.api.routes.reports import router as reports_router
 
 def _sync_missing_columns():
-    from sqlalchemy import inspect, text
-    import logging
-    logger = logging.getLogger("uvicorn.error")
-    try:
-        insp = inspect(engine)
-        with engine.begin() as conn:
-            if insp.has_table("users"):
-                user_cols = {c['name']: c for c in insp.get_columns("users")}
-                if 'password_hash' in user_cols and not user_cols['password_hash'].get('nullable', True):
-                    logger.info("Migrating users.password_hash to nullable for passwordless student auth")
-                    conn.execute(text("ALTER TABLE `users` MODIFY COLUMN `password_hash` VARCHAR(255) NULL"))
-
-            for table_name, table in Base.metadata.tables.items():
-                if not insp.has_table(table_name):
-                    continue
-                db_cols = {c['name'] for c in insp.get_columns(table_name)}
-                for col in table.columns:
-                    if col.name not in db_cols:
-                        col_type = col.type.compile(engine.dialect)
-                        type_str = str(col_type).upper()
-                        if "DATETIME" in type_str or "TIMESTAMP" in type_str:
-                            if col.name == "updated_at":
-                                sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-                            else:
-                                sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                        elif col.nullable:
-                            sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
-                        else:
-                            sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col.name}` {col_type} NULL"
-                        logger.info("Auto-migrating column: %s", sql)
-                        conn.execute(text(sql))
-    except Exception as e:
-        logger.warning("Schema column sync warning: %s", e)
+    from app.db.migrate import sync_schema
+    sync_schema(engine)
 
 def _ensure_admin_user():
     if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
@@ -146,7 +115,7 @@ cors_origin_regex = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=cors_origin_regex,
+    allow_origin_regex=None if is_production else cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -201,11 +170,6 @@ from app.db.session import get_db
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
-@app.post("/agent/release-kiosk", include_in_schema=False)
-def alias_release_kiosk(req: AgentReleaseRequest, request: Request, db: Session = Depends(get_db)):
-    from app.api.routes.agent import release_job_kiosk
-    return release_job_kiosk(req, request, db)
-
 @app.get("/health", tags=["Health"])
 def health_check():
     return {
@@ -241,53 +205,12 @@ def get_tunnel_status():
                 pass
     return {"active": False, "tunnel_url": None}
 
-import httpx
-
-@app.get("/local/status", tags=["Hardware Proxy"])
-async def proxy_local_status():
-    """Proxy local printer hardware status for tunneled / remote access."""
-    for agent_url in ["http://127.0.0.1:5001/local/status", "http://127.0.0.1:5000/local/status"]:
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                res = await client.get(agent_url)
-                if res.status_code == 200:
-                    return JSONResponse(content=res.json(), status_code=200)
-        except Exception:
-            pass
-    return {
-        "agent_id": "STATION-AGENT",
-        "printer_name": "Station Printer",
-        "printer_state": "READY",
-        "paper_state": "AVAILABLE",
-        "active_jobs_count": 0
-    }
-
-@app.post("/local/release", tags=["Hardware Proxy"])
-async def proxy_local_release(request: Request):
-    """Proxy local OTP release for tunneled remote access."""
-    body = await request.json()
-    for agent_url in ["http://127.0.0.1:5001/local/release", "http://127.0.0.1:5000/local/release"]:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.post(agent_url, json=body)
-                return JSONResponse(content=res.json(), status_code=res.status_code)
-        except Exception:
-            pass
-    return JSONResponse(content={"error": "AGENT_UNAVAILABLE", "message": "Hardware agent not reached."}, status_code=503)
-
-@app.get("/local/job-status/{job_id}", tags=["Hardware Proxy"])
-async def proxy_local_job_status(job_id: str):
-    """Proxy print job status for kiosk and remote monitoring."""
-    for agent_url in [f"http://127.0.0.1:5001/local/job-status/{job_id}", f"http://127.0.0.1:5000/local/job-status/{job_id}"]:
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                res = await client.get(agent_url)
-                if res.status_code == 200:
-                    return JSONResponse(content=res.json(), status_code=200)
-        except Exception:
-            pass
-    return JSONResponse(content={"job_id": job_id, "status": "UNKNOWN", "progress": 0, "message": "Job status unavailable."}, status_code=200)
-
+@app.get("/local/status", include_in_schema=False)
+@app.post("/local/release", include_in_schema=False)
+@app.get("/local/job-status/{job_id}", include_in_schema=False)
+def retired_hardware_proxy(job_id: str = ""):
+    return JSONResponse(status_code=410, content={"error": "STATION_RELEASE_REQUIRED",
+        "message": "Use the physical station touchscreen. Customer status is available through the order API."})
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse

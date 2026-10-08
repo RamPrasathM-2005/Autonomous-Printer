@@ -14,6 +14,7 @@ class JobPoller:
         self._poller_thread = None
         self._heartbeat_thread = None
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
         # In-memory deduplication set
         self.processing_jobs: Set[str] = set()
 
@@ -21,6 +22,8 @@ class JobPoller:
         if self._running:
             return
         self._running = True
+        self._stop_event.clear()
+        print_service.recover_submissions()
 
         # Perform startup spool cleanup of orphaned temp files
         try:
@@ -40,7 +43,21 @@ class JobPoller:
 
     def stop(self):
         self._running = False
+        self._stop_event.set()
         agent_logger.info("Stopping job poller and heartbeat workers...")
+
+    def enqueue_job(self, job):
+        job_id = job.get("jobId") or job.get("job_id")
+        if not job_id:
+            return False
+        with self._lock:
+            if (job_id in self.processing_jobs or print_service.is_job_active_or_done(job_id) or
+                    len(self.processing_jobs) >= config.MAX_CONCURRENT_JOBS):
+                return False
+            self.processing_jobs.add(job_id)
+        threading.Thread(target=self._execute_job_safely, args=(job,), daemon=True,
+                         name=f"ExecWorker-{job_id}").start()
+        return True
 
     def _heartbeat_loop(self):
         current_interval = float(config.HEARTBEAT_INTERVAL_SECONDS)
@@ -49,6 +66,7 @@ class JobPoller:
         while self._running:
             try:
                 printer_state, paper_state = printer_monitor.get_printer_status()
+                backend_client.flush_status_updates()
                 success = backend_client.send_heartbeat(printer_state=printer_state, paper_state=paper_state)
                 if success:
                     current_interval = float(config.HEARTBEAT_INTERVAL_SECONDS)
@@ -58,7 +76,7 @@ class JobPoller:
                 agent_logger.warning(f"Heartbeat network communication issue: {e}")
                 current_interval = min(current_interval * 1.5, max_interval)
 
-            time.sleep(current_interval)
+            self._stop_event.wait(current_interval)
 
     def _poll_loop(self):
         current_interval = float(config.POLL_INTERVAL_SECONDS)
@@ -74,25 +92,13 @@ class JobPoller:
                     if not job_id:
                         continue
 
-                    # Section 40: Duplicate polling protection
-                    with self._lock:
-                        if job_id in self.processing_jobs or print_service.is_job_active_or_done(job_id):
-                            continue
-                        self.processing_jobs.add(job_id)
-
-                    # Spawn execution worker thread for this job
-                    threading.Thread(
-                        target=self._execute_job_safely,
-                        args=(job,),
-                        daemon=True,
-                        name=f"ExecWorker-{job_id}"
-                    ).start()
+                    self.enqueue_job(job)
 
             except Exception as e:
                 agent_logger.warning(f"Job poller communication issue: {e}")
                 current_interval = min(current_interval * 1.5, max_interval)
 
-            time.sleep(current_interval)
+            self._stop_event.wait(current_interval)
 
     def _execute_job_safely(self, job: dict):
         job_id = job.get("jobId") or job.get("job_id")

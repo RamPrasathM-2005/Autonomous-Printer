@@ -148,7 +148,7 @@ def test_test_connection_when_no_printer_connected(client: TestClient, admin_tok
     assert result["is_active"] is False
     assert result["status"] == "FAILED"
     assert result["reachable"] is False
-    assert "Connection failed" in result["message"] or "unreachable" in result["message"].lower()
+    assert "No recent matching" in result["message"]
 
     # Verify database state
     p = db_session.query(Printer).filter(Printer.id == printer_id).first()

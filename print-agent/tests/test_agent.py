@@ -46,7 +46,7 @@ def test_cups_mock_submission(tmp_path):
     orig_mock = cups_service.mock_mode
     try:
         cups_service.mock_mode = True
-        cups_job_id = cups_service.submit_job(dummy_file, {"copies": 1})
+        cups_job_id = cups_service.submit_job(dummy_file, {"copies": 1, "cups_printer_name": "test_queue"})
         assert cups_job_id.startswith("cups-")
     finally:
         cups_service.mock_mode = orig_mock
@@ -144,14 +144,14 @@ def test_direct_print_job_internal_authentication(agent_client):
     assert res_bad_tok.status_code == 401
     assert res_bad_tok.get_json()["error"] == "UNAUTHORIZED"
 
-    # 3. Valid Bearer token -> 200 OK
+    # Valid credentials still cannot submit an invented/unreleased job.
     res_bearer = agent_client.post(
         "/local/print-job",
         headers={"Authorization": f"Bearer {config.INTERNAL_AGENT_TOKEN}"},
         json={"job_id": "job_auth_test_3"}
     )
-    assert res_bearer.status_code == 200
-    assert res_bearer.get_json()["status"] in ["PRINTING", "ALREADY_ACTIVE"]
+    assert res_bearer.status_code == 409
+    assert res_bearer.get_json()["error"] == "JOB_NOT_RELEASED"
 
     # 4. Valid X-Internal-Token header -> 200 OK
     res_header = agent_client.post(
@@ -159,5 +159,5 @@ def test_direct_print_job_internal_authentication(agent_client):
         headers={"X-Internal-Token": config.INTERNAL_AGENT_TOKEN},
         json={"job_id": "job_auth_test_4"}
     )
-    assert res_header.status_code == 200
+    assert res_header.status_code == 409
 

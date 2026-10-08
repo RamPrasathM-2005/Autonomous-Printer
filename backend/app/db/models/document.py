@@ -14,6 +14,7 @@ class Document(Base):
 
     id = Column(String(64), primary_key=True, index=True) # e.g. doc_01JXYZ
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_token = Column(String(512), nullable=True)
     original_filename = Column(String(255), nullable=False)
     stored_filename = Column(String(255), nullable=False)
     storage_key = Column(String(512), nullable=False, unique=True, index=True)

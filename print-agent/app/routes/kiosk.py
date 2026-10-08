@@ -1,85 +1,25 @@
 import os
 import io
-import re
-import socket
 import base64
-import subprocess
-from pathlib import Path
+from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from flask import Blueprint, render_template_string, redirect, url_for, send_file, request, jsonify, Response
 import qrcode
 from app.config import config
 
 kiosk_bp = Blueprint("kiosk", __name__)
 
-def get_station_ip() -> str:
-    """Detect the local LAN IP of the Ubuntu station machine so mobile phones can connect."""
-    override = os.getenv("KIOSK_HOST_IP")
-    if override:
-        return override
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
-
-def is_tunnel_alive() -> bool:
-    """Checks whether cloudflared quick tunnel daemon is actively running."""
-    try:
-        res = subprocess.run(["pgrep", "-f", "cloudflared.*tunnel"], capture_output=True)
-        return res.returncode == 0
-    except Exception:
-        return False
-
-def get_tunnel_url() -> str | None:
-    """Returns active Cloudflare quick tunnel URL immediately if available."""
-    candidates = [
-        Path(os.getcwd()) / "storage" / "tunnel_url.txt",
-        Path(__file__).resolve().parent.parent.parent.parent / "storage" / "tunnel_url.txt",
-        Path(__file__).resolve().parent.parent.parent / "storage" / "tunnel_url.txt",
-    ]
-    for p in candidates:
-        if p.exists():
-            try:
-                url = p.read_text().strip()
-                if url.startswith("http"):
-                    return url
-            except Exception:
-                pass
-
-    # Instantaneous fallback: inspect active cloudflared quick tunnel log directly
-    log_file = Path("/tmp/cloudflared_quick_tunnel.log")
-    if log_file.exists():
-        try:
-            content = log_file.read_text()
-            m = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
-            if m:
-                found_url = m.group(0)
-                for p in candidates[:2]:
-                    try:
-                        p.parent.mkdir(parents=True, exist_ok=True)
-                        p.write_text(found_url)
-                    except Exception:
-                        pass
-                return found_url
-        except Exception:
-            pass
-
-    return None
-
 def get_web_url() -> str:
-    """Returns the URL of the customer web app (prefers active Cloudflare tunnel if available)."""
-    override = os.getenv("KIOSK_WEB_URL")
-    if override:
-        return override
-    tunnel = get_tunnel_url()
-    if tunnel:
-        return tunnel
-    ip = get_station_ip()
-    return f"http://{ip}:3000"
+    """The Pi displays the configured customer website; no local tunnel discovery."""
+    return os.getenv("KIOSK_WEB_URL", "http://127.0.0.1:3000").strip().rstrip("/")
 
+def get_customer_url() -> str:
+    parts = urlsplit(get_web_url())
+    query = dict(parse_qsl(parts.query))
+    query["station"] = config.AGENT_ID
+    return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", urlencode(query), parts.fragment))
+
+@lru_cache(maxsize=8)
 def generate_qr_base64(url: str) -> str:
     """Generates a high-contrast PNG QR code as a base64 Data URI."""
     qr = qrcode.QRCode(
@@ -986,7 +926,7 @@ KIOSK_HTML = """<!DOCTYPE html>
         <!-- Active Running Printer Badge -->
         <div class="kiosk-printer-badge" id="modalPrinterBadge" style="display:none;">
           <span class="kiosk-printer-dot"></span>
-          <span id="modalPrinterName">HP LaserJet 400 M401dn</span>
+          <span id="modalPrinterName">Department printer</span>
         </div>
 
         <!-- Live Printing Progress Bar -->
@@ -1192,7 +1132,7 @@ KIOSK_HTML = """<!DOCTYPE html>
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.status === 'RELEASED') {
-          const targetPrinter = data.friendlyPrinter || data.printerName || 'HP LaserJet 400 M401dn';
+          const targetPrinter = data.friendlyPrinter || data.printerName || 'Department printer';
           modalPrinterName.textContent = targetPrinter;
           modalPrinterBadge.style.display = 'inline-flex';
           modalTitle.textContent = 'Printing In Progress';
@@ -1204,7 +1144,7 @@ KIOSK_HTML = """<!DOCTYPE html>
           const jobId = data.jobId;
           let currentPct = 40;
           let pollAttempts = 0;
-          const maxPollAttempts = 18;
+          const maxPollAttempts = 600;
 
           const progressInterval = setInterval(async () => {
             pollAttempts += 1;
@@ -1216,8 +1156,15 @@ KIOSK_HTML = """<!DOCTYPE html>
                   if (jobData.friendly_printer) {
                     modalPrinterName.textContent = jobData.friendly_printer;
                   }
-                  if (jobData.status === 'COMPLETED' || jobData.progress >= 100) {
+                  if (jobData.status === 'COMPLETED') {
                     finishJob(targetPrinter);
+                    return;
+                  } else if (jobData.status === 'FAILED') {
+                    clearInterval(progressInterval);
+                    modalTitle.textContent = 'Printing Failed';
+                    modalMessage.textContent = jobData.message || 'Ask the attendant for help.';
+                    modalSpinner.style.display = 'none';
+                    if (modalErrorIcon) modalErrorIcon.style.display = 'block';
                     return;
                   } else if (jobData.progress && jobData.progress > currentPct) {
                     currentPct = jobData.progress;
@@ -1238,9 +1185,11 @@ KIOSK_HTML = """<!DOCTYPE html>
             }
 
             if (pollAttempts >= maxPollAttempts) {
-              finishJob(targetPrinter);
+              clearInterval(progressInterval);
+              modalTitle.textContent = 'Still awaiting printer confirmation';
+              modalMessage.textContent = 'Check your order on your phone or ask the attendant. Completion has not been confirmed.';
             }
-          }, 700);
+          }, 2000);
 
           function finishJob(printer) {
             clearInterval(progressInterval);
@@ -1365,7 +1314,7 @@ KIOSK_HTML = """<!DOCTYPE html>
         }
       } catch (e) {}
 
-      // Poll active QR status (dynamically updates when Cloudflare tunnel is started)
+      // Refresh the configured station QR without changing an identical image
       try {
         const qrRes = await fetch('/kiosk/qr-status');
         if (qrRes.ok) {
@@ -1373,7 +1322,7 @@ KIOSK_HTML = """<!DOCTYPE html>
           const qrImg = document.getElementById('kioskQrImg');
           const qrUrl = document.getElementById('kioskQrUrlText');
           const tunnelBadge = document.getElementById('kioskTunnelBadge');
-          if (qrImg && qrData.qr_data_uri) qrImg.src = qrData.qr_data_uri;
+          if (qrImg && qrData.qr_data_uri && qrImg.src !== qrData.qr_data_uri) qrImg.src = qrData.qr_data_uri;
           if (qrUrl && qrData.target_url) qrUrl.textContent = qrData.target_url;
           if (tunnelBadge) tunnelBadge.style.display = qrData.is_tunneled ? 'inline-flex' : 'none';
         }
@@ -1383,17 +1332,12 @@ KIOSK_HTML = """<!DOCTYPE html>
     // Run check immediately on load:
     checkPrinterHealth();
 
-    // Fast-poll every 500ms for the first 12s so Cloudflare QR renders without delay
-    let pollCount = 0;
-    const fastPoll = setInterval(async () => {
-      pollCount++;
+    // Wait until the previous check finishes; slow CUPS/backend calls cannot pile up.
+    async function pollStationHealth() {
       await checkPrinterHealth();
-      const badge = document.getElementById('kioskTunnelBadge');
-      if ((badge && badge.style.display !== 'none') || pollCount >= 24) {
-        clearInterval(fastPoll);
-        setInterval(checkPrinterHealth, 3000);
-      }
-    }, 500);
+      setTimeout(pollStationHealth, 5000);
+    }
+    setTimeout(pollStationHealth, 5000);
 
     updateDisplay();
   </script>
@@ -1597,12 +1541,9 @@ SMART_GATEWAY_HTML = """<!DOCTYPE html>
 
 @kiosk_bp.route("/kiosk", methods=["GET"])
 def render_kiosk():
-    tunnel_url = get_tunnel_url()
-    web_url = tunnel_url if tunnel_url else get_web_url()
-    # QR code points directly to the active Cloudflare tunnel if available
-    qr_target = tunnel_url if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/kiosk/open"
+    web_url = get_web_url()
+    qr_target = get_customer_url()
     qr_data_uri = generate_qr_base64(qr_target)
-    apk_url = f"{tunnel_url}/downloads/achuppori.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/achuppori.apk"
 
     return render_template_string(
         KIOSK_HTML,
@@ -1610,28 +1551,24 @@ def render_kiosk():
         agent_id=config.AGENT_ID,
         web_url=web_url,
         qr_data_uri=qr_data_uri,
-        apk_url=apk_url,
-        is_tunneled=bool(tunnel_url)
+        is_tunneled=False
     )
 
 @kiosk_bp.route("/kiosk/qr-status", methods=["GET"])
 def get_qr_status():
     """Live QR code status polling endpoint for kiosk display screen."""
-    tunnel_url = get_tunnel_url()
-    target_url = tunnel_url if tunnel_url else get_web_url()
+    target_url = get_customer_url()
     qr_data_uri = generate_qr_base64(target_url)
-    apk_url = f"{tunnel_url}/downloads/achuppori.apk" if tunnel_url else f"http://{get_station_ip()}:{config.PORT}/downloads/achuppori.apk"
     return jsonify({
-        "is_tunneled": bool(tunnel_url),
+        "is_tunneled": False,
         "target_url": target_url,
         "qr_data_uri": qr_data_uri,
-        "apk_url": apk_url,
     })
 
 @kiosk_bp.route("/kiosk/open", methods=["GET"])
 def smart_gateway():
     """Smart gateway: opens installed app if present, or redirects to web app."""
-    web_url = get_web_url()
+    web_url = get_customer_url()
     return render_template_string(SMART_GATEWAY_HTML, web_url=web_url)
 
 

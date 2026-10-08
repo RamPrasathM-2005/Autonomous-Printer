@@ -1,0 +1,17 @@
+[Unit]
+Description=Achuppori refund reconciliation and cleanup
+After=network-online.target achuppori-backend.service
+Wants=network-online.target
+
+[Service]
+User=achuppori
+WorkingDirectory=/opt/achuppori/backend
+EnvironmentFile=/opt/achuppori/backend/.env
+ExecStart=/opt/achuppori/.venv/bin/python -m app.worker
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

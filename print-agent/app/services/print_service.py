@@ -7,6 +7,7 @@ from app.services.file_service import file_service
 from app.services.cups_service import cups_service
 from app.services.backend_client import backend_client
 from app.utils.logging import agent_logger
+from app.services.job_journal import job_journal
 
 class BoundedSet:
     """Memory-safe LRU set for 24/7 Raspberry Pi operation."""
@@ -73,7 +74,7 @@ class PrintService:
                     "status": "COMPLETED",
                     "progress": 100,
                     "printer_name": config.PRINTER_NAME,
-                    "friendly_printer": "HP LaserJet 400 M401dn",
+                    "friendly_printer": config.PRINTER_NAME or "Department printer",
                     "message": "Print completed. Please collect your document."
                 }
             if job_id in self.active_jobs:
@@ -82,7 +83,7 @@ class PrintService:
                     "status": "PRINTING",
                     "progress": 70,
                     "printer_name": config.PRINTER_NAME,
-                    "friendly_printer": "HP LaserJet 400 M401dn",
+                    "friendly_printer": config.PRINTER_NAME or "Department printer",
                     "message": "Printing in progress..."
                 }
             return {
@@ -90,7 +91,7 @@ class PrintService:
                 "status": "UNKNOWN",
                 "progress": 0,
                 "printer_name": config.PRINTER_NAME,
-                "friendly_printer": "HP LaserJet 400 M401dn",
+                "friendly_printer": config.PRINTER_NAME or "Department printer",
                 "message": "Waiting for print job..."
             }
 
@@ -117,22 +118,46 @@ class PrintService:
                 return True
             self.active_jobs.add(job_id)
 
+        succeeded = False
         try:
-            return self._do_execute(job_id, order_id, storage_key, settings)
+            if not backend_client.claim_job(job_id):
+                agent_logger.warning(f"Job {job_id} was not claimed; no document will be submitted.")
+                return False
+            succeeded = self._do_execute(job_id, order_id, storage_key, settings)
+            return succeeded
         finally:
             with self._lock:
                 self.active_jobs.discard(job_id)
-                self.completed_jobs.add(job_id)
+                if succeeded:
+                    self.completed_jobs.add(job_id)
+
+    def recover_submissions(self):
+        for job_id, entry in job_journal.entries("submissions"):
+            with self._lock:
+                if job_id in self.active_jobs:
+                    continue
+                self.active_jobs.add(job_id)
+            threading.Thread(target=self._resume_submission, args=(job_id, entry), daemon=True).start()
+
+    def _resume_submission(self, job_id, entry):
+        try:
+            cups_id = entry["cups_job_id"]
+            result = cups_service.monitor_job(cups_id, target_printer=entry["printer_name"])
+            status = "COMPLETED" if result == "COMPLETED" else ("FAILED" if result == "FAILED" else "PRINTING")
+            backend_client.update_job_status(job_id, status, cups_job_id=cups_id,
+                error_code=None if status == "COMPLETED" else result)
+            self.set_job_state(job_id, {"job_id": job_id, "status": status,
+                "progress": 100 if status == "COMPLETED" else 75, "printer_name": entry["printer_name"]})
+            if status in ("COMPLETED", "FAILED"):
+                job_journal.remove("submissions", job_id)
+        finally:
+            with self._lock:
+                self.active_jobs.discard(job_id)
 
     def _do_execute(self, job_id: str, order_id: str, storage_key: str, settings: Dict[str, Any]) -> bool:
         agent_logger.info(f"Starting execution of job {job_id} (Order {order_id})")
         raw_printer = settings.get("cups_printer_name") or settings.get("printer_name") or settings.get("selected_printer") or config.PRINTER_NAME
-        if any(k in str(raw_printer) for k in ["E9A0F4", "Unit 2", "Printer_2", "central_02"]):
-            raw_printer = "HP_LaserJet_400_M401dn_E9A0F4"
-            friendly_printer = "HP LaserJet 400 (Unit 2)"
-        else:
-            raw_printer = "HP_LaserJet_400_M401dn_F36EC0"
-            friendly_printer = "HP LaserJet 400 (Unit 1)"
+        friendly_printer = settings.get("printer_name") or raw_printer or "Station printer"
 
         self.set_job_state(job_id, {
             "job_id": job_id,
@@ -181,9 +206,15 @@ class PrintService:
             })
             try:
                 cups_job_id = cups_service.submit_job(local_file, settings)
+                job_journal.put("submissions", job_id, {"cups_job_id": cups_job_id, "printer_name": raw_printer})
                 prepared_file = getattr(cups_service, "last_prepared_file", None)
             except Exception as e:
                 agent_logger.error(f"CUPS submission failed for job {job_id}: {e}")
+                if getattr(e, "error_code", "") == "SUBMISSION_UNKNOWN":
+                    self.set_job_state(job_id, {"job_id": job_id, "status": "PRINTING", "progress": 50,
+                        "printer_name": raw_printer, "message": "Submission outcome unknown. Ask the attendant to inspect CUPS."})
+                    backend_client.update_job_status(job_id, "PRINTING", error_code="SUBMISSION_UNKNOWN", message=str(e))
+                    return False
                 self.set_job_state(job_id, {
                     "job_id": job_id,
                     "order_id": order_id,
@@ -230,11 +261,11 @@ class PrintService:
                     self.set_job_state(job_id, {
                         "job_id": job_id,
                         "order_id": order_id,
-                        "status": "PRINTING",
+                        "status": "OUT_OF_PAPER" if error_code == "OUT_OF_PAPER" else "PRINTING",
                         "progress": 85,
                         "printer_name": raw_printer,
                         "friendly_printer": friendly_printer,
-                        "message": f"Printing pages on {friendly_printer}..."
+                        "message": message or f"Printing pages on {friendly_printer}..."
                     })
 
             cups_status = cups_service.monitor_job(cups_job_id, on_status_callback=status_callback, target_printer=raw_printer)
@@ -253,6 +284,7 @@ class PrintService:
                     status="COMPLETED",
                     cups_job_id=cups_job_id
                 )
+                job_journal.remove("submissions", job_id)
                 agent_logger.info(f"Successfully finished job {job_id} (CUPS ID {cups_job_id})")
                 return True
             elif cups_status == "OUT_OF_PAPER":
@@ -273,6 +305,16 @@ class PrintService:
                     message=f"{friendly_printer} is out of paper. Please load paper into the tray to continue printing."
                 )
                 return False
+            elif cups_status == "STATUS_UNKNOWN":
+                self.set_job_state(job_id, {
+                    "job_id": job_id, "order_id": order_id, "status": "PRINTING",
+                    "progress": 75, "printer_name": raw_printer,
+                    "friendly_printer": friendly_printer,
+                    "message": "Printer outcome is unknown. Ask the attendant to inspect CUPS before retrying."
+                })
+                backend_client.update_job_status(job_id, "PRINTING", cups_job_id=cups_job_id,
+                    error_code="STATUS_UNKNOWN", message="CUPS outcome could not be confirmed. Inspect the queue before retrying.")
+                return False
             else:
                 self.set_job_state(job_id, {
                     "job_id": job_id,
@@ -290,10 +332,11 @@ class PrintService:
                     error_code="PRINT_ERROR",
                     message=f"CUPS reported status: {cups_status}"
                 )
+                job_journal.remove("submissions", job_id)
                 return False
         finally:
             # SSD Protection: Guaranteed cleanup of downloaded and prepared spool artifacts
-            if local_file and str(file_service.storage_root) in str(local_file):
+            if local_file and local_file.is_relative_to(file_service.storage_root):
                 file_service.cleanup_file(local_file)
             if prepared_file:
                 file_service.cleanup_file(prepared_file)

@@ -10,3 +10,13 @@ def agent_app():
 @pytest.fixture
 def agent_client(agent_app):
     return agent_app.test_client()
+
+@pytest.fixture(autouse=True)
+def isolate_station_workers(monkeypatch, tmp_path):
+    from app.services import backend_client, print_service, job_journal
+    journal = job_journal.JobJournal(tmp_path / "journal.sqlite3")
+    monkeypatch.setattr(backend_client, "job_journal", journal)
+    monkeypatch.setattr(print_service, "job_journal", journal)
+    # HTTP route tests must never send physical print jobs in background threads.
+    monkeypatch.setattr("app.routes.local.job_poller._execute_job_safely", lambda job: None)
+    monkeypatch.setattr("app.routes.local.backend_client.poll_jobs", lambda: [])

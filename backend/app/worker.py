@@ -16,6 +16,12 @@ def run_once():
     """Execute a single pass of reconciliation and maintenance."""
     with SessionLocal() as db:
         try:
+            from app.services.refund_service import refund_service
+            refund_service.reconcile_pending(db)
+        except Exception as exc:
+            db.rollback()
+            log.warning("Refund reconciliation pass failed: %s", exc)
+        try:
             cleanup_service.run_storage_cleanup(db)
         except Exception as exc:
             db.rollback()

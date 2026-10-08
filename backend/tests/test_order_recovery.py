@@ -100,7 +100,7 @@ def test_order_recovery_lifecycle(client, test_print_server, db_session, gateway
     assert otp_call["otp"] == initial_otp
 
     # 5. Printer accepts OTP and releases job -> begins printing
-    release_resp = client.post("/api/agent/release-kiosk", json={"otp": initial_otp})
+    release_resp = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": initial_otp})
     assert release_resp.status_code == 200
 
     # From that moment onward, reopening must restore Printing screen, OTP permanently invalid
@@ -219,7 +219,7 @@ def test_cancel_paid_order_triggers_refund(client, test_print_server, db_session
     assert "refundId" in cancel_data
 
     # Releasing at kiosk must now fail because OTP was invalidated
-    kiosk_resp = client.post("/api/agent/release-kiosk", json={"otp": otp_code})
+    kiosk_resp = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": otp_code})
     assert kiosk_resp.status_code == 400
 
     # Once cancelled and refunded, attempting to cancel again returns idempotent success

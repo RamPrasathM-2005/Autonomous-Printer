@@ -69,7 +69,7 @@ void main() {
           expect(find.text('Ready to Print?'), findsOneWidget);
           expect(find.text('Upload File'), findsOneWidget);
           final nearby = tester.getRect(
-            find.byTooltip('Check nearby stations'),
+            find.byTooltip('Select Department'),
           );
           final local = tester.getRect(find.text('Local connection'));
           expect(nearby.left, lessThan(local.left));

@@ -139,6 +139,7 @@ class ApiConfig {
     backendUrl = normalizeBackendUrl(storedBackend);
     agentUrl = storedAgent;
     selectedStationId =
+        (kIsWeb ? Uri.base.queryParameters['station'] : null) ??
         prefs.getString(_keySelectedStationId) ?? 'PRINT-SERVER-001';
   }
 

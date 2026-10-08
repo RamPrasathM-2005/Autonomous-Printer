@@ -61,6 +61,8 @@ bin/
 
 # Runtime and logs
 .runtime/
+logs/
+*.log
 print-agent/state/
 
 # Markdown documentation
@@ -71,3 +73,7 @@ downloads/
 *.apk
 .kotlin/
 frontend/android/.kotlin/
+
+# Current setup and audit documentation
+!README.md
+!docs/*.md

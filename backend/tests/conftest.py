@@ -2,6 +2,7 @@ import pytest
 import hashlib
 import hmac
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -52,7 +53,7 @@ def gateway(monkeypatch):
             "items": [p for p in payments.values() if p["order_id"] == order_id]
         }),
         payment=SimpleNamespace(fetch=lambda payment_id, **kw: payments[payment_id],
-                                refund=lambda *args, **kw: {"id": f"rfnd_{uuid.uuid4().hex}"}),
+                                refund=lambda *args, **kw: {"id": f"rfnd_{uuid.uuid4().hex}", "status": "processed"}),
         capture=capture, orders=orders, payments=payments,
     )
     monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "rzp_test_unit")
@@ -111,7 +112,7 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-Customer-Session": f"sess_{uuid.uuid4().hex}"}) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -143,8 +144,15 @@ def test_print_server(db_session, test_agent_token):
         status=PrintServerStatus.ONLINE
     )
     db_session.add(server)
+    server.last_heartbeat = datetime.now(timezone.utc)
     db_session.commit()
     db_session.refresh(server)
+    from app.db.models.printer import Printer
+    for idx, name in enumerate(("HP_LaserJet_400_M401dn_F36EC0", "HP_LaserJet_400_M401dn_E9A0F4")):
+        db_session.add(Printer(id=f"TEST-PRINTER-{idx}", server_id=server.id, cups_printer_name=name,
+                               display_name=f"Test printer {idx + 1}", is_enabled=True, is_active=True))
+    db_session.commit()
+    # Tests using the compatibility kiosk route still exercise authenticated station release.
     return server
 
 import io
@@ -164,3 +172,8 @@ def get_auth_token(client, test_user):
         "password": "SecurePass123!"
     })
     return login_res.json()["access_token"]
+
+@pytest.fixture(autouse=True)
+def isolate_station_rate_limits(monkeypatch):
+    from app.services import otp_service
+    monkeypatch.setattr(otp_service, "_otp_rate_limiter", otp_service.OTPRateLimiter())

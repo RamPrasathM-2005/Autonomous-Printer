@@ -48,9 +48,6 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_SECRET: str = ""
     RAZORPAY_WEBHOOK_SECRET: str = ""
 
-    # Internal Print Agent Secret
-    INTERNAL_AGENT_TOKEN: str = "test-agent-device-token-secret"
-
     # CORS Allowed Origins
     ALLOWED_ORIGINS: Union[List[str], str] = [
         "http://127.0.0.1:3000",
@@ -63,24 +60,15 @@ class Settings(BaseSettings):
         "http://localhost:5001",
     ]
 
-    AGENT_REQUEST_TIMEOUT_SECONDS: int = 10
-    HEARTBEAT_TIMEOUT_SECONDS: int = 60
+    HEARTBEAT_TIMEOUT_SECONDS: int = 120
 
     # Initial Admin & Seed Credentials (loaded from .env)
     ADMIN_EMAIL: str = "admin@example.com"
     ADMIN_PASSWORD: str = ""
     ADMIN_NAME: str = "Platform Administrator"
 
-    # Print Server Station Defaults
-    DEFAULT_PRINT_SERVER_ID: str = "PRINT-SERVER-001"
-    DEFAULT_PRINT_SERVER_NAME: str = "Central Library Station"
-    DEFAULT_PRINT_SERVER_LOCATION: str = "Main Campus Library Floor 1"
-
     model_config = SettingsConfigDict(
-        env_file=(
-            str(Path(__file__).resolve().parent.parent.parent / ".env"),
-            ".env"
-        ),
+        env_file=str(Path(__file__).resolve().parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -109,12 +97,10 @@ class Settings(BaseSettings):
 
         if is_prod:
             missing_secrets = []
-            if not self.JWT_SECRET_KEY or self.JWT_SECRET_KEY in insecure_keys:
+            if len(self.JWT_SECRET_KEY) < 32 or self.JWT_SECRET_KEY in insecure_keys:
                 missing_secrets.append("JWT_SECRET_KEY (must be strong, non-default secret in production)")
             if not self.DATABASE_URL:
                 missing_secrets.append("DATABASE_URL")
-            if not self.INTERNAL_AGENT_TOKEN or self.INTERNAL_AGENT_TOKEN in {"test-agent-device-token-secret", ""}:
-                missing_secrets.append("INTERNAL_AGENT_TOKEN (must be configured securely in production)")
             if missing_secrets:
                 raise RuntimeError(
                     f"CRITICAL SECURITY CONFIGURATION ERROR: The following required production secrets are missing or insecure: {', '.join(missing_secrets)}. "

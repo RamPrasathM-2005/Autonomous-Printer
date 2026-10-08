@@ -9,8 +9,8 @@ class StorageException(AgentException):
         super().__init__(message, error_code="STORAGE_ERROR")
 
 class CupsException(AgentException):
-    def __init__(self, message: str):
-        super().__init__(message, error_code="CUPS_ERROR")
+    def __init__(self, message: str, error_code: str = "CUPS_ERROR"):
+        super().__init__(message, error_code=error_code)
 
 class BackendCommunicationException(AgentException):
     def __init__(self, message: str, error_code: str = "BACKEND_UNAVAILABLE", status_code: int = 503):

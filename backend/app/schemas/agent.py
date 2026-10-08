@@ -49,6 +49,7 @@ class AgentJobStatusUpdate(BaseModel):
     cupsJobId: Optional[str] = Field(default=None, alias="cupsJobId", serialization_alias="cupsJobId")
     errorCode: Optional[str] = Field(default=None, alias="errorCode", serialization_alias="errorCode")
     message: Optional[str] = None
+    eventId: Optional[str] = Field(default=None, max_length=64)
 
     def __init__(self, **data):
         if "cups_job_id" in data and "cupsJobId" not in data:

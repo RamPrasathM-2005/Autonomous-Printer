@@ -191,8 +191,8 @@ class _UploadScreenState extends State<UploadScreen>
         _selectedStation = null;
         if (stations.isNotEmpty) {
           _selectedStation = stations.firstWhere(
-            (s) => s.status.toLowerCase() == 'online',
-            orElse: () => stations.first,
+            (s) => s.id == ApiConfig.selectedStationId,
+            orElse: () => stations.firstWhere((s) => s.isOnline, orElse: () => stations.first),
           );
         }
         _isLoadingStations = false;
@@ -211,8 +211,8 @@ class _UploadScreenState extends State<UploadScreen>
             _selectedStation = null;
             if (stations.isNotEmpty) {
               _selectedStation = stations.firstWhere(
-                (s) => s.status.toLowerCase() == 'online',
-                orElse: () => stations.first,
+                (s) => s.id == ApiConfig.selectedStationId,
+                orElse: () => stations.firstWhere((s) => s.isOnline, orElse: () => stations.first),
               );
             }
             _isLoadingStations = false;
@@ -244,8 +244,8 @@ class _UploadScreenState extends State<UploadScreen>
         _selectedStation = null;
         if (stations.isNotEmpty) {
           _selectedStation = stations.firstWhere(
-            (s) => s.status.toLowerCase() == 'online',
-            orElse: () => stations.first,
+            (s) => s.id == ApiConfig.selectedStationId,
+            orElse: () => stations.firstWhere((s) => s.isOnline, orElse: () => stations.first),
           );
         }
         _isLoadingStations = false;

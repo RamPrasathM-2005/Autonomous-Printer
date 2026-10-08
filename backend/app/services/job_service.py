@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import update as sql_update
 from fastapi import status
 
 from app.config.settings import settings
@@ -8,11 +9,30 @@ from app.db.models.order import Order, OrderStatus
 from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.db.models.document import Document, DocumentStatus
 from app.schemas.agent import AgentJobResponse, AgentJobStatusUpdate
+from app.schemas.order import sanitize_print_settings
 from app.services.refund_service import refund_service
 from app.utils.errors import AppException
 from app.utils.state_machine import validate_job_transition, validate_order_transition
 
 class JobService:
+    @staticmethod
+    def claim_job(db: Session, server_id: str, job_id: str) -> bool:
+        # A conditional UPDATE arbitrates duplicate pollers, kiosk threads, and
+        # restarted agents before any irreversible CUPS submission.
+        result = db.execute(sql_update(PrintJob).where(
+            PrintJob.id == job_id, PrintJob.server_id == server_id,
+            PrintJob.status == PrintJobStatus.RELEASED,
+        ).values(status=PrintJobStatus.PRINTING, updated_at=datetime.now(timezone.utc)))
+        if result.rowcount != 1:
+            db.commit()
+            return False
+        job = db.get(PrintJob, job_id)
+        order = db.get(Order, job.order_id)
+        order.status = OrderStatus.PRINTING
+        order.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return True
+
     @staticmethod
     def get_pending_jobs_for_server(db: Session, server_id: str) -> List[AgentJobResponse]:
         """
@@ -35,7 +55,7 @@ class JobService:
                 job_id=job.id,
                 order_id=order.id,
                 storage_key=doc.storage_key,
-                settings=order.print_settings
+                settings=sanitize_print_settings(order.print_settings)
             ))
         return job_responses
 
@@ -58,6 +78,11 @@ class JobService:
                 message="Print job not found for this print server."
             )
 
+        if update.eventId and job.last_status_event == update.eventId:
+            return job
+        if job.status == PrintJobStatus.FINAL_FAILED and update.status == PrintJobStatus.FAILED:
+            return job
+
         order = db.query(Order).filter(Order.id == job.order_id).with_for_update().first()
         if not order:
             raise AppException(
@@ -67,19 +92,22 @@ class JobService:
             )
 
         target_status = update.status
+        if target_status not in (PrintJobStatus.PRINTING, PrintJobStatus.COMPLETED, PrintJobStatus.FAILED):
+            raise AppException(400, "INVALID_STATE", "Agents may report printing, completed, or failed jobs only.")
         validate_job_transition(job.status, target_status)
 
         now = datetime.now(timezone.utc)
         job.updated_at = now
+        job.last_status_event = update.eventId
+        if update.cupsJobId:
+            job.cups_job_id = update.cupsJobId
 
         if target_status == PrintJobStatus.PRINTING:
             job.status = PrintJobStatus.PRINTING
             if update.cupsJobId:
                 job.cups_job_id = update.cupsJobId
-            if update.errorCode:
-                job.error_code = update.errorCode
-            if update.message:
-                job.error_message = update.message
+            job.error_code = update.errorCode
+            job.error_message = update.message
             if order.status == OrderStatus.RELEASED:
                 validate_order_transition(order.status, OrderStatus.PRINTING)
                 order.status = OrderStatus.PRINTING
@@ -87,6 +115,7 @@ class JobService:
 
         elif target_status == PrintJobStatus.COMPLETED:
             job.status = PrintJobStatus.COMPLETED
+            job.completed_at = now
             job.error_code = None
             job.error_message = None
             if order.status in [OrderStatus.PRINTING, OrderStatus.RELEASED, OrderStatus.WAITING_FOR_OTP]:
@@ -103,9 +132,9 @@ class JobService:
             job.error_code = update.errorCode
             job.error_message = update.message
 
-            if job.retry_count < settings.MAX_PRINT_RETRIES:
+            if update.errorCode == "FILE_NOT_FOUND" and not job.cups_job_id and job.retry_count < settings.MAX_PRINT_RETRIES:
                 job.retry_count += 1
-                job.status = PrintJobStatus.QUEUED
+                job.status = PrintJobStatus.RELEASED
             else:
                 job.status = PrintJobStatus.FINAL_FAILED
                 if order.status in [OrderStatus.RELEASED, OrderStatus.PRINTING]:

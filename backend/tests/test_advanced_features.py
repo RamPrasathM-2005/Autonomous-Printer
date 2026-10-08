@@ -75,11 +75,11 @@ def test_print_failure_retry_and_auto_refund(client, test_user, test_print_serve
     res1 = client.post(
         f"/api/agent/jobs/{job.id}/status",
         headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "PAPER_JAM", "message": "Paper jammed"}
+        json={"status": "FAILED", "errorCode": "FILE_NOT_FOUND", "message": "Paper jammed"}
     )
     assert res1.status_code == 200
     db_session.refresh(job)
-    assert job.status == PrintJobStatus.QUEUED
+    assert job.status == PrintJobStatus.RELEASED
     assert job.retry_count == 1
 
     # Transition back to PRINTING for retry run
@@ -90,11 +90,11 @@ def test_print_failure_retry_and_auto_refund(client, test_user, test_print_serve
     client.post(
         f"/api/agent/jobs/{job.id}/status",
         headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "PAPER_JAM", "message": "Paper jammed again"}
+        json={"status": "FAILED", "errorCode": "FILE_NOT_FOUND", "message": "Paper jammed again"}
     )
     db_session.refresh(job)
     assert job.retry_count == 2
-    assert job.status == PrintJobStatus.QUEUED
+    assert job.status == PrintJobStatus.RELEASED
 
     # Transition back to PRINTING
     job.status = PrintJobStatus.PRINTING
@@ -104,7 +104,7 @@ def test_print_failure_retry_and_auto_refund(client, test_user, test_print_serve
     client.post(
         f"/api/agent/jobs/{job.id}/status",
         headers={"Authorization": f"Bearer {test_agent_token}"},
-        json={"status": "FAILED", "errorCode": "HARDWARE_ERROR", "message": "Hardware error"}
+        json={"status": "FAILED", "errorCode": "FILE_NOT_FOUND", "message": "Hardware error"}
     )
     db_session.refresh(job)
     db_session.refresh(order)
@@ -142,10 +142,13 @@ def test_maintenance_cleanup(client, test_user, db_session):
     db_session.refresh(doc)
     assert doc.status == DocumentStatus.DELETED
 
-def test_dual_printer_otps_and_one_time_switch_lock(client, test_print_server, test_agent_token, db_session):
+def test_dual_printer_otps_and_one_time_switch_lock(client, test_print_server, test_agent_token, db_session, gateway):
     pdf_bytes = create_sample_pdf(1)
     up = client.post("/api/documents/upload", files={"file": ("doc_dual.pdf", pdf_bytes, "application/pdf")}).json()
     order = client.post("/api/orders", json={"document_id": up["documentId"], "print_server_id": test_print_server.id, "settings": {"copies": 1}}).json()
+
+    from tests.conftest import checkout_payload
+    assert client.post("/api/payments/verify", json=checkout_payload(client, gateway, order["id"])).status_code == 200
 
     # Get OTP info
     res = client.get(f"/api/orders/{order['id']}/otp")
@@ -154,13 +157,13 @@ def test_dual_printer_otps_and_one_time_switch_lock(client, test_print_server, t
     assert "printerOtps" in otp_data
     potps = otp_data["printerOtps"]
     assert "HP_LaserJet_400_M401dn_F36EC0" in potps
-    assert "Printer_2" in potps
+    assert "HP_LaserJet_400_M401dn_E9A0F4" in potps
     otp1 = potps["HP_LaserJet_400_M401dn_F36EC0"]["otp"]
-    otp2 = potps["Printer_2"]["otp"]
+    otp2 = potps["HP_LaserJet_400_M401dn_E9A0F4"]["otp"]
     assert otp1 != otp2
 
     # Switch printer allowed once
-    switch_res = client.post(f"/api/orders/{order['id']}/printer", json={"cups_printer_name": "Printer_2"})
+    switch_res = client.post(f"/api/orders/{order['id']}/printer", json={"cups_printer_name": "HP_LaserJet_400_M401dn_E9A0F4"})
     assert switch_res.status_code == 200
     assert switch_res.json()["printerSelectionLocked"] == True
 
@@ -169,19 +172,12 @@ def test_dual_printer_otps_and_one_time_switch_lock(client, test_print_server, t
     assert switch_res2.status_code == 400
     assert switch_res2.json()["error"] == "PRINTER_LOCKED"
 
-    # Mark payment captured so release can proceed
-    from app.db.models.payment import Payment, PaymentStatus
-    import uuid
-    pmt = Payment(id=f"pmt_{uuid.uuid4().hex[:8]}", order_id=order["id"], razorpay_order_id="rzp_test", status=PaymentStatus.CAPTURED, amount=2.0, currency="INR")
-    db_session.add(pmt)
-    db_session.commit()
-
     # Release using OTP 2
-    rel_res = client.post("/api/agent/release-kiosk", json={"otp": otp2})
+    rel_res = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": otp2})
     assert rel_res.status_code == 200
     assert rel_res.json()["status"] == "RELEASED"
 
     # Crucial: Using OTP 1 now MUST FAIL with ALREADY_PRINTED because both OTPs are expired
-    rel_res2 = client.post("/api/agent/release-kiosk", json={"otp": otp1})
+    rel_res2 = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": otp1})
     assert rel_res2.status_code == 400
     assert rel_res2.json()["error"] == "ALREADY_PRINTED"

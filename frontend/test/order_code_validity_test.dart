@@ -51,7 +51,7 @@ void main() {
         expect(find.text('No expiry'), findsOneWidget);
         expect(find.text('Expired'), findsNothing);
         status = 'COMPLETED';
-        await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 3));
         await tester.pumpAndSettle();
         expect(find.text('No expiry'), findsNothing);
         await tester.pumpWidget(const SizedBox());

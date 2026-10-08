@@ -5,6 +5,7 @@ from typing import Optional
 from app.db.session import get_db
 from app.schemas.payment import PaymentCreateRequest, PaymentCreateResponse, PaymentVerifyRequest
 from app.services.payment_service import payment_service
+from app.api.customer_access import customer_access
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
@@ -13,7 +14,7 @@ def payment_capabilities():
     from app.config.settings import settings
     return {"paymentMode": "test" if settings.RAZORPAY_KEY_ID.startswith("rzp_test_") else "live"}
 
-@router.post("/create", response_model=PaymentCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/create", dependencies=[Depends(customer_access)], response_model=PaymentCreateResponse, status_code=status.HTTP_201_CREATED)
 def create_payment(
     req: PaymentCreateRequest,
     db: Session = Depends(get_db)
@@ -31,7 +32,7 @@ def create_payment(
     print(f"[BACKEND_PAYMENT] <<< Payment Order Ready: keyId={res.keyId}, razorpayOrderId={res.razorpayOrderId}, amountPaise={res.amountPaise}")
     return res
 
-@router.post("/verify")
+@router.post("/verify", dependencies=[Depends(customer_access)])
 def verify_payment(
     req: PaymentVerifyRequest,
     db: Session = Depends(get_db)
@@ -51,7 +52,7 @@ def verify_payment(
     print(f"[BACKEND_PAYMENT] <<< Payment verification complete for {req.orderId}: status={res.get('status')}")
     return res
 
-@router.post("/reconcile")
+@router.post("/reconcile", dependencies=[Depends(customer_access)])
 def reconcile_payment(
     payload: dict,
     db: Session = Depends(get_db)

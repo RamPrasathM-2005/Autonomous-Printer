@@ -12,12 +12,12 @@ Group=lp
 WorkingDirectory=/home/pi/print-agent
 EnvironmentFile=/home/pi/print-agent/.env
 ExecStart=/home/pi/print-agent/venv/bin/python app/main.py
-Restart=always
+Restart=on-failure
 RestartSec=5s
 
 # Low-memory and process protection for Raspberry Pi 3 Model B (1GB RAM)
-MemoryMax=350M
-MemoryHigh=280M
+MemoryMax=450M
+MemoryHigh=350M
 CPUQuota=85%
 TimeoutStopSec=15
 KillMode=mixed

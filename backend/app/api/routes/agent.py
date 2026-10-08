@@ -36,7 +36,7 @@ def agent_heartbeat(
     server.last_seen = now
     server.printer_state = req.printerState
     server.paper_state = req.paperState
-    if server.status != PrintServerStatus.DISABLED:
+    if server.status not in (PrintServerStatus.DISABLED, PrintServerStatus.MAINTENANCE):
         server.status = PrintServerStatus.ONLINE
 
     # Heartbeat printer synchronization & mismatch validation
@@ -118,80 +118,7 @@ def get_pending_jobs(
     return job_service.get_pending_jobs_for_server(db, server.id)
 
 
-@router.post("/release-kiosk")
-def release_job_kiosk(
-    req: AgentReleaseRequest,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Public endpoint for station touchscreen or mobile client.
-    Verifies OTP with brute-force protection and triggers printing with internal agent authentication.
-    """
-    client_ip = request.client.host if request.client else "unknown"
-    print(f"[BACKEND] Kiosk OTP release requested from {client_ip}.")
-    job = otp_service.verify_and_release_job(
-        db=db,
-        server_id=None,
-        plaintext_otp=req.otp,
-        client_ip=client_ip
-    )
-    order = db.query(Order).filter(Order.id == job.order_id).first()
-    doc = db.query(Document).filter(Document.id == order.document_id).first() if order else None
-
-    # Job is now RELEASED in DB. Notify print agent immediately to print via CUPS with internal token
-    payload = {
-        "jobId": job.id,
-        "orderId": order.id if order else "",
-        "storageKey": doc.storage_key if doc else "",
-        "settings": order.print_settings if order else {}
-    }
-    dispatch_headers = {
-        "Authorization": f"Bearer {settings.INTERNAL_AGENT_TOKEN}",
-        "X-Internal-Token": settings.INTERNAL_AGENT_TOKEN
-    }
-    target_ips = []
-    if job.server_id:
-        srv = db.query(PrintServer).filter(PrintServer.id == job.server_id).first()
-        if srv and srv.ip_address:
-            clean_ip = srv.ip_address.strip().replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
-            target_ips.append(clean_ip)
-    target_ips.append("127.0.0.1")
-
-    dispatched = False
-    for ip in target_ips:
-        if dispatched:
-            break
-        for port in (5001, 5000):
-            try:
-                import requests
-                resp = requests.post(
-                    f"http://{ip}:{port}/local/print-job",
-                    json=payload,
-                    headers=dispatch_headers,
-                    timeout=3
-                )
-                if resp.status_code == 200:
-                    print(f"[KIOSK] Real print agent on {ip}:{port} dispatched job {job.id} to physical printer.")
-                    dispatched = True
-                    break
-                else:
-                    print(f"[KIOSK] Print agent on {ip}:{port} responded with status: {resp.status_code}")
-            except Exception as err:
-                print(f"[KIOSK] Direct agent dispatch on {ip}:{port} warning: {err}")
-
-    # Note: If direct HTTP dispatch was not reachable, job_poller polls every 3 seconds for RELEASED jobs.
-    clean_settings = sanitize_print_settings(order.print_settings if order else {})
-    return {
-        "status": "RELEASED",
-        "message": "OTP verified successfully. Printing started.",
-        "jobId": job.id,
-        "orderId": order.id if order else "",
-        "fileName": doc.original_filename if doc else "Document.pdf",
-        "storageKey": doc.storage_key if doc else "",
-        "settings": clean_settings
-    }
-
+@router.post("/release-kiosk", response_model=AgentReleaseResponse)
 @router.post("/release", response_model=AgentReleaseResponse)
 def release_job_with_otp(
     req: AgentReleaseRequest,
@@ -214,7 +141,7 @@ def release_job_with_otp(
         order_id=order.id,
         status=job.status,
         storage_key=doc.storage_key,
-        settings=order.print_settings
+        settings=sanitize_print_settings(order.print_settings)
     )
 
 @router.post("/jobs/{job_id}/status", response_model=MessageResponse)
@@ -233,11 +160,20 @@ def update_job_status(
     return MessageResponse(message="Job status updated successfully.")
 
 
+@router.post("/jobs/{job_id}/claim")
+def claim_job(job_id: str, server: PrintServer = Depends(get_authenticated_agent), db: Session = Depends(get_db)):
+    return {"claimed": job_service.claim_job(db, server.id, job_id)}
+
+
 @router.get("/file/{storage_key:path}")
 def download_file_for_agent(
     storage_key: str,
-    server: PrintServer = Depends(get_authenticated_agent)
+    server: PrintServer = Depends(get_authenticated_agent),
+    db: Session = Depends(get_db),
 ):
+    allowed = db.query(Document).join(Order, Order.document_id == Document.id).join(PrintJob, PrintJob.order_id == Order.id).filter(Document.storage_key == storage_key, PrintJob.server_id == server.id, PrintJob.status.in_([PrintJobStatus.RELEASED, PrintJobStatus.PRINTING])).first()
+    if not allowed:
+        raise AppException(404, "NOT_FOUND", "No released job for this document at this station.")
     path = storage_service.resolve_storage_key(storage_key)
     if not path.exists() or not path.is_file():
         raise AppException(

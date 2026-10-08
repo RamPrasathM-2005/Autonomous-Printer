@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, UploadFile, File, status
+from fastapi import APIRouter, Depends, UploadFile, File, status, Request
+from app.api.customer_access import customer_access, identity
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -9,10 +10,11 @@ from app.schemas.common import MessageResponse
 from app.services.document_service import document_service
 from app.utils.errors import AppException
 
-router = APIRouter(prefix="/api/documents", tags=["Documents"])
+router = APIRouter(prefix="/api/documents", tags=["Documents"], dependencies=[Depends(customer_access)])
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -20,11 +22,14 @@ async def upload_document(
     Public upload endpoint - no login required.
     Users can upload documents directly to print via station OTP.
     """
+    session, user = identity(request, db)
     doc = await document_service.process_and_save_upload(
         db=db,
         file=file,
-        user_id=None
+        user_id=user.id if user else None
     )
+    doc.session_token = session
+    db.commit()
     return DocumentUploadResponse(
         documentId=doc.id,
         originalFilename=doc.original_filename,
@@ -63,6 +68,7 @@ def get_document_preview(
     from fastapi.responses import Response, FileResponse
     from app.services.storage_service import storage_service
     import fitz
+    dpi = max(36, min(dpi, 200))
 
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc or doc.status == DocumentStatus.DELETED:

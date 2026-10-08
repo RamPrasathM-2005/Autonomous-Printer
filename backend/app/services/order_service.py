@@ -2,7 +2,7 @@ import io
 import uuid
 import hashlib
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from fastapi import status
 from pypdf import PdfWriter, PdfReader
@@ -14,6 +14,7 @@ from app.db.models.document import Document, DocumentStatus
 from app.db.models.print_server import PrintServer, PrintServerStatus
 from app.db.models.print_job import PrintJob, PrintJobStatus
 from app.db.models.otp import OTP
+from app.config.settings import settings
 from app.schemas.order import OrderCreateRequest, OrderItemConfig, PrintSettingsSchema
 from app.services.pricing_service import pricing_service
 from app.services.storage_service import storage_service
@@ -53,7 +54,7 @@ class OrderService:
                 message="Print server station not found."
             )
 
-        if server.status == PrintServerStatus.DISABLED:
+        if server.status == PrintServerStatus.DISABLED or not server.is_enabled:
             raise AppException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 error_code="PRINT_SERVER_DISABLED",
@@ -66,6 +67,18 @@ class OrderService:
                 error_code="PRINT_SERVER_OFFLINE",
                 message="This print server station is currently offline."
             )
+        heartbeat = server.last_heartbeat
+        if heartbeat and heartbeat.tzinfo is None:
+            heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+        if not heartbeat or heartbeat < datetime.now(timezone.utc) - timedelta(seconds=settings.HEARTBEAT_TIMEOUT_SECONDS):
+            raise AppException(409, "PRINT_SERVER_OFFLINE", "The station has not reported a recent heartbeat.")
+
+        if server.status == PrintServerStatus.MAINTENANCE:
+            raise AppException(409, "STATION_UNAVAILABLE", "This station is under maintenance.")
+        from app.db.models.printer import Printer
+        available_printers = db.query(Printer).filter(Printer.server_id == server.id, Printer.is_enabled == True).all()
+        if not available_printers:
+            raise AppException(409, "PRINTER_UNAVAILABLE", "No enabled printer is registered at this station.")
 
         # Determine items to process
         items_to_process: List[OrderItemConfig] = []
@@ -84,6 +97,11 @@ class OrderService:
                 error_code="MISSING_DOCUMENT",
                 message="No document provided in order request."
             )
+
+        for item in items_to_process:
+            if not any((not item.settings.colour or p.supports_color) and
+                       (item.settings.sides == "one-sided" or p.supports_duplex) for p in available_printers):
+                raise AppException(400, "UNSUPPORTED_OPTIONS", "No assigned printer supports the selected color and duplex options.")
 
         # Case 1: Single Document Order
         if len(items_to_process) == 1:
@@ -191,7 +209,8 @@ class OrderService:
             item_price = pricing_service.calculate_price(
                 selected_pages_count=item_pages,
                 copies=item.settings.copies,
-                is_colour=item.settings.colour
+                is_colour=item.settings.colour,
+                base_fee=0
             )
 
             total_amount += item_price
@@ -289,6 +308,7 @@ class OrderService:
         merged_document = Document(
             id=combined_doc_id,
             user_id=user_id,
+            session_token=session_token,
             original_filename=f"Combined_{len(items_to_process)}_Documents.pdf",
             stored_filename=f"combined_{order_id}.pdf",
             storage_key=target_combined_rel,
@@ -323,7 +343,7 @@ class OrderService:
             print_settings=combined_settings,
             total_pages=len(writer.pages),
             copies=1,
-            amount=round(total_amount, 2),
+            amount=round(total_amount + settings.BASE_FEE, 2),
             currency="INR",
             status=OrderStatus.CREATED,
             created_at=datetime.now(timezone.utc)
@@ -465,7 +485,8 @@ class OrderService:
             "refundId": refund.id,
             "razorpayRefundId": refund.razorpay_refund_id,
             "amount": float(refund.amount),
-            "message": "Order cancelled and full refund processed."
+            "refundStatus": refund.status.value,
+            "message": "Order cancelled. Refund status: " + refund.status.value
         }
 
     @staticmethod

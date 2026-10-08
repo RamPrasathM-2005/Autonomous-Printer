@@ -53,21 +53,21 @@ def test_task2_otp_kiosk_brute_force_lockout_and_reset(client, test_print_server
 
     # Kiosk verification failed attempts
     for i in range(4):
-        res = client.post("/api/agent/release-kiosk", json={"otp": f"88888{i}"})
+        res = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": f"88888{i}"})
         assert res.status_code == 400
         assert res.json()["error"] == "INVALID_OTP"
 
     # 5th attempt must trigger lockout (429 TOO_MANY_ATTEMPTS)
-    res5 = client.post("/api/agent/release-kiosk", json={"otp": "888885"})
+    res5 = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": "888885"})
     assert res5.status_code == 429
     assert res5.json()["error"] == "TOO_MANY_ATTEMPTS"
 
     # Locked OTP in DB
     otp_record = db_session.query(OTP).filter(OTP.order_id == order["id"]).first()
-    assert otp_record.attempt_count >= 5
-    assert otp_record.active is False
+    assert otp_record.attempt_count == 0
+    assert otp_record.active is True
 
-def test_task3_plaintext_otp_not_exposed_in_order_response(client, test_print_server, db_session):
+def test_task3_plaintext_otp_not_exposed_in_order_response(client, test_print_server, db_session, gateway):
     pdf_bytes = create_sample_pdf(1)
     up = client.post("/api/documents/upload", files={"file": ("doc_plain.pdf", pdf_bytes, "application/pdf")}).json()
     order = client.post("/api/orders", json={"document_id": up["documentId"], "print_server_id": test_print_server.id, "settings": {"copies": 1}}).json()
@@ -88,7 +88,10 @@ def test_task3_plaintext_otp_not_exposed_in_order_response(client, test_print_se
     if "printer_otps" in print_settings:
         for p_name, p_info in print_settings["printer_otps"].items():
             assert "otp" not in p_info, f"Plaintext OTP was exposed in printer_otps for {p_name}"
-            assert "otp_hash" in p_info, "otp_hash should be preserved"
+            assert "otp_hash" not in p_info, "OTP hashes must not be disclosed"
+
+    from tests.conftest import checkout_payload
+    assert client.post("/api/payments/verify", json=checkout_payload(client, gateway, order_id)).status_code == 200
 
     # Dedicated OTP endpoint must still work for authorized access
     otp_res = client.get(f"/api/orders/{order_id}/otp")
@@ -120,13 +123,9 @@ def test_task4_secure_print_agent_token(client, test_print_server, db_session):
 
     with patch("requests.post") as mock_post:
         mock_post.return_value.status_code = 200
-        res = client.post("/api/agent/release-kiosk", json={"otp": otp_code})
+        res = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": otp_code})
         assert res.status_code == 200
-        assert mock_post.called
-        call_kwargs = mock_post.call_args[1]
-        headers = call_kwargs.get("headers", {})
-        assert headers.get("Authorization") == f"Bearer {settings.INTERNAL_AGENT_TOKEN}"
-        assert headers.get("X-Internal-Token") == settings.INTERNAL_AGENT_TOKEN
+        mock_post.assert_not_called()  # station polls over outbound HTTPS
 
 def test_task5_cors_origins(client):
     # Allowed origin: localhost

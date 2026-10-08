@@ -65,13 +65,13 @@ def test_legacy_elapsed_code_survives_worker_and_releases_once(
     assert recovery["otp"]["expiresAt"] is None
 
     monkeypatch.setattr("requests.post", Mock(return_value=Mock(status_code=200)))
-    release = client.post("/api/agent/release-kiosk", json={"otp": code})
+    release = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": code})
     assert release.status_code == 200
     db_session.refresh(row)
     assert row.active is False
     assert row.used_at is not None
     assert client.get(f"/api/orders/{order_id}/otp").status_code == 400
-    repeated = client.post("/api/agent/release-kiosk", json={"otp": code})
+    repeated = client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": code})
     assert repeated.status_code == 400
     assert repeated.json()["error"] == "ALREADY_PRINTED"
 
@@ -83,7 +83,7 @@ def test_cancelled_elapsed_code_stays_invalid(client, test_print_server, db_sess
     row.expires_at = datetime.now(timezone.utc) - timedelta(days=365)
     db_session.commit()
     assert client.post(f"/api/orders/{order_id}/cancel").status_code == 200
-    assert client.post("/api/agent/release-kiosk", json={"otp": code}).status_code == 400
+    assert client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": code}).status_code == 400
     db_session.refresh(row)
     assert row.active is False
 
@@ -108,4 +108,4 @@ def test_older_secondary_code_remains_discoverable_after_fifty_new_orders(client
     for index in range(51):
         paid_order(client, test_print_server, gateway, f"new-{index}.pdf")
     monkeypatch.setattr("requests.post", Mock(return_value=Mock(status_code=200)))
-    assert client.post("/api/agent/release-kiosk", json={"otp": code}).status_code == 200
+    assert client.post("/api/agent/release-kiosk", headers={"Authorization": "Bearer test-agent-device-token-secret"}, json={"otp": code}).status_code == 200

@@ -15,11 +15,14 @@ from app.services.order_service import order_service
 from app.services.otp_service import otp_service
 from app.utils.crypto import hash_sha256, encrypt_value
 from app.utils.errors import AppException
+from app.api.customer_access import customer_access, identity
+from fastapi import Request
 
-router = APIRouter(prefix="/api/orders", tags=["Orders"])
+router = APIRouter(prefix="/api/orders", tags=["Orders"], dependencies=[Depends(customer_access)])
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(
+    request: Request,
     req: OrderCreateRequest,
     authorization: Optional[str] = Header(None),
     x_customer_session: Optional[str] = Header(None, alias="X-Customer-Session"),
@@ -30,21 +33,8 @@ def create_order(
     Creates an order for an uploaded document and calculates authoritative price.
     Stores session_token for persistent customer order recovery.
     """
-    session_token = None
-    if x_customer_session and x_customer_session.strip():
-        session_token = x_customer_session.strip()
-    elif authorization and authorization.lower().startswith("bearer "):
-        session_token = authorization.split(" ", 1)[1].strip()
-
-    user_id = None
-    if session_token:
-        from app.config.security import decode_token
-        payload = decode_token(session_token)
-        if payload and payload.get("sub"):
-            try:
-                user_id = int(payload["sub"])
-            except (ValueError, TypeError):
-                pass
+    session_token, customer = identity(request, db)
+    user_id = customer.id if customer else None
 
     order = order_service.create_order(db=db, req=req, user_id=user_id, session_token=session_token)
     return OrderResponse(
@@ -117,6 +107,7 @@ def get_my_orders(
 
 @router.get("/active")
 def get_active_order(
+    request: Request,
     order_id: Optional[str] = None,
     authorization: Optional[str] = Header(None),
     x_customer_session: Optional[str] = Header(None, alias="X-Customer-Session"),
@@ -127,21 +118,8 @@ def get_active_order(
     Checks if an unfinished order exists for the given order_id or customer session.
     Returns the exact stage and data without regenerating payments or OTPs.
     """
-    session_token = None
-    if x_customer_session and x_customer_session.strip():
-        session_token = x_customer_session.strip()
-    elif authorization and authorization.lower().startswith("bearer "):
-        session_token = authorization.split(" ", 1)[1].strip()
-
-    user_id = None
-    if session_token:
-        try:
-            from app.config.security import decode_token
-            token_payload = decode_token(session_token)
-            if token_payload and token_payload.get("sub"):
-                user_id = int(token_payload["sub"])
-        except Exception:
-            pass
+    session_token, customer = identity(request, db)
+    user_id = customer.id if customer else None
 
     order = None
     if order_id and order_id.strip():
@@ -268,8 +246,16 @@ def get_active_order(
     }
 
 @router.get("", response_model=List[OrderResponse])
-def list_orders(db: Session = Depends(get_db)):
-    orders = db.query(Order).order_by(Order.created_at.desc()).limit(50).all()
+def list_orders(request: Request, db: Session = Depends(get_db)):
+    session, user = identity(request, db)
+    query = db.query(Order)
+    from app.db.models.user import UserRole
+    if not user or user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        owner_filter = Order.print_settings["session_token"].as_string() == session
+        if user:
+            owner_filter = owner_filter | (Order.user_id == user.id)
+        query = query.filter(owner_filter)
+    orders = query.order_by(Order.created_at.desc()).limit(50).all()
     return [
         OrderResponse(
             id=o.id,
@@ -351,6 +337,11 @@ def get_order_otp(
             message="Order is no longer active."
         )
 
+    from app.db.models.payment import Payment, PaymentStatus
+    payment = db.query(Payment).filter(Payment.order_id == order.id, Payment.status == PaymentStatus.CAPTURED).first()
+    if not payment or order.status not in (OrderStatus.PAID, OrderStatus.JOB_QUEUED, OrderStatus.WAITING_FOR_OTP):
+        raise AppException(400, "PAYMENT_NOT_COMPLETED", "Complete payment before requesting a release code.")
+
     # Check if active OTP exists
     now = datetime.now(timezone.utc)
     active_otp = db.query(OTP).filter(OTP.order_id == order.id, OTP.active == True).first()
@@ -420,13 +411,16 @@ def select_order_printer(
             message="Printer selection has already been locked and cannot be switched again."
         )
 
-    chosen_printer = payload.cups_printer_name or payload.printer_name or payload.printer_id
-    if payload.printer_id and not payload.cups_printer_name:
-        p = db.query(Printer).filter(Printer.id == payload.printer_id).first()
-        if p:
-            chosen_printer = p.cups_printer_name
+    if order.status != OrderStatus.WAITING_FOR_OTP:
+        raise AppException(400, "INVALID_STATE", "Printer selection is available after payment and before release.")
+    chosen_printer = payload.cups_printer_name or payload.printer_name
+    query = db.query(Printer).filter(Printer.server_id == order.print_server_id, Printer.is_enabled == True)
+    p = query.filter(Printer.id == payload.printer_id).first() if payload.printer_id else query.filter(Printer.cups_printer_name == chosen_printer).first()
+    if not p or p.cups_printer_name not in current_settings.get("printer_otps", {}):
+        raise AppException(400, "INVALID_PRINTER", "Choose a registered printer at this station.")
+    chosen_printer = p.cups_printer_name
 
-    current_settings["printer_name"] = chosen_printer
+    current_settings["printer_name"] = p.display_name
     current_settings["cups_printer_name"] = chosen_printer
     current_settings["selected_printer"] = chosen_printer
     current_settings["printer_switch_count"] = current_settings.get("printer_switch_count", 0) + 1
@@ -464,24 +458,7 @@ def release_order_endpoint(
     payload: Dict[str, Any],
     db: Session = Depends(get_db)
 ):
-    otp = str(payload.get("otp", "")).strip()
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise AppException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            error_code="NOT_FOUND",
-            message="Order not found."
-        )
-    job = otp_service.verify_and_release_job(
-        db=db,
-        server_id=order.print_server_id,
-        plaintext_otp=otp
-    )
-    return {
-        "status": "RELEASED",
-        "orderId": order.id,
-        "jobId": job.id
-    }
+    raise AppException(403, "STATION_RELEASE_REQUIRED", "Enter your release code on the station touchscreen.")
 
 @router.post("/{order_id}/cancel")
 def cancel_order_endpoint(

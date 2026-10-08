@@ -1,6 +1,7 @@
 """Portable setup, cached web builds and supervised local services."""
 import argparse
 import hashlib
+import json
 import os
 import secrets
 from pathlib import Path
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import time
 from urllib.request import urlopen
+from scripts.process_utils import stop_process
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
@@ -45,25 +47,34 @@ def fingerprint():
 
 
 def build(force=False):
+    def publish_config():
+        from dotenv import dotenv_values
+        values = dotenv_values(FRONTEND / ".env")
+        (STAMP.parent / "env.json").write_text(json.dumps({"BACKEND_URL": values.get("BACKEND_URL") or ""}))
+
     current = fingerprint()
     if not force and STAMP.exists() and STAMP.read_text() == current and (STAMP.parent / "main.dart.js").exists():
         print("Web build is current.", flush=True)
+        publish_config()
         return
     run([flutter(), "pub", "get", "--enforce-lockfile"], FRONTEND)
     run([flutter(), "build", "web", "--release", "--no-web-resources-cdn", "--no-wasm-dry-run"], FRONTEND)
     STAMP.write_text(fingerprint())
+    publish_config()
 
 
-def setup():
+def setup(with_agent=True):
     if sys.version_info < (3, 12):
         raise RuntimeError("Python 3.12 or newer is required.")
     if not PYTHON.exists():
         run([sys.executable, "-m", "venv", ROOT / ".venv"])
-    run([PYTHON, "-m", "pip", "install", "-r", ROOT / "requirements.lock"])
+    run([PYTHON, "-m", "pip", "install", "-r", ROOT / "backend/requirements.txt"])
+    if with_agent:
+        run([PYTHON, "-m", "pip", "install", "-r", ROOT / "print-agent/requirements.txt"])
     # Never overwrite a configured installation.
     created = []
     device_token = secrets.token_urlsafe(32)
-    for folder in ("backend", "print-agent", "frontend"):
+    for folder in (("backend", "print-agent", "frontend") if with_agent else ("backend", "frontend")):
         target = ROOT / folder / ".env"
         if not target.exists():
             example = target.parent / ".env.example"
@@ -71,7 +82,7 @@ def setup():
                 text = example.read_text()
                 if folder == "backend":
                     text = text.replace("CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS", secrets.token_urlsafe(48))
-                    text += f"\nINTERNAL_AGENT_TOKEN={device_token}\n"
+
                 if folder == "print-agent":
                     text = text.replace("/var/lib/printplatform/storage", "./storage")
                     text = text.replace("MOCK_CUPS=false", "MOCK_CUPS=true")
@@ -79,18 +90,16 @@ def setup():
                 target.write_text(text)
                 created.append(folder)
                 print(f"Created {folder}/.env for local development.")
-    if len(created) == 2:
-        run([PYTHON, ROOT / "scripts/init_local_station.py"], ROOT / "backend")
     run([flutter(), "pub", "get", "--enforce-lockfile"], FRONTEND)
-    print("Setup complete. New installations use SQLite and simulated printing. Configure Razorpay test keys in backend/.env for checkout.")
+    print("Setup complete. Configure backend/.env, seed the administrator, then register departments/stations/printers in admin. Local simulation requires MOCK_CUPS=true explicitly.")
 
 
-def sync_dependencies():
-    lock_file = ROOT / "requirements.lock"
+def sync_dependencies(with_agent=True):
     backend_req = ROOT / "backend" / "requirements.txt"
     stamp_file = RUNTIME / ".requirements-fingerprint"
     parts = []
-    for path in (lock_file, backend_req):
+    agent_req = ROOT / "print-agent/requirements.txt"
+    for path in ([backend_req, agent_req] if with_agent else [backend_req]):
         if path.exists():
             parts.append(hashlib.sha256(path.read_bytes()).hexdigest().upper())
     current_hash = "".join(parts)
@@ -98,20 +107,20 @@ def sync_dependencies():
         return
     print("Synchronizing Python dependencies...", flush=True)
     cmd = [PYTHON, "-m", "pip", "install"]
-    if lock_file.exists():
-        cmd.extend(["-r", lock_file])
     if backend_req.exists():
         cmd.extend(["-r", backend_req])
+    if with_agent:
+        cmd.extend(["-r", agent_req])
     cmd.append("--quiet")
     run(cmd)
     RUNTIME.mkdir(exist_ok=True)
     stamp_file.write_text(current_hash)
 
 
-def serve(hot=False, force=False, with_agent=True):
+def serve(hot=False, force=False, with_agent=True, server=False):
     if not PYTHON.exists():
         raise RuntimeError("Run python scripts/project.py setup first.")
-    sync_dependencies()
+    sync_dependencies(with_agent)
     from dotenv import dotenv_values
     agent_port = int(dotenv_values(ROOT / "print-agent/.env").get("PORT") or 5001)
     ports_to_check = (8000, 3000) if not with_agent else (8000, agent_port, 3000)
@@ -153,7 +162,7 @@ def serve(hot=False, force=False, with_agent=True):
         raise RuntimeError(f"{name} is unhealthy. See .runtime/{name}.out.log.")
 
     try:
-        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
+        start("backend", ROOT / "backend", ["-m", "uvicorn", "app.main:app", "--host", ("127.0.0.1" if server else "0.0.0.0"), "--port", "8000", "--no-proxy-headers"], "http://127.0.0.1:8000/health")
         start("reconciliation", ROOT / "backend", ["-m", "app.worker"])
         if with_agent:
             start("agent", ROOT / "print-agent", ["-m", "app.main"], f"http://127.0.0.1:{agent_port}/health")
@@ -175,33 +184,27 @@ def serve(hot=False, force=False, with_agent=True):
         pass
     finally:
         for child in reversed(children):
-            if child.poll() is None:
-                child.terminate()
-        for child in children:
-            try:
-                child.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait()
+            stop_process(child)
         for log in logs:
             log.close()
 
 
-def main():
+def main(server=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["setup", "build", "run"])
     parser.add_argument("--build", action="store_true", help="Force rebuilding the web bundle")
     parser.add_argument("--hot", action="store_true")
     parser.add_argument("--no-agent", action="store_true", help="Do not run local print agent (use when agent runs on external Raspberry Pi)")
     args = parser.parse_args()
+    if args.command != "setup" and PYTHON.exists() and Path(sys.executable).resolve() != PYTHON.resolve():
+        entry = ROOT / ("run-server.py" if server else "run-local.py")
+        raise SystemExit(subprocess.call([str(PYTHON), str(entry), *sys.argv[1:]]))
     if args.command == "setup":
-        setup()
+        setup(with_agent=not server and not args.no_agent)
     elif args.command == "build":
         build(args.build)
     else:
-        if PYTHON.exists() and Path(sys.executable).resolve() != PYTHON.resolve():
-            os.execv(str(PYTHON), [f'"{PYTHON}"', f'"{Path(__file__).resolve()}"', *sys.argv[1:]])
-        serve(hot=args.hot, force=args.build, with_agent=not args.no_agent)
+        serve(hot=args.hot, force=args.build, with_agent=not server and not args.no_agent, server=server)
 
 
 if __name__ == "__main__":

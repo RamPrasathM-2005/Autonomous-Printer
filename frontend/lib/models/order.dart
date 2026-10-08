@@ -29,6 +29,9 @@ class PrintSettings {
   final String orientation; // portrait, landscape
   final bool mockPrinting;
   final List<PrintLineItem> items;
+  final String? cupsPrinterName;
+  final String? printerName;
+  final bool printerSelectionLocked;
 
   PrintSettings({
     this.pageRange = 'all',
@@ -39,6 +42,9 @@ class PrintSettings {
     this.orientation = 'portrait',
     this.mockPrinting = false,
     this.items = const [],
+    this.cupsPrinterName,
+    this.printerName,
+    this.printerSelectionLocked = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -48,6 +54,9 @@ class PrintSettings {
     'sides': sides,
     'paperSize': paperSize,
     'orientation': orientation,
+    if (cupsPrinterName != null) 'cups_printer_name': cupsPrinterName,
+    if (printerName != null) 'printer_name': printerName,
+    'printer_selection_locked': printerSelectionLocked,
   };
 
   factory PrintSettings.fromJson(Map<String, dynamic> json) {
@@ -59,6 +68,9 @@ class PrintSettings {
       paperSize: json['paperSize'] ?? json['paper_size'] ?? 'A4',
       orientation: json['orientation'] ?? 'portrait',
       mockPrinting: json['mockPrinting'] == true,
+      cupsPrinterName: json['cups_printer_name'],
+      printerName: json['printer_name'],
+      printerSelectionLocked: json['printer_selection_locked'] == true,
       items: (json['items'] as List? ?? const [])
           .map(
             (item) =>
@@ -84,10 +96,14 @@ class PrintOrder {
   final String status;
   final String? releaseCode;
   final String createdAt;
+  final String? errorCode;
+  final String? errorMessage;
 
   PrintOrder({
     required this.id,
     this.userId,
+    this.errorCode,
+    this.errorMessage,
     this.rollNumber,
     this.department,
     required this.documentId,
@@ -141,6 +157,8 @@ class PrintOrder {
   factory PrintOrder.fromJson(Map<String, dynamic> json) {
     return PrintOrder(
       id: json['id'] ?? '',
+      errorCode: json['errorCode'] ?? json['error_code'],
+      errorMessage: json['errorMessage'] ?? json['error_message'],
       userId: (json['userId'] ?? json['user_id'])?.toString(),
       rollNumber: json['rollNumber'] ?? json['roll_number'],
       department: json['department'],
