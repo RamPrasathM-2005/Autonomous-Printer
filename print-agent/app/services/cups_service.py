@@ -13,6 +13,11 @@ from app.services.file_service import file_service
 
 
 class CupsService:
+    @staticmethod
+    def is_physical_uri(uri: str) -> bool:
+        """Reject file sinks and missing devices in physical mode."""
+        return str(uri or "").lower().startswith(("usb://", "hp:/", "hpfax:/", "ipp://", "ipps://", "socket://", "lpd://", "dnssd://", "parallel:/", "serial:/"))
+
     def __init__(self):
         self._local = threading.local()
         self.printer_name = config.PRINTER_NAME
@@ -227,12 +232,15 @@ class CupsService:
 
                     writer.add_page(page)
 
-                if len(writer.pages) > 0:
-                    with open(out_path, "wb") as f_out:
-                        writer.write(f_out)
-                    return out_path
+                if not writer.pages:
+                    raise CupsException("The selected page range contains no pages.", error_code="INVALID_PAGE_RANGE")
+                with open(out_path, "wb") as f_out:
+                    writer.write(f_out)
+                return out_path
         except Exception as e:
-            agent_logger.warning(f"Error in prepare_printable_file ({e}), falling back to original: {file_path}")
+            out_path.unlink(missing_ok=True)
+            agent_logger.exception("Cannot prepare print document %s", file_path.name)
+            raise CupsException("Document preparation failed. Check the file and page selection.", error_code="DOCUMENT_PREPARATION_FAILED") from e
 
         return file_path
 
@@ -263,7 +271,9 @@ class CupsService:
         Supports dynamic selection between multiple printers connected to the station.
         Returns the CUPS Job ID.
         """
+        self.last_prepared_file = None
         printable_file = self.prepare_printable_file(file_path, settings)
+        self.last_prepared_file = printable_file if printable_file != file_path else None
         options = self.build_cups_options(settings)
 
         # Dynamic printer selection
@@ -272,8 +282,11 @@ class CupsService:
             raise CupsException("No CUPS printer is assigned to this job.")
         if self.has_pycups and not self.mock_mode:
             conn = self.cups.Connection(host=config.CUPS_SERVER)
-            if target_printer not in conn.getPrinters():
+            printers = conn.getPrinters()
+            if target_printer not in printers:
                 raise CupsException(f"Assigned printer '{target_printer}' does not exist in CUPS.")
+            if not self.is_physical_uri(printers[target_printer].get("device-uri")):
+                raise CupsException(f"Assigned printer '{target_printer}' has no physical device URI. Correct its CUPS queue.", error_code="INVALID_PRINTER_URI")
 
         # If printable_file was already sliced with custom/odd/even ranges, remove page-ranges / page-set from CUPS options
         if printable_file != file_path:
@@ -338,7 +351,7 @@ class CupsService:
 
         printer_name = target_printer or self.printer_name
 
-        if self.mock_mode or cups_job_id.startswith("cups-"):
+        if self.mock_mode:
             time.sleep(2)
             return "COMPLETED"
 
@@ -395,6 +408,8 @@ class CupsService:
                         state_str = "BUSY"
                     elif state_num == 5:
                         state_str = "OFFLINE"
+                    if not self.mock_mode and not self.is_physical_uri(uri):
+                        state_str = "OFFLINE"
 
                     ip = None
                     if uri:
@@ -432,7 +447,7 @@ class CupsService:
                             "cups_printer_name": p_name,
                             "device_uri": uri,
                             "ip_address": ip,
-                            "status": "READY",
+                            "status": "OFFLINE",
                             "jobs": 0,
                         })
                 return printers_list
@@ -574,4 +589,3 @@ class CupsService:
         }
 
 cups_service = CupsService()
-

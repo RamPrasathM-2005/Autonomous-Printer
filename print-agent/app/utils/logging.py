@@ -18,6 +18,10 @@ class AgentFormatter(logging.Formatter):
             "thread": record.threadName,
             "message": record.getMessage(),
         }
+        for key in ("order_id", "job_id", "printer_id", "department_id", "device_id",
+                    "state", "previous_state", "duration_ms", "cups_job_id", "error_code"):
+            if hasattr(record, key):
+                event[key] = getattr(record, key)
         if record.exc_info:
             event["exception"] = self.formatException(record.exc_info)
         return json.dumps(event, ensure_ascii=True)
@@ -53,4 +57,3 @@ def setup_agent_logger(name: str = "PrintAgent") -> logging.Logger:
     return logger
 
 agent_logger = setup_agent_logger()
-

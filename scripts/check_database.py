@@ -43,6 +43,30 @@ def main():
                 orphan_count = connection.scalar(select(func.count()).select_from(joined).where(source.is_not(None), target.is_(None)))
                 if orphan_count:
                     issues.append(f"{name}.{source.name}: {orphan_count} orphan references")
+        # Foreign keys alone cannot detect an order stranded between workflow states.
+        if not issues:
+            from app.db.models.order import Order
+            from app.db.models.print_job import PrintJob
+            from app.db.models.payment import Payment
+            orders, jobs, payments = Order.__table__, PrintJob.__table__, Payment.__table__
+            valid_jobs = {
+                "WAITING_FOR_OTP": {"QUEUED"}, "JOB_QUEUED": {"QUEUED"},
+                "RELEASED": {"RELEASED"}, "PRINTING": {"PRINTING", "RELEASED"},
+                "COMPLETED": {"COMPLETED"},
+            }
+            rows = connection.execute(select(orders.c.id, orders.c.status, jobs.c.status.label("job_status"))
+                                      .select_from(orders.outerjoin(jobs, orders.c.id == jobs.c.order_id)))
+            for row in rows:
+                order_state = row.status.value
+                job_state = row.job_status.value if row.job_status else None
+                if order_state in valid_jobs and job_state not in valid_jobs[order_state]:
+                    issues.append(f"order {row.id}: {order_state} but job is {job_state or 'missing'}; inspect before retrying")
+            unpaid = connection.execute(select(orders.c.id).select_from(
+                orders.outerjoin(payments, orders.c.id == payments.c.order_id)).where(
+                    orders.c.status.in_(["WAITING_FOR_OTP", "RELEASED", "PRINTING", "COMPLETED"]),
+                    (payments.c.id.is_(None)) | (payments.c.status != "CAPTURED")))
+            for row in unpaid:
+                issues.append(f"order {row.id}: payable/printed state without captured payment")
     for issue in issues:
         print("CONFLICT: " + issue)
     print(f"Database audit: {len(issues)} conflicts.")

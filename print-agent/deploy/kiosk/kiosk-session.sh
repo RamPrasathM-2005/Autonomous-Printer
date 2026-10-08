@@ -16,7 +16,7 @@ done
 while true; do
     "$BROWSER" --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
         --user-data-dir="$HOME/.cache/achuppori-kiosk" --disable-background-networking \
-        --disable-component-update --disable-sync --disk-cache-size=10485760 \
+        --disable-component-update --disable-sync --no-first-run --disable-extensions --disk-cache-size=10485760 \
         --window-position=0,0 --window-size=800,480 http://127.0.0.1:5001/kiosk || true
     echo "Kiosk browser exited; reopening after five seconds."
     sleep 5

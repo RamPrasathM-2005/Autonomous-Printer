@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Dict, Any
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import update as sql_update
 from fastapi import status
@@ -150,8 +151,9 @@ class JobService:
                         reason=update.message or "Print failed after retries"
                     )
                 except Exception:
-                    # Log error, don't crash status reporting
-                    pass
+                    logging.getLogger(__name__).exception(
+                        "Refund processing failed for order %s, job %s, station %s",
+                        order.id, job.id, server_id)
 
         db.commit()
         db.refresh(job)

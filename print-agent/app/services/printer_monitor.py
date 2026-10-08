@@ -19,6 +19,9 @@ class PrinterMonitor:
             import cups
             conn = cups.Connection(host=config.CUPS_SERVER)
             printers = conn.getPrinters()
+            from app.services.cups_service import CupsService
+            printers = {name: attrs for name, attrs in printers.items()
+                        if CupsService.is_physical_uri(attrs.get("device-uri"))}
             queue = self.printer_name
             if not queue:
                 queue = next((name for name, attrs in printers.items() if attrs.get("printer-state") == 3), next(iter(printers), ""))

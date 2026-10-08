@@ -97,7 +97,16 @@ class PrintService:
 
     def set_job_state(self, job_id: str, state: Dict[str, Any]):
         with self._lock:
+            previous = self.job_states.get(job_id, {})
+            # Carry correlation information through abbreviated recovery/error updates.
+            state = {**previous, **state}
             self.job_states[job_id] = state
+        agent_logger.info("Print job state changed", extra={
+            "job_id": job_id, "order_id": state.get("order_id"),
+            "printer_id": state.get("printer_name"), "device_id": config.AGENT_ID,
+            "department_id": state.get("department_id"),
+            "previous_state": previous.get("status"), "state": state.get("status"),
+        })
 
     def execute_print_job(self, job: Dict[str, Any]) -> bool:
         job_id = job.get("jobId") or job.get("job_id")
@@ -150,11 +159,15 @@ class PrintService:
                 "progress": 100 if status == "COMPLETED" else 75, "printer_name": entry["printer_name"]})
             if status in ("COMPLETED", "FAILED"):
                 job_journal.remove("submissions", job_id)
+        except Exception:
+            # Preserve the journal so a later poll can resume observation.
+            agent_logger.exception("Failed to resume CUPS monitoring for job %s", job_id)
         finally:
             with self._lock:
                 self.active_jobs.discard(job_id)
 
     def _do_execute(self, job_id: str, order_id: str, storage_key: str, settings: Dict[str, Any]) -> bool:
+        started = time.monotonic()
         agent_logger.info(f"Starting execution of job {job_id} (Order {order_id})")
         raw_printer = settings.get("cups_printer_name") or settings.get("printer_name") or settings.get("selected_printer") or config.PRINTER_NAME
         friendly_printer = settings.get("printer_name") or raw_printer or "Station printer"
@@ -206,10 +219,17 @@ class PrintService:
             })
             try:
                 cups_job_id = cups_service.submit_job(local_file, settings)
-                job_journal.put("submissions", job_id, {"cups_job_id": cups_job_id, "printer_name": raw_printer})
+                try:
+                    job_journal.put("submissions", job_id, {"cups_job_id": cups_job_id, "printer_name": raw_printer,
+                                                           "order_id": order_id})
+                except Exception:
+                    # CUPS already accepted the document. A journal write failure
+                    # must never convert that into a refundable submission failure.
+                    agent_logger.exception("CUPS accepted job but its recovery journal could not be saved",
+                                           extra={"job_id": job_id, "order_id": order_id, "cups_job_id": cups_job_id})
                 prepared_file = getattr(cups_service, "last_prepared_file", None)
             except Exception as e:
-                agent_logger.error(f"CUPS submission failed for job {job_id}: {e}")
+                agent_logger.exception("CUPS submission failed for job %s", job_id)
                 if getattr(e, "error_code", "") == "SUBMISSION_UNKNOWN":
                     self.set_job_state(job_id, {"job_id": job_id, "status": "PRINTING", "progress": 50,
                         "printer_name": raw_printer, "message": "Submission outcome unknown. Ask the attendant to inspect CUPS."})
@@ -335,7 +355,11 @@ class PrintService:
                 job_journal.remove("submissions", job_id)
                 return False
         finally:
+            agent_logger.info("Print execution finished", extra={"job_id": job_id, "order_id": order_id,
+                "printer_id": raw_printer, "duration_ms": round((time.monotonic() - started) * 1000),
+                "state": self.get_job_state(job_id).get("status")})
             # SSD Protection: Guaranteed cleanup of downloaded and prepared spool artifacts
+            prepared_file = getattr(cups_service, "last_prepared_file", None) or prepared_file
             if local_file and local_file.is_relative_to(file_service.storage_root):
                 file_service.cleanup_file(local_file)
             if prepared_file:

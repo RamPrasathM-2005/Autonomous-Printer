@@ -66,7 +66,6 @@ class JobPoller:
         while self._running:
             try:
                 printer_state, paper_state = printer_monitor.get_printer_status()
-                backend_client.flush_status_updates()
                 success = backend_client.send_heartbeat(printer_state=printer_state, paper_state=paper_state)
                 if success:
                     current_interval = float(config.HEARTBEAT_INTERVAL_SECONDS)
@@ -84,6 +83,8 @@ class JobPoller:
 
         while self._running:
             try:
+                backend_client.flush_status_updates()
+                print_service.recover_submissions()
                 jobs = backend_client.poll_jobs()
                 current_interval = float(config.POLL_INTERVAL_SECONDS) # Reset backoff on successful query
 
@@ -109,4 +110,3 @@ class JobPoller:
                 self.processing_jobs.discard(job_id)
 
 job_poller = JobPoller()
-

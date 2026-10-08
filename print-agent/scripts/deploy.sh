@@ -49,6 +49,11 @@ if command -v chromium >/dev/null || command -v chromium-browser >/dev/null; the
     if [[ -f /etc/xdg/autostart/kiosk.desktop ]] && grep -q 'Achuppori Kiosk' /etc/xdg/autostart/kiosk.desktop; then
         rm /etc/xdg/autostart/kiosk.desktop
     fi
+    # Disable the other historical launcher, preserving it for inspection.
+    LEGACY_KIOSK="$USER_HOME/.config/autostart/smartprint-kiosk.desktop"
+    if [[ -f "$LEGACY_KIOSK" ]] && grep -q '/SmartPrint/launch_kiosk.sh' "$LEGACY_KIOSK"; then
+        mv "$LEGACY_KIOSK" "$LEGACY_KIOSK.disabled"
+    fi
 else
     echo "Agent installed. Install chromium on a graphical Pi OS desktop to enable the touchscreen kiosk, then rerun."
 fi

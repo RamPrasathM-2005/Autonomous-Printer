@@ -41,7 +41,10 @@ def test_cups_options_mapping():
 
 def test_cups_mock_submission(tmp_path):
     dummy_file = tmp_path / "test.pdf"
-    dummy_file.write_bytes(b"%PDF-1.4 test")
+    from pypdf import PdfWriter
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+    writer.write(dummy_file)
 
     orig_mock = cups_service.mock_mode
     try:
@@ -160,4 +163,3 @@ def test_direct_print_job_internal_authentication(agent_client):
         json={"job_id": "job_auth_test_4"}
     )
     assert res_header.status_code == 409
-
