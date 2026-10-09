@@ -17,6 +17,45 @@ CSP = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://*.razor
        "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 
 class Handler(SimpleHTTPRequestHandler):
+    def read_proxy_body(self):
+        limit = 60 * 1024 * 1024
+        encoding = self.headers.get('Transfer-Encoding', '').lower().strip()
+        if encoding:
+            if encoding != 'chunked' or self.headers.get('Content-Length') is not None:
+                raise ValueError('Invalid request framing')
+            body = bytearray()
+            while True:
+                line = self.rfile.readline(8192)
+                if not line.endswith(b'\r\n'):
+                    raise ValueError('Invalid chunk header')
+                size = int(line.split(b';', 1)[0].strip(), 16)
+                if size < 0:
+                    raise ValueError('Invalid chunk size')
+                if len(body) + size > limit:
+                    raise OverflowError('Request too large')
+                if size == 0:
+                    trailer_bytes = 0
+                    while True:
+                        trailer = self.rfile.readline(8192)
+                        trailer_bytes += len(trailer)
+                        if not trailer.endswith(b'\r\n') or trailer_bytes > 65536:
+                            raise ValueError('Invalid chunk trailer')
+                        if trailer == b'\r\n':
+                            return bytes(body)
+                chunk = self.rfile.read(size)
+                if len(chunk) != size or self.rfile.read(2) != b'\r\n':
+                    raise ValueError('Invalid chunk body')
+                body.extend(chunk)
+        size = int(self.headers.get('Content-Length', '0'))
+        if size < 0:
+            raise ValueError('Invalid content length')
+        if size > limit:
+            raise OverflowError('Request too large')
+        body = self.rfile.read(size)
+        if len(body) != size:
+            raise ValueError('Incomplete request body')
+        return body
+
     def list_directory(self, path):
         self.send_error(404)
         return None
@@ -25,20 +64,18 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.path.split('?')[0].startswith(('/api/', '/health')):
             return False
         try:
-            size = int(self.headers.get('Content-Length', '0'))
+            body = self.read_proxy_body()
         except ValueError:
             self.send_error(400)
             return True
-        if size < 0 or self.headers.get('Transfer-Encoding'):
-            self.send_error(400)
-            return True
-        if size > 60 * 1024 * 1024:
+        except OverflowError:
             self.send_error(413)
             return True
         headers = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection', 'transfer-encoding')}
+        headers['Content-Length'] = str(len(body))
         connection = http.client.HTTPConnection('127.0.0.1', BACKEND_PROXY_PORT, timeout=120)
         try:
-            connection.request(self.command, self.path, body=self.rfile.read(size) if size else None, headers=headers)
+            connection.request(self.command, self.path, body=body, headers=headers)
             response = connection.getresponse()
             self.send_response(response.status)
             for key, value in response.getheaders():
