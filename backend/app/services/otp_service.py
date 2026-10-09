@@ -451,6 +451,11 @@ class OTPService:
             raise AppException(409, "PRINTER_UNAVAILABLE", "The selected printer is no longer assigned or enabled. Contact the attendant.")
         if order_settings.get("printer_selection_locked") and order_settings.get("cups_printer_name") != target_printer:
             raise AppException(400, "INVALID_OTP", "Use the release code for your selected printer.")
+        from app.services.printer_availability import available
+        from app.db.models.print_server import PrintServer
+        station = db.get(PrintServer, job_rec.server_id)
+        if not available(printer, station):
+            raise AppException(409, "PRINTER_UNAVAILABLE", "Printer unavailable. Your code remains valid; try again when the printer is ready.")
         job_rec.printer_id = printer.id
 
         # Apply state transitions

@@ -30,7 +30,7 @@ class ApiConfig {
     if (kBackendUrl.isNotEmpty) return normalizeBackendUrl(kBackendUrl);
     if (kApiBaseUrl.isNotEmpty) return normalizeBackendUrl(kApiBaseUrl);
 
-    if (kIsWeb && !['localhost', '127.0.0.1'].contains(Uri.base.host)) {
+    if (kIsWeb) {
       return normalizeBackendUrl(Uri.base.origin);
     }
     // On physical mobile devices, if active Cloudflare tunnel is known, prefer it so remote/cellular works!
@@ -60,7 +60,7 @@ class ApiConfig {
     if (backendUrl.isNotEmpty) backendUrl,
     if (kActiveTunnelUrl.isNotEmpty && kActiveTunnelUrl.startsWith('http'))
       normalizeBackendUrl(kActiveTunnelUrl),
-    'http://127.0.0.1:8000',
+    if (!kIsWeb) 'http://127.0.0.1:8000',
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
       'http://10.0.2.2:8000',
   ];
@@ -80,8 +80,9 @@ class ApiConfig {
         final response = await http.get(uri).timeout(const Duration(milliseconds: 1500));
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          if (data is Map && data['BACKEND_URL'] != null && data['BACKEND_URL'].toString().trim().isNotEmpty) {
-            final parsed = normalizeBackendUrl(data['BACKEND_URL'].toString());
+          if (data is Map && data.containsKey('BACKEND_URL')) {
+            final configured = data['BACKEND_URL']?.toString().trim() ?? '';
+            final parsed = configured.isEmpty ? Uri.base.origin : normalizeBackendUrl(configured);
             if (parsed.isNotEmpty) {
               runtimeEnvUrl = parsed;
             }
@@ -99,7 +100,6 @@ class ApiConfig {
         await prefs.setString(_keyBackendOrigin, Uri.base.origin);
       }
     } else if (kIsWeb) {
-      final host = Uri.base.host.toLowerCase();
       final queryBackend =
           Uri.base.queryParameters['backend'] ??
           Uri.base.queryParameters['tunnel'];
@@ -110,18 +110,12 @@ class ApiConfig {
       } else if (kBackendUrl.isNotEmpty || kApiBaseUrl.isNotEmpty) {
         storedBackend = defaultBackendUrl;
         await prefs.setString(_keyBackendUrl, storedBackend);
-      } else if (!['localhost', '127.0.0.1'].contains(host)) {
-        // When accessed via Cloudflare Tunnel or remote hostname on mobile browser,
-        // use origin to avoid Mixed Content or unreachable localhost!
+      } else {
+        // Same-origin proxy also applies on localhost. Discard stale direct-port
+        // overrides from previous deployments when no explicit config is given.
         storedBackend = normalizeBackendUrl(Uri.base.origin);
         await prefs.setString(_keyBackendUrl, storedBackend);
-      } else {
-        // A local checkout must not inherit another machine's saved LAN/tunnel URL.
-        if (prefs.getString(_keyBackendOrigin) != Uri.base.origin ||
-            storedBackend == null) {
-          storedBackend = defaultBackendUrl;
-        }
-        await prefs.setString(_keyBackendUrl, storedBackend);
+        await prefs.setString(_keyBackendOrigin, Uri.base.origin);
       }
     } else {
       // Native Android / iOS mobile app

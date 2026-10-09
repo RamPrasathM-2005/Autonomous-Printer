@@ -1,60 +1,27 @@
 from typing import Tuple
 from app.config import config
-from app.utils.logging import agent_logger
+
 
 class PrinterMonitor:
     def __init__(self):
         self.printer_name = config.PRINTER_NAME
 
     def get_printer_status(self) -> Tuple[str, str]:
-        """
-        Returns (printer_state, paper_state).
-        In production with CUPS, queries printer IPP attributes.
-        Fallback / default returns ('READY', 'AVAILABLE').
-        """
         if config.MOCK_CUPS:
             return "READY", "AVAILABLE"
+        from app.services.cups_service import cups_service
+        from app.services.printer_health import observe
         try:
-            # If pycups available, query printer attributes
-            import cups
-            conn = cups.Connection(host=config.CUPS_SERVER)
+            conn = cups_service.cups.Connection(host=config.CUPS_SERVER)
             printers = conn.getPrinters()
-            from app.services.cups_service import CupsService
-            printers = {name: attrs for name, attrs in printers.items()
-                        if CupsService.is_physical_uri(attrs.get("device-uri"))}
-            queue = self.printer_name
-            if not queue:
-                queue = next((name for name, attrs in printers.items() if attrs.get("printer-state") == 3), next(iter(printers), ""))
-            if queue in printers:
-                info = printers[queue]
-                state = info.get("printer-state", 3) # 3: IDLE, 4: PROCESSING, 5: STOPPED
-
-                # Query detailed attributes including reasons and messages
-                attrs = conn.getPrinterAttributes(queue)
-                reasons = [str(r).lower() for r in attrs.get("printer-state-reasons", [])]
-                msg = str(attrs.get("printer-state-message") or "").lower()
-
-                is_media_empty = any(
-                    r in reasons for r in ["media-empty", "media-needed", "media-empty-warning", "media-empty-error", "input-tray-missing"]
-                ) or ("out of paper" in msg or "tray empty" in msg or "load paper" in msg)
-
-                paper_state = "OUT_OF_PAPER" if is_media_empty else "AVAILABLE"
-
-                if is_media_empty:
-                    printer_state = "OUT_OF_PAPER"
-                elif any(r in reasons for r in ["media-jam", "door-open", "offline"]):
-                    printer_state = "ERROR"
-                elif state == 5:
-                    printer_state = "STOPPED"
-                elif state == 4:
-                    printer_state = "BUSY"
-                else:
-                    printer_state = "READY"
-
-                return printer_state, paper_state
+            candidates = [info for name, info in printers.items()
+                          if (not self.printer_name or name == self.printer_name)
+                          and cups_service.is_physical_uri(info.get("device-uri"))]
+            states = [observe(info)[0] for info in candidates]
+            state = next((s for s in states if s in ("READY", "BUSY")), states[0] if states else "OFFLINE")
+            return state, "OUT_OF_PAPER" if state == "OUT_OF_PAPER" else "AVAILABLE" if state in ("READY", "BUSY") else "UNKNOWN"
         except Exception:
-            pass
+            return "OFFLINE", "UNKNOWN"
 
-        return "OFFLINE", "UNKNOWN"
 
 printer_monitor = PrinterMonitor()

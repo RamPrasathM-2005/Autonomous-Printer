@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../config/theme.dart';
 import '../../services/admin_api_service.dart';
+import '../../services/api_error.dart';
 import '../../utils/download_helper.dart';
 import '../../widgets/admin/stat_card.dart';
 import 'admin_shell.dart';
@@ -75,7 +76,7 @@ class _UsersScreenState extends State<UsersScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString().replaceAll('Exception: ', '');
+          _error = userError(e, fallback: 'Unable to load users. Please retry.');
           _isLoading = false;
         });
       }
@@ -803,13 +804,15 @@ class _UsersScreenState extends State<UsersScreen> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final isNarrow = constraints.maxWidth < 900;
-                return GridView.count(
-                  crossAxisCount: isNarrow ? 2 : 4,
+                return GridView(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: constraints.maxWidth < 420 ? 1 : isNarrow ? 2 : 4,
+                    mainAxisExtent: 160,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
                   shrinkWrap: true,
                   physics: const NeverScrollableCardImpossiblePhysics(),
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: isNarrow ? 1.6 : 1.45,
                   children: [
                     StatCard(
                       title: 'Total Users',
@@ -1047,7 +1050,7 @@ class _UsersScreenState extends State<UsersScreen> {
                     else
                       _buildUsersTable(_users),
                     const SizedBox(height: 16),
-                    _buildPaginationControls(),
+                    if (_error == null) _buildPaginationControls(),
                   ],
                 ),
               ),
@@ -1202,7 +1205,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Showing ${(_currentPage - 1) * _limit + 1} - ${((_currentPage - 1) * _limit + _users.length)} of $_totalUsers',
+        Text('Showing ${_users.isEmpty ? 0 : (_currentPage - 1) * _limit + 1} - ${((_currentPage - 1) * _limit + _users.length)} of $_totalUsers',
             style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
         Row(
           children: [

@@ -40,11 +40,11 @@ class BackendClient:
         })
 
 
-    def send_heartbeat(self, printer_state: str = "READY", paper_state: str = "AVAILABLE") -> bool:
+    def send_heartbeat(self, printer_state: str = "READY", paper_state: str = "AVAILABLE", force=False) -> bool:
         url = f"{self.base_url}/agent/heartbeat"
         try:
             from app.services.cups_service import cups_service
-            detected = cups_service.get_detected_printers()
+            detected = cups_service.get_detected_printers(force=True) if force else cups_service.get_detected_printers()
             payload = {
                 "printerState": printer_state,
                 "paperState": paper_state,
@@ -52,6 +52,10 @@ class BackendClient:
             }
             resp = self.session.post(url, json=payload, timeout=5)
             if resp.status_code == 200:
+                if not config.MOCK_CUPS:
+                    from app.services.printer_discovery import printer_discovery
+                    installed = {p['cups_printer_name'] for p in detected if p['status'] != 'DISCOVERED'}
+                    printer_discovery.provision(resp.json().get('assignments', []), installed)
                 return True
             agent_logger.warning(f"Heartbeat responded with status code: {resp.status_code}")
             return False

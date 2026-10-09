@@ -77,8 +77,10 @@ class OrderService:
             raise AppException(409, "STATION_UNAVAILABLE", "This station is under maintenance.")
         from app.db.models.printer import Printer
         available_printers = db.query(Printer).filter(Printer.server_id == server.id, Printer.is_enabled == True).all()
+        from app.services.printer_availability import available
+        available_printers = [p for p in available_printers if available(p, server)]
         if not available_printers:
-            raise AppException(409, "PRINTER_UNAVAILABLE", "No enabled printer is registered at this station.")
+            raise AppException(409, "PRINTER_UNAVAILABLE", "No printer is currently available at this station.")
 
         # Determine items to process
         items_to_process: List[OrderItemConfig] = []

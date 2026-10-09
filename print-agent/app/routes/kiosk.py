@@ -1164,7 +1164,16 @@ KIOSK_HTML = """<!DOCTYPE html>
                     modalSpinner.style.display = 'none';
                     if (modalErrorIcon) modalErrorIcon.style.display = 'block';
                     return;
-                  } else if (jobData.progress && jobData.progress > currentPct) {
+                  } else if (jobData.status === 'PAUSED' || jobData.error_code) {
+                    modalTitle.textContent = 'Printing paused';
+                    modalMessage.textContent = jobData.message || 'Printer needs attention.';
+                    modalProgressStep.textContent = jobData.message || 'Printer needs attention.';
+                    modalSpinner.style.display = 'none';
+                    return;
+                  } else if (jobData.progress) {
+                    modalTitle.textContent = 'Printing';
+                    modalMessage.textContent = jobData.message || 'Waiting for printer confirmation.';
+                    modalSpinner.style.display = 'block';
                     currentPct = jobData.progress;
                     modalProgressFill.style.width = currentPct + '%';
                     modalProgressPercent.textContent = currentPct + '%';
@@ -1174,13 +1183,6 @@ KIOSK_HTML = """<!DOCTYPE html>
                 }
               }
             } catch (_) {}
-
-            if (currentPct < 90) {
-              currentPct += Math.min(14, 90 - currentPct);
-              modalProgressFill.style.width = currentPct + '%';
-              modalProgressPercent.textContent = currentPct + '%';
-              modalProgressStep.textContent = 'Printing pages on ' + targetPrinter + '...';
-            }
 
             if (pollAttempts >= maxPollAttempts) {
               clearInterval(progressInterval);

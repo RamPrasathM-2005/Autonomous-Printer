@@ -70,6 +70,8 @@ def local_station_otp_release():
         }), 503
 
     try:
+        if not backend_client.send_heartbeat(printer_state=printer_state, force=True):
+            raise BackendCommunicationException("Cannot confirm printer availability. Please retry.", error_code="BACKEND_UNAVAILABLE", status_code=503)
         # Submit to central FastAPI backend
         release_data = backend_client.release_job(otp)
     except OTPReleaseException as e:
@@ -217,4 +219,3 @@ def test_printer_connection():
         protocol=protocol
     )
     return jsonify(res), 200
-

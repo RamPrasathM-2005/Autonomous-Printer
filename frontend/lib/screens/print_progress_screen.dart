@@ -67,8 +67,8 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
         if (!mounted) return;
         final status = order.status.toUpperCase();
         setState(() {
-          _errorMessage = null;
-          _statusMessage = order.statusLabel;
+          _errorMessage = order.errorMessage;
+          _statusMessage = order.errorMessage != null ? 'Printing paused' : order.statusLabel;
           if (status == 'COMPLETED') {
             timer.cancel();
             _animController.stop();

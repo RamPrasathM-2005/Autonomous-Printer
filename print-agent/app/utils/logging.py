@@ -29,6 +29,7 @@ class AgentFormatter(logging.Formatter):
 def setup_agent_logger(name: str = "PrintAgent") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
+    logger.propagate = False
 
     if not logger.handlers:
         formatter = AgentFormatter()

@@ -8,7 +8,8 @@ AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 [[ "$AGENT_DIR" =~ ^[a-zA-Z0-9_./-]+$ ]] || { echo "Install under a path without spaces or shell metacharacters."; exit 1; }
 [[ -f "$AGENT_DIR/.env" ]] || { echo "Copy .env.example to .env and configure station credentials first."; exit 1; }
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cups libcups2-dev python3-venv python3-dev build-essential curl
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cups cups-ipp-utils avahi-daemon libcups2-dev python3-venv python3-dev build-essential curl
+systemctl enable --now avahi-daemon
 systemctl enable --now cups
 cupsctl PreserveJobHistory=Yes PreserveJobFiles=No
 usermod -a -G lp,lpadmin "$TARGET_USER"

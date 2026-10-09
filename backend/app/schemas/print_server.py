@@ -38,6 +38,8 @@ class ReportedPrinterInfo(BaseModel):
     device_uri: Optional[str] = None
     status: Optional[str] = "READY"
     jobs: Optional[int] = 0
+    supports_color: Optional[bool] = None
+    supports_duplex: Optional[bool] = None
 
     def __init__(self, **data):
         if "cups_name" in data and "cups_printer_name" not in data:
@@ -61,4 +63,4 @@ class HeartbeatRequest(BaseModel):
 class HeartbeatResponse(BaseModel):
     status: str
     server_time: datetime
-
+    assignments: List[dict] = []

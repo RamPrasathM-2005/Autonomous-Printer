@@ -1,4 +1,6 @@
+from app.services.printer_availability import printer_state, recent
 import io
+import re
 import csv
 import time
 import secrets
@@ -238,7 +240,7 @@ class AdminService:
                 supports_duplex=p.supports_duplex,
                 is_enabled=p.is_enabled if p.is_enabled is not None else True,
                 is_active=p.is_active,
-                printer_state=p.printer_status or (server.printer_state if server else "UNKNOWN"),
+                printer_state=printer_state(p, server),
                 paper_state=server.paper_state if server else "UNKNOWN",
                 last_heartbeat=server.last_heartbeat.strftime("%Y-%m-%d %H:%M:%S") if (server and server.last_heartbeat) else None,
                 total_jobs_count=job_count,
@@ -283,6 +285,13 @@ class AdminService:
         device_uri = (data.device_uri or "").strip()
         proto = (data.protocol or "Socket").strip()
         ip = (data.ip_address or "").strip()
+        discovered = db.query(DiscoveredPrinter).filter_by(
+            server_id=data.server_id, cups_printer_name=data.cups_printer_name.strip()).first()
+        if discovered:
+            device_uri = device_uri or discovered.device_uri or ""
+            ip = ip or discovered.ip_address or ""
+            if device_uri.startswith(("ipp://", "ipps://")):
+                proto = "IPP"
         if not device_uri and ip:
             if proto.lower() == "ipp":
                 device_uri = f"ipp://{ip}:631/ipp/print"
@@ -311,10 +320,10 @@ class AdminService:
             supports_color=data.supports_color,
             supports_duplex=data.supports_duplex,
             is_enabled=data.is_enabled,
-            is_active=data.is_active if data.is_active is not None else False,
-            printer_status="READY",
-            test_status="VERIFIED" if (data.is_active is True) else "PENDING",
-            test_message="Registered and activated by administrator." if (data.is_active is True) else "Awaiting test connection verification.",
+            is_active=False,
+            printer_status="CONFIGURING",
+            test_status="PENDING",
+            test_message="Awaiting confirmation from the assigned agent.",
             has_mismatch=False,
             mismatch_details=None,
         )
@@ -472,6 +481,8 @@ class AdminService:
             else:
                 printer.department_id = None
         if data.is_active is not None:
+            if data.is_active and printer_state(printer, db.get(PrintServer, printer.server_id)) not in ("READY", "BUSY"):
+                raise AppException(409, "PRINTER_UNAVAILABLE", "Wait for the assigned agent to confirm this printer is available.")
             printer.is_active = data.is_active
 
         db.commit()
@@ -614,9 +625,8 @@ class AdminService:
                 agent_cups.append({"cups_printer_name": d.cups_printer_name, "device_uri": d.device_uri,
                                    "ip_address": d.ip_address, "status": d.reported_status or "UNKNOWN"})
         for p in db.query(Printer).filter(Printer.server_id == server_id).all():
-            if recent(p.last_seen):
-                agent_cups.append({"cups_printer_name": p.cups_printer_name, "device_uri": p.device_uri,
-                                   "ip_address": p.ip_address, "status": p.printer_status or "UNKNOWN"})
+            agent_cups.append({"cups_printer_name": p.cups_printer_name, "device_uri": p.device_uri,
+                               "ip_address": p.ip_address, "status": printer_state(p, server)})
 
         results: List[AdminAgentCupsPrinterItem] = []
         seen = set()
@@ -626,12 +636,13 @@ class AdminService:
                 continue
             seen.add(c_name.lower())
             is_mapped = c_name.lower() in registered_cups
-            disp_name = c_name.replace("_", " ")
+            disp_name = re.sub(r"_[0-9a-f]{8}$", "", c_name).replace("_", " ")
+            disp_name = " ".join(disp_name.split())
             results.append(AdminAgentCupsPrinterItem(
                 cups_printer_name=c_name,
                 display_name=disp_name,
                 device_uri=item.get("device_uri"),
-                ip_address=item.get("ip_address") or server.ip_address,
+                ip_address=item.get("ip_address"),
                 status=item.get("status") or "READY",
                 is_mapped=is_mapped
             ))
@@ -666,7 +677,7 @@ class AdminService:
                 cups_printer_name=d.cups_printer_name,
                 ip_address=d.ip_address,
                 device_uri=d.device_uri,
-                reported_status=d.reported_status or "READY",
+                reported_status=(d.reported_status or "UNKNOWN") if recent(d.last_seen) and srv and recent(srv.last_heartbeat) else "OFFLINE",
                 reported_jobs=d.reported_jobs or "0",
                 first_seen=d.first_seen.strftime("%Y-%m-%d %H:%M:%S") if d.first_seen else "",
                 last_seen=d.last_seen.strftime("%Y-%m-%d %H:%M:%S") if d.last_seen else "",
@@ -754,7 +765,7 @@ class AdminService:
             orders = db.query(Order).filter(Order.user_id == u.id).all()
             total_orders = len(orders)
             total_pages_sum = sum(o.total_pages or 0 for o in orders)
-            total_spent = sum(float(o.total_amount or 0.0) for o in orders)
+            total_spent = sum(float(o.amount or 0.0) for o in orders)
 
             user_items.append(AdminUserItem(
                 id=u.id,
@@ -1182,4 +1193,3 @@ class AdminService:
         )
 
 admin_service = AdminService()
-

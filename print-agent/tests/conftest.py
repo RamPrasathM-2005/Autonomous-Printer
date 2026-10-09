@@ -15,6 +15,7 @@ def agent_client(agent_app):
 def isolate_station_workers(monkeypatch, tmp_path):
     # Route tests must not depend on the host's CUPS installation or private .env.
     monkeypatch.setattr("app.routes.local.printer_monitor.get_printer_status", lambda: ("READY", "AVAILABLE"))
+    monkeypatch.setattr("app.routes.local.backend_client.send_heartbeat", lambda **kwargs: True)
     from app.routes.local import _recent_attempts
     _recent_attempts.clear()
     from app.services import backend_client, print_service, job_journal

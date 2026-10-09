@@ -287,6 +287,10 @@ class CupsService:
                 raise CupsException(f"Assigned printer '{target_printer}' does not exist in CUPS.")
             if not self.is_physical_uri(printers[target_printer].get("device-uri")):
                 raise CupsException(f"Assigned printer '{target_printer}' has no physical device URI. Correct its CUPS queue.", error_code="INVALID_PRINTER_URI")
+            from app.services.printer_health import observe
+            state, message = observe(printers[target_printer], force=True)
+            if state not in ("READY", "BUSY"):
+                raise CupsException(message, error_code="PRINTER_UNAVAILABLE")
 
         # If printable_file was already sliced with custom/odd/even ranges, remove page-ranges / page-set from CUPS options
         if printable_file != file_path:
@@ -357,6 +361,7 @@ class CupsService:
 
         # Missing queue entries and timeouts are not proof of completion.
         last_reported = None
+        started = time.monotonic()
         while True:
             try:
                 if self.has_pycups:
@@ -368,8 +373,20 @@ class CupsService:
                         return "COMPLETED"
                     if job_state in (7, 8):
                         return "FAILED"
-                    reasons = conn.getPrinterAttributes(printer_name).get("printer-state-reasons", [])
-                    paper_empty = any("media-empty" in str(reason) for reason in reasons)
+                    from app.services.printer_health import observe
+                    info = conn.getPrinterAttributes(printer_name)
+                    state, message = observe(info)
+                    error_code = None if state in ("READY", "BUSY") else state
+                    if job_state == 4 and not error_code:
+                        error_code, message = "JOB_HELD", "Print job held. Ask the attendant to resume it."
+                    if time.monotonic() - started > 300 and not error_code:
+                        error_code, message = "PRINT_DELAYED", "Printer has not confirmed completion. Ask the attendant to check it."
+                    observation = (error_code, message)
+                    if on_status_callback and observation != last_reported:
+                        on_status_callback(status="PRINTING", error_code=error_code, message=message)
+                        last_reported = observation
+                    time.sleep(2)
+                    continue
                 else:
                     # CLI fallback consults retained completed-job history as well as active jobs.
                     res = subprocess.run(["lpstat", "-h", config.CUPS_SERVER, "-W", "completed", "-o", printer_name], capture_output=True, text=True, timeout=10)
@@ -388,7 +405,7 @@ class CupsService:
                 return "STATUS_UNKNOWN"
             time.sleep(2)
 
-    def get_detected_printers(self) -> list:
+    def get_detected_printers(self, force=False) -> list:
         """
         Scans CUPS for all installed and detected printers.
         Extracts CUPS queue name, device URI, IP address (if network-based), and state.
@@ -401,6 +418,9 @@ class CupsService:
                 conn = self.cups.Connection(host=config.CUPS_SERVER)
                 cups_printers = conn.getPrinters()
                 for name, info in cups_printers.items():
+                    details = conn.getPrinterAttributes(name)
+                    if isinstance(details, dict):
+                        info = {**info, **details}
                     uri = info.get("device-uri", "")
                     state_num = info.get("printer-state", 3)
                     state_str = "READY"
@@ -410,6 +430,9 @@ class CupsService:
                         state_str = "OFFLINE"
                     if not self.mock_mode and not self.is_physical_uri(uri):
                         state_str = "OFFLINE"
+                    elif not self.mock_mode:
+                        from app.services.printer_health import observe
+                        state_str, _ = observe(info, force=force)
 
                     ip = None
                     if uri:
@@ -423,7 +446,14 @@ class CupsService:
                         "ip_address": ip,
                         "status": state_str,
                         "jobs": 0,
+                        "supports_color": info.get("color-supported") if isinstance(info.get("color-supported"), bool) else None,
+                        "supports_duplex": any(s.startswith('two-sided') for s in info.get('sides-supported', [])) if 'sides-supported' in info else None,
                     })
+                if not self.mock_mode:
+                    from app.services.printer_discovery import printer_discovery
+                    installed_uris = {p['device_uri'] for p in printers_list}
+                    installed_ips = {p['ip_address'] for p in printers_list if p['ip_address']}
+                    printers_list.extend(p for p in printer_discovery.scan() if p['device_uri'] not in installed_uris and p['ip_address'] not in installed_ips)
                 return printers_list
             except Exception as e:
                 agent_logger.warning(f"Error querying pycups for detected printers: {e}")

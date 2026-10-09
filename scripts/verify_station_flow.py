@@ -69,7 +69,7 @@ with SessionLocal() as db:
         file_size=file.stat().st_size, sha256=hashlib.sha256(file.read_bytes()).hexdigest(), page_count=1))
     db.commit()
     db.add(Printer(id="HTTP-PRINTER", server_id="HTTP-STATION", cups_printer_name="HTTP_Test_Queue",
-        display_name="HTTP test printer", is_enabled=True, is_active=True))
+        display_name="HTTP test printer", is_enabled=True, is_active=True, printer_status="READY", last_seen=datetime.now(timezone.utc)))
     db.add(Order(id="HTTP-ORDER", document_id="HTTP-DOC", print_server_id="HTTP-STATION",
         print_settings={"copies": 1, "session_token": "sess_http_verification"}, total_pages=1, copies=1,
         amount=2, currency="INR", status=OrderStatus.WAITING_FOR_OTP))

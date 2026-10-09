@@ -60,6 +60,38 @@ void main() {
     );
   }
 
+  testWidgets('Offline printing shows attention and recovers to completion', (tester) async {
+    var offline = true;
+    var complete = false;
+    addTearDown(OrderRecoveryService().clearAll);
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.lightTheme,
+      home: OtpReleaseScreen(
+        orderId: 'offline-order',
+        loadOrder: () async => PrintOrder(
+          id: 'offline-order', documentId: 'doc', printServerId: 'station',
+          printSettings: PrintSettings(), totalPages: 1, copies: 1, amount: 2,
+          currency: 'INR', status: complete ? 'COMPLETED' : 'PRINTING', createdAt: '',
+          errorCode: offline ? 'PRINTER_OFFLINE' : null,
+          errorMessage: offline ? 'Printer offline. Waiting for it to reconnect.' : null,
+        ),
+        loadOtp: () async => OrderOtp.fromJson({'orderId': 'offline-order', 'otp': '123456'}),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Printing paused'), findsOneWidget);
+    expect(find.text('Printing...'), findsNothing);
+    offline = false;
+    complete = true;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Print Complete'), findsOneWidget);
+    expect(find.text('Printing paused'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Shared release-code card describes validity without expiry', (
     tester,
   ) async {

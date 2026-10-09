@@ -55,6 +55,13 @@ class PaymentService:
             raise AppException(404, "NOT_FOUND", "Order not found.")
         if order.status != OrderStatus.CREATED:
             raise AppException(400, "INVALID_STATE", "This order cannot start another payment. Check its status.")
+        from app.db.models.printer import Printer
+        from app.db.models.print_server import PrintServer
+        from app.services.printer_availability import available
+        station = db.get(PrintServer, order.print_server_id)
+        printers = db.query(Printer).filter_by(server_id=order.print_server_id).all()
+        if not any(available(p, station) for p in printers):
+            raise AppException(409, "PRINTER_UNAVAILABLE", "Printer unavailable. Please wait before paying.")
         payment = db.query(Payment).filter(Payment.order_id == order_id).first()
         if payment and payment.status == PaymentStatus.REFUNDED:
             raise AppException(400, "PAYMENT_REFUNDED", "This payment has been refunded.")

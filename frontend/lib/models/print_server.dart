@@ -33,6 +33,8 @@ class Printer {
     required this.state,
   });
 
+  bool get isAvailable => isActive && isEnabled && ['READY', 'BUSY'].contains(state.toUpperCase());
+
   factory Printer.fromJson(Map<String, dynamic> json) {
     final cupsName = json['cups_printer_name'] ?? json['cups_queue_name'] ?? '';
     final name = json['display_name'] ?? (cupsName.isNotEmpty ? cupsName : 'Station Printer');
@@ -84,7 +86,7 @@ class PrintServer {
   });
 
   bool get isOnline => status.toUpperCase() == 'ONLINE';
-  bool get canAcceptJobs => isOnline && paperState.toUpperCase() != 'EMPTY';
+  bool get canAcceptJobs => isOnline && printers.any((printer) => printer.isAvailable);
 
   factory PrintServer.fromJson(Map<String, dynamic> json) {
     var rawPrinters = json['printers'] as List<dynamic>?;

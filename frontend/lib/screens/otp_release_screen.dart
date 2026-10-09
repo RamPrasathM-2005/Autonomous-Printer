@@ -62,6 +62,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
   double _printProgress = 0.0;
 
   List<Printer> _availablePrinters = [];
+  DateTime? _lastPrinterRefresh;
 
   Future<PrintOrder> _getOrder() =>
       widget.loadOrder?.call() ?? _apiService.getOrder(widget.orderId);
@@ -154,6 +155,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         _order = order;
         _otpData = otp;
         _availablePrinters = loadedPrinters;
+        _errorMessage = order.errorMessage;
         _selectedPrinterName = initialSelectedPrinter;
         _isPrinterLocked = isLocked && _selectedPrinterName != null;
         if (_isPrinterLocked) {
@@ -181,6 +183,14 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
       final updated = await _getOrder();
       if (!mounted) return;
       final status = updated.status.toUpperCase();
+      if (widget.loadOrder == null && (_lastPrinterRefresh == null || DateTime.now().difference(_lastPrinterRefresh!).inSeconds >= 10)) {
+        _lastPrinterRefresh = DateTime.now();
+        try {
+          final printers = await _apiService.fetchPrinters(serverId: updated.printServerId);
+          if (!mounted) return;
+          setState(() => _availablePrinters = printers);
+        } catch (_) {}
+      }
       setState(() {
         _order = updated;
         _errorMessage = updated.errorMessage;
@@ -213,7 +223,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
         });
         _pollingTimer?.cancel();
       }
-    } catch (_) {} finally {
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'Connection lost. Print status unconfirmed.');
+    } finally {
       _pollingInFlight = false;
     }
   }
@@ -859,10 +871,10 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     final isLocked = _isPrinterLocked;
     final accentColor = index % 2 == 0 ? AppTheme.primary : AppTheme.success;
     final tag = name.contains('_') ? name.split('_').last : (name.length > 8 ? name.substring(name.length - 6) : name);
-    final isReady = printer.state.toUpperCase() == 'READY' || printer.state.toLowerCase() == 'idle';
+    final isReady = printer.isAvailable;
 
     return GestureDetector(
-      onTap: isLocked
+      onTap: isLocked || !isReady
           ? null
           : () => setState(() => _selectedPrinterName = name),
       child: AnimatedContainer(
@@ -948,6 +960,9 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 2),
+            Text(isReady ? (printer.state == 'BUSY' ? 'Busy' : 'Available') : printer.state.replaceAll('_', ' ').toLowerCase(),
+              style: TextStyle(fontSize: 11, color: isReady ? AppTheme.success : AppTheme.danger)),
             const SizedBox(height: 2),
             Text(
               printer.model != null && printer.model!.isNotEmpty
@@ -1213,6 +1228,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
     if (_printStatus == 'WAITING') return const SizedBox.shrink();
 
     final isCompleted = _printStatus == 'COMPLETED';
+    final needsAttention = !isCompleted && _errorMessage != null;
     final isStopped = ['FAILED', 'REFUNDED', 'CANCELLED', 'EXPIRED'].contains(_printStatus);
 
     return Container(
@@ -1253,7 +1269,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isCompleted ? 'Print Complete' : (isStopped ? 'Order ${_printStatus.toLowerCase()}' : 'Printing...'),
+                      isCompleted ? 'Print Complete' : (isStopped ? 'Order ${_printStatus.toLowerCase()}' : needsAttention ? 'Printing paused' : 'Printing...'),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1265,7 +1281,7 @@ class _OtpReleaseScreenState extends State<OtpReleaseScreen> {
                     Text(
                       isCompleted
                           ? 'Collect your pages from $_friendlyPrinterName.'
-                          : (isStopped ? (_errorMessage ?? 'Contact the attendant.') : 'Job running on $_friendlyPrinterName.'),
+                          : (isStopped || needsAttention ? (_errorMessage ?? 'Contact the attendant.') : 'Job running on $_friendlyPrinterName.'),
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textMuted,

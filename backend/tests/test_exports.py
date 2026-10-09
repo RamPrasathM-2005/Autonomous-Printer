@@ -111,6 +111,13 @@ def test_generate_excel_and_pdf_exports(db_session):
         login_res = client.post('/api/auth/admin/login', json={'email': 'admin@printplatform.local', 'password': 'AdminPass123!'})
         assert login_res.status_code == 200
         token = login_res.json()['access_token']
+        # A user with order history must remain loadable in the directory.
+        users_res = client.get('/api/admin/users', headers={'Authorization': f'Bearer {token}'})
+        assert users_res.status_code == 200
+        directory_user = next(item for item in users_res.json()['users'] if item['id'] == student.id)
+        assert directory_user['total_orders'] == 1
+        assert directory_user['total_pages'] == 5
+        assert directory_user['total_spent'] == 50.0
         headers = {'Authorization': f'Bearer {token}'}
 
         # 1. Test Excel Export

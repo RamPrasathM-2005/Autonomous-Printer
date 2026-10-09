@@ -23,7 +23,7 @@ class Config:
 
     # Optimized intervals for Raspberry Pi 3B continuous 24/7 operation
     POLL_INTERVAL_SECONDS: int = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
-    HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
+    HEARTBEAT_INTERVAL_SECONDS: int = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "10"))
     BACKOFF_MAX_SECONDS: int = int(os.getenv("BACKOFF_MAX_SECONDS", "30"))
 
     # Memory and storage boundaries
@@ -38,4 +38,3 @@ class Config:
     INTERNAL_AGENT_TOKEN: str = os.getenv("INTERNAL_AGENT_TOKEN", os.getenv("AGENT_TOKEN", "test-agent-device-token-secret"))
 
 config = Config()
-

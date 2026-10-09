@@ -1,3 +1,4 @@
+from app.services.printer_availability import printer_state
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, status
@@ -59,7 +60,7 @@ def list_print_servers(
             last_heartbeat=s.last_heartbeat,
             printer_state=s.printer_state,
             paper_state=s.paper_state,
-            printers=[PrinterResponse.model_validate(p) for p in printers]
+            printers=[PrinterResponse.model_validate(p).model_copy(update={"printer_status": printer_state(p, db.get(PrintServer, p.server_id))}) for p in printers]
         ))
     return results
 
@@ -79,7 +80,7 @@ def list_all_printers(
     if server_id is not None:
         query = query.filter(Printer.server_id == server_id)
     printers = query.all()
-    return [PrinterResponse.model_validate(p) for p in printers]
+    return [PrinterResponse.model_validate(p).model_copy(update={"printer_status": printer_state(p, db.get(PrintServer, p.server_id))}) for p in printers]
 
 @router.get("/{server_id}", response_model=PrintServerResponse)
 def get_print_server(server_id: str, db: Session = Depends(get_db)):
@@ -102,5 +103,5 @@ def get_print_server(server_id: str, db: Session = Depends(get_db)):
         last_heartbeat=s.last_heartbeat,
         printer_state=s.printer_state,
         paper_state=s.paper_state,
-        printers=[PrinterResponse.model_validate(p) for p in printers]
+        printers=[PrinterResponse.model_validate(p).model_copy(update={"printer_status": printer_state(p, db.get(PrintServer, p.server_id))}) for p in printers]
     )

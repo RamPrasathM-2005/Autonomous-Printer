@@ -1,3 +1,4 @@
+from app.services.printer_availability import order_problem
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
@@ -174,8 +175,8 @@ def get_active_order(
         amount=float(order.amount),
         currency=order.currency,
         status=order.status,
-        error_code=job.error_code if job else None,
-        error_message=job.error_message if job else None,
+        error_code=order_problem(db, order, job)[0],
+        error_message=order_problem(db, order, job)[1],
         created_at=order.created_at
     )
 
@@ -303,8 +304,8 @@ def get_order(
         amount=float(order.amount),
         currency=order.currency,
         status=order.status,
-        error_code=job.error_code if job else None,
-        error_message=job.error_message if job else None,
+        error_code=order_problem(db, order, job)[0],
+        error_message=order_problem(db, order, job)[1],
         created_at=order.created_at
     )
 
@@ -421,6 +422,10 @@ def select_order_printer(
     p = query.filter(Printer.id == payload.printer_id).first() if payload.printer_id else query.filter(Printer.cups_printer_name == chosen_printer).first()
     if not p or p.cups_printer_name not in current_settings.get("printer_otps", {}):
         raise AppException(400, "INVALID_PRINTER", "Choose a registered printer at this station.")
+    from app.services.printer_availability import available
+    from app.db.models.print_server import PrintServer
+    if not available(p, db.get(PrintServer, order.print_server_id)):
+        raise AppException(409, "PRINTER_UNAVAILABLE", "This printer is currently unavailable. Choose an available printer.")
     chosen_printer = p.cups_printer_name
 
     current_settings["printer_name"] = p.display_name

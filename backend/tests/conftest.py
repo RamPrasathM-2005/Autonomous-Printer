@@ -152,7 +152,7 @@ def test_print_server(db_session, test_agent_token):
     from app.db.models.printer import Printer
     for idx, name in enumerate(("HP_LaserJet_400_M401dn_F36EC0", "HP_LaserJet_400_M401dn_E9A0F4")):
         db_session.add(Printer(id=f"TEST-PRINTER-{idx}", server_id=server.id, cups_printer_name=name,
-                               display_name=f"Test printer {idx + 1}", is_enabled=True, is_active=True))
+                               display_name=f"Test printer {idx + 1}", is_enabled=True, is_active=True, printer_status="READY", last_seen=datetime.now(timezone.utc)))
     db_session.commit()
     # Tests using the compatibility kiosk route still exercise authenticated station release.
     return server

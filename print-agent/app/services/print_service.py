@@ -100,6 +100,9 @@ class PrintService:
             previous = self.job_states.get(job_id, {})
             # Carry correlation information through abbreviated recovery/error updates.
             state = {**previous, **state}
+            if state.get("status") == "COMPLETED":
+                state["error_code"] = None
+                state["message"] = "Print completed. Please collect your document."
             self.job_states[job_id] = state
         agent_logger.info("Print job state changed", extra={
             "job_id": job_id, "order_id": state.get("order_id"),
@@ -131,6 +134,8 @@ class PrintService:
         try:
             if not backend_client.claim_job(job_id):
                 agent_logger.warning(f"Job {job_id} was not claimed; no document will be submitted.")
+                self.set_job_state(job_id, {"job_id": job_id, "order_id": order_id, "status": "PAUSED",
+                    "progress": 0, "message": "Waiting for job confirmation. Check the station connection."})
                 return False
             succeeded = self._do_execute(job_id, order_id, storage_key, settings)
             return succeeded
@@ -151,11 +156,19 @@ class PrintService:
     def _resume_submission(self, job_id, entry):
         try:
             cups_id = entry["cups_job_id"]
-            result = cups_service.monitor_job(cups_id, target_printer=entry["printer_name"])
+            def report(status, error_code=None, message=None):
+                backend_client.update_job_status(job_id, status, cups_job_id=cups_id,
+                                                 error_code=error_code, message=message)
+                self.set_job_state(job_id, {"job_id": job_id, "order_id": entry.get("order_id"),
+                    "printer_name": entry["printer_name"], "status": "PAUSED" if error_code else "PRINTING",
+                    "error_code": error_code, "message": message or "Printing in progress.", "progress": 75})
+            result = cups_service.monitor_job(cups_id, target_printer=entry["printer_name"], on_status_callback=report)
             status = "COMPLETED" if result == "COMPLETED" else ("FAILED" if result == "FAILED" else "PRINTING")
             backend_client.update_job_status(job_id, status, cups_job_id=cups_id,
                 error_code=None if status == "COMPLETED" else result)
-            self.set_job_state(job_id, {"job_id": job_id, "status": status,
+            self.set_job_state(job_id, {"job_id": job_id, "status": "PAUSED" if status == "PRINTING" else status,
+                "error_code": None if status == "COMPLETED" else result,
+                "message": "Printer status unconfirmed. Ask the attendant to check it." if status == "PRINTING" else None,
                 "progress": 100 if status == "COMPLETED" else 75, "printer_name": entry["printer_name"]})
             if status in ("COMPLETED", "FAILED"):
                 job_journal.remove("submissions", job_id)
@@ -281,7 +294,8 @@ class PrintService:
                     self.set_job_state(job_id, {
                         "job_id": job_id,
                         "order_id": order_id,
-                        "status": "OUT_OF_PAPER" if error_code == "OUT_OF_PAPER" else "PRINTING",
+                        "status": "PAUSED" if error_code else "PRINTING",
+                        "error_code": error_code,
                         "progress": 85,
                         "printer_name": raw_printer,
                         "friendly_printer": friendly_printer,
@@ -327,7 +341,7 @@ class PrintService:
                 return False
             elif cups_status == "STATUS_UNKNOWN":
                 self.set_job_state(job_id, {
-                    "job_id": job_id, "order_id": order_id, "status": "PRINTING",
+                    "job_id": job_id, "order_id": order_id, "status": "PAUSED", "error_code": "STATUS_UNKNOWN",
                     "progress": 75, "printer_name": raw_printer,
                     "friendly_printer": friendly_printer,
                     "message": "Printer outcome is unknown. Ask the attendant to inspect CUPS before retrying."

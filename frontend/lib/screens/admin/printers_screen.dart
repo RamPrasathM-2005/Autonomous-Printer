@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../services/admin_api_service.dart';
@@ -14,6 +15,8 @@ class PrintersScreen extends StatefulWidget {
 class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
+  Timer? _refreshTimer;
+  bool _refreshInFlight = false;
   String? _error;
 
   List<dynamic> _printers = [];
@@ -28,19 +31,25 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadData(silent: true));
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  Future<void> _loadData({bool silent = false}) async {
+    if (_refreshInFlight) return;
+    _refreshInFlight = true;
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
 
     try {
       final results = await Future.wait([
@@ -51,6 +60,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
 
       if (mounted) {
         setState(() {
+          _error = null;
           _printers = results[0];
           _agents = results[1];
           _departments = results[2];
@@ -65,6 +75,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
         });
       }
     }
+    _refreshInFlight = false;
   }
 
   List<dynamic> get _filteredPrinters {
@@ -277,7 +288,9 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                     'department_id': selectedDeptId,
                     'location': locationCtrl.text.trim().isNotEmpty ? locationCtrl.text.trim() : null,
                     'is_enabled': isEnabled,
-                    'is_active': isEnabled,
+                    'is_active': false,
+                    'device_uri': prefill?['device_uri'],
+                    'ip_address': prefill?['ip_address'],
                   });
                   if (ctx.mounted) Navigator.of(ctx).pop(true);
                 } catch (e) {
@@ -857,7 +870,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                               textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             icon: const Icon(Icons.print_outlined, size: 15),
-                            label: const Text('Open CUPS'),
+                            label: const Text('Find Printers'),
                             onPressed: () => _showAgentCupsPrintersDialog(a),
                           ),
                           const SizedBox(width: 4),
@@ -1029,13 +1042,17 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
     List<dynamic> cupsPrinters = [];
     bool isLoadingCups = true;
     String? cupsError;
+    Timer? dialogTimer;
+    bool fetching = false;
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          if (isLoadingCups) {
-            AdminApiService.getAgentCupsPrinters(agentId).then((data) {
+          Future<void> refreshPrinters() async {
+            if (fetching) return;
+            fetching = true;
+            await AdminApiService.getAgentCupsPrinters(agentId).then((data) {
               if (ctx.mounted) {
                 setDialogState(() {
                   cupsPrinters = data;
@@ -1051,7 +1068,12 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                 });
               }
             });
+            fetching = false;
           }
+          dialogTimer ??= Timer.periodic(const Duration(seconds: 10), (_) {
+            if (ctx.mounted) refreshPrinters();
+          });
+          if (isLoadingCups) refreshPrinters();
 
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1070,7 +1092,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$agentName — CUPS Printers', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                      Text('$agentName — Available Printers', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                       Text('Raspberry Pi Station at $agentIp', style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                     ],
                   ),
@@ -1136,7 +1158,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                                 children: [
                                   const Icon(Icons.devices_other_outlined, size: 40, color: AppTheme.textMuted),
                                   const SizedBox(height: 12),
-                                  const Text('No CUPS printers reported by this Print Agent yet.', style: TextStyle(fontWeight: FontWeight.w600)),
+                                  const Text('No printers discovered by this station.', style: TextStyle(fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 6),
                                   const Text('Printers configured on this Raspberry Pi will appear here automatically.', style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                                   const SizedBox(height: 16),
@@ -1180,7 +1202,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                                   ),
                                   title: Text(dispName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                   subtitle: Text(
-                                    'Queue: $cupsName • State: $stateStr',
+                                    '${p['ip_address'] ?? cupsName} · $stateStr',
                                     style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                                   ),
                                   trailing: isMapped
@@ -1215,7 +1237,10 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                                                 'server_id': agentId,
                                                 'department_id': deptId,
                                                 'is_enabled': true,
-                                                'is_active': true,
+                                                'is_active': false,
+                                                'device_uri': p['device_uri'],
+                                                'ip_address': p['ip_address'],
+                                                'protocol': (p['device_uri'] ?? '').toString().startsWith('ipp') ? 'IPP' : 'Socket',
                                               });
                                               setDialogState(() {
                                                 p['is_mapped'] = true;
@@ -1224,7 +1249,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
                                               if (ctx.mounted) {
                                                 ScaffoldMessenger.of(ctx).showSnackBar(
                                                   SnackBar(
-                                                    content: Text('Printer "$dispName" mapped and activated successfully!'),
+                                                    content: Text('Printer "$dispName" mapped. Waiting for station confirmation.'),
                                                     backgroundColor: AppTheme.success,
                                                   ),
                                                 );
@@ -1252,6 +1277,7 @@ class _PrintersScreenState extends State<PrintersScreen> with SingleTickerProvid
         },
       ),
     );
+    dialogTimer?.cancel();
   }
 
   Future<void> _showEditAgentDialog(Map<String, dynamic> agent) async {

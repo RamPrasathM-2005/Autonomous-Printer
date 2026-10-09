@@ -58,6 +58,12 @@ def agent_heartbeat(
                 p.printer_status = "OFFLINE"
             else:
                 rep = reported_by_name[p_name_key]
+                # Older admin clients map by queue name only. Bind missing metadata
+                # from the authenticated station's own observed inventory.
+                if not p.device_uri and rep.device_uri:
+                    p.device_uri = rep.device_uri
+                if not p.ip_address and rep.ip_address:
+                    p.ip_address = rep.ip_address
                 # Compare static IP if both registered and reported have IP
                 if p.ip_address and rep.ip_address and p.ip_address.strip() != rep.ip_address.strip():
                     p.has_mismatch = True
@@ -73,8 +79,19 @@ def agent_heartbeat(
                     p.has_mismatch = False
                     p.mismatch_details = None
 
-                p.printer_status = rep.status or "READY"
+                p.printer_status = rep.status or "UNKNOWN"
+                if p.printer_status == "DISCOVERED":
+                    p.printer_status = "CONFIGURING"
+                if p.test_status == "PENDING" and p.printer_status in ("READY", "BUSY") and not p.has_mismatch:
+                    p.is_active = True
+                    p.test_status = "SUCCESS"
+                    p.last_tested_at = now
+                    p.test_message = "Assigned agent confirmed the printer is available."
                 p.job_count = rep.jobs or 0
+                if rep.supports_color is not None:
+                    p.supports_color = rep.supports_color
+                if rep.supports_duplex is not None:
+                    p.supports_duplex = rep.supports_duplex
                 p.last_seen = now
 
         # 2. Track unregistered discovered printers without auto-modifying Printer table
@@ -107,7 +124,9 @@ def agent_heartbeat(
                     disc.last_seen = now
 
     db.commit()
-    return HeartbeatResponse(status="OK", server_time=server.last_heartbeat)
+    assignments = [{"cups_printer_name": p.cups_printer_name, "device_uri": p.device_uri}
+                   for p in db.query(Printer).filter(Printer.server_id == server.id, Printer.is_enabled == True).all()]
+    return HeartbeatResponse(status="OK", server_time=server.last_heartbeat, assignments=assignments)
 
 
 @router.get("/jobs", response_model=List[AgentJobResponse])
@@ -182,4 +201,3 @@ def download_file_for_agent(
             message="Document not found on disk."
         )
     return FileResponse(path=str(path), filename=path.name)
-
