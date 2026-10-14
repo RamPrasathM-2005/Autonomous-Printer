@@ -16,6 +16,21 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final reviewRoot = Platform.environment['UI_REVIEW_FLUTTER_ROOT'];
   setUpAll(() async {
+    for (final entry in {
+      'Manrope': [
+        'Manrope-Regular.ttf',
+        'Manrope-Medium.ttf',
+        'Manrope-SemiBold.ttf',
+        'Manrope-Bold.ttf',
+      ],
+      'DM Serif Display': ['DMSerifDisplay-Regular.ttf'],
+    }.entries) {
+      final loader = FontLoader(entry.key);
+      for (final file in entry.value) {
+        loader.addFont(rootBundle.load('assets/fonts/$file'));
+      }
+      await loader.load();
+    }
     if (reviewRoot == null) return;
     for (final entry in {
       'Roboto': 'roboto-regular.ttf',
@@ -59,7 +74,7 @@ void main() {
             key: boundary,
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightTheme,
+              theme: AppTheme.userTheme,
               home: page,
             ),
           ),
@@ -68,9 +83,7 @@ void main() {
         if (screen == 'upload') {
           expect(find.text('Ready to Print?'), findsOneWidget);
           expect(find.text('Upload File'), findsOneWidget);
-          final nearby = tester.getRect(
-            find.byTooltip('Select Department'),
-          );
+          final nearby = tester.getRect(find.byTooltip('Select Department'));
           final local = tester.getRect(find.text('Local connection'));
           expect(nearby.left, lessThan(local.left));
           expect((nearby.center.dy - local.center.dy).abs(), lessThan(12));

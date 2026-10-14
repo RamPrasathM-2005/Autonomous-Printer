@@ -418,11 +418,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     child: Text(
                       'Review Your Order',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.7,
-                      ),
+                      style: AppTheme.userHeading,
                     ),
                   ),
                   const SizedBox(height: 12),

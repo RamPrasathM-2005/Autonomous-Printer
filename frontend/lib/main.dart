@@ -28,15 +28,15 @@ class PrintApp extends StatelessWidget {
     return MaterialApp(
       title: 'Achuppori',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.userTheme,
       home: const UploadScreen(),
       routes: {
-        '/admin/login': (_) => const AdminLoginScreen(),
-        '/admin/dashboard': (_) => const AdminDashboardScreen(),
-        '/admin/departments': (_) => const DepartmentsScreen(),
-        '/admin/printers': (_) => const PrintersScreen(),
-        '/admin/users': (_) => const UsersScreen(),
-        '/admin/settings': (_) => const SettingsScreen(),
+        '/admin/login': (_) => _adminPage(const AdminLoginScreen()),
+        '/admin/dashboard': (_) => _adminPage(const AdminDashboardScreen()),
+        '/admin/departments': (_) => _adminPage(const DepartmentsScreen()),
+        '/admin/printers': (_) => _adminPage(const PrintersScreen()),
+        '/admin/users': (_) => _adminPage(const UsersScreen()),
+        '/admin/settings': (_) => _adminPage(const SettingsScreen()),
         '/admin/reports': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           int? deptId;
@@ -45,9 +45,12 @@ class PrintApp extends StatelessWidget {
           } else if (args is Map<String, dynamic>) {
             deptId = args['department_id'] as int?;
           }
-          return ReportsScreen(initialDepartmentId: deptId);
+          return _adminPage(ReportsScreen(initialDepartmentId: deptId));
         },
       },
     );
   }
+
+  Widget _adminPage(Widget page) =>
+      Theme(data: AppTheme.lightTheme, child: page);
 }

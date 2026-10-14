@@ -142,15 +142,8 @@ class _StationsScreenState extends State<StationsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryDark.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                color: AppTheme.primary,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
@@ -172,11 +165,10 @@ class _StationsScreenState extends State<StationsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'ACTIVE PRINT STATION',
+                          'Active print station',
                           style: TextStyle(
                             fontSize: 11,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                             color: Colors.white70,
                           ),
                         ),
@@ -185,7 +177,7 @@ class _StationsScreenState extends State<StationsScreen> {
                           _selectedStationId ?? 'None Selected',
                           style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
                         ),

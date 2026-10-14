@@ -134,7 +134,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                         padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceWhite,
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppTheme.border),
                           boxShadow: AppTheme.cardShadow,
                         ),
@@ -159,12 +159,7 @@ class _PrintProgressScreenState extends State<PrintProgressScreen>
                                 _mockPrinting
                                     ? 'Test print complete'
                                     : 'Print complete',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppTheme.textPrimary,
-                                  letterSpacing: -0.5,
-                                ),
+                                style: AppTheme.userHeading,
                               ),
                               if (_mockPrinting) ...[
                                 const SizedBox(height: 8),

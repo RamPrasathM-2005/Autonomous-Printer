@@ -183,11 +183,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
 
               const Text(
                 'Enter Release Code',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+                style: AppTheme.userHeading,
               ),
               const SizedBox(height: 20),
 
@@ -297,8 +293,8 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                       ? null
                       : _submitOtp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.secondary,
-                    foregroundColor: Colors.black,
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: _isReleasing
@@ -309,7 +305,7 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Colors.white,
                                 strokeWidth: 2,
                               ),
                             ),
@@ -323,8 +319,8 @@ class _StationTerminalScreenState extends State<StationTerminalScreen> {
                             Icon(Icons.print_rounded, size: 20),
                             SizedBox(width: 8),
                             Text(
-                              'RELEASE PRINT JOB',
-                              style: TextStyle(fontWeight: FontWeight.w800),
+                              'Release print job',
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),

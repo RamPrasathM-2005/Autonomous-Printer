@@ -650,6 +650,7 @@ class _DocumentEditorScreenState extends State<DocumentEditorScreen> {
           value: _paperSize,
           isExpanded: true,
           style: const TextStyle(
+            fontFamily: AppTheme.userFont,
             fontSize: 13,
             color: AppTheme.textPrimary,
             fontWeight: FontWeight.w500,

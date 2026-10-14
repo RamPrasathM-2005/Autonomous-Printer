@@ -9,30 +9,33 @@ class AppScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? body;
   final Widget? bottomNavigationBar;
+  final bool minimal;
 
   const AppScaffold({
     super.key,
     this.appBar,
     this.body,
     this.bottomNavigationBar,
+    this.minimal = true,
   });
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF3F7FE),
+    backgroundColor: minimal ? AppTheme.userCanvas : const Color(0xFFF3F7FE),
     resizeToAvoidBottomInset: true,
     appBar: appBar,
     bottomNavigationBar: bottomNavigationBar,
     body: Stack(
       fit: StackFit.expand,
       children: [
-        const Positioned.fill(
-          child: IgnorePointer(
-            child: RepaintBoundary(
-              child: CustomPaint(painter: _BlueTilePainter()),
+        if (!minimal)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                child: CustomPaint(painter: _BlueTilePainter()),
+              ),
             ),
           ),
-        ),
         if (body != null) SafeArea(top: false, bottom: false, child: body!),
       ],
     ),

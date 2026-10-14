@@ -807,6 +807,7 @@ class _PrintOptionsScreenState extends State<PrintOptionsScreen> {
           value: value,
           isExpanded: true,
           style: const TextStyle(
+            fontFamily: AppTheme.userFont,
             fontSize: 12,
             color: AppTheme.textPrimary,
             fontWeight: FontWeight.w500,

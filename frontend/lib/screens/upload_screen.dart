@@ -782,30 +782,19 @@ class _UploadScreenState extends State<UploadScreen>
             color: _isDragging
                 ? AppTheme.primarySurface
                 : AppTheme.surfaceWhite,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _isDragging ? AppTheme.primary : AppTheme.border,
               width: _isDragging ? 2.0 : 1.0,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withValues(
-                  alpha: _isDragging ? 0.12 : 0.04,
-                ),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 _isDragging ? 'Drop Files Here' : 'Ready to Print?',
-                style: TextStyle(
-                  fontSize: isNarrow ? 20 : 24,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
+                style: AppTheme.userHeading.copyWith(
+                  fontSize: isNarrow ? 26 : 30,
                   color: _isDragging ? AppTheme.primary : AppTheme.textPrimary,
                 ),
               ),
@@ -835,6 +824,7 @@ class _UploadScreenState extends State<UploadScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                   textStyle: const TextStyle(
+                    fontFamily: AppTheme.userFont,
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),

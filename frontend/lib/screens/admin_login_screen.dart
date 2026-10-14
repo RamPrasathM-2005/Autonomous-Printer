@@ -97,6 +97,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   Widget build(BuildContext context) => AppScaffold(
+    minimal: false,
     appBar: AppBar(
       title: const Text('Autonomous Printer'),
       leading: IconButton(

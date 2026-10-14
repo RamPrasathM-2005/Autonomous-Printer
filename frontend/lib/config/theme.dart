@@ -6,60 +6,134 @@ import 'package:flutter/material.dart';
 // ---------------------------------------------------------------------------
 
 class AppTheme {
+  static const userFont = 'Manrope';
+  static const headingFont = 'DM Serif Display';
+  static const userCanvas = Color(0xFFF8F7F2);
+
+  static const userHeading = TextStyle(
+    fontFamily: headingFont,
+    fontSize: 28,
+    fontWeight: FontWeight.w400,
+    height: 1.2,
+    letterSpacing: -0.3,
+    color: textPrimary,
+  );
+
+  /// Customer typography is separate from the existing administration theme.
+  static ThemeData get userTheme {
+    final base = lightTheme;
+    final text = base.textTheme.apply(fontFamily: userFont);
+    TextStyle heading(TextStyle? style) => (style ?? userHeading).copyWith(
+      fontFamily: headingFont,
+      fontWeight: FontWeight.w400,
+      letterSpacing: -0.3,
+      height: 1.2,
+    );
+    return base.copyWith(
+      scaffoldBackgroundColor: userCanvas,
+      textTheme: text.copyWith(
+        displayLarge: heading(text.displayLarge),
+        displayMedium: heading(text.displayMedium),
+        displaySmall: heading(text.displaySmall),
+        headlineLarge: heading(text.headlineLarge),
+        headlineMedium: heading(text.headlineMedium),
+        headlineSmall: heading(text.headlineSmall),
+      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: userFont),
+      appBarTheme: base.appBarTheme.copyWith(
+        titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+          fontFamily: userFont,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: base.elevatedButtonTheme.style?.copyWith(
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(
+              fontFamily: userFont,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: base.outlinedButtonTheme.style?.copyWith(
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(
+              fontFamily: userFont,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        hintStyle: base.inputDecorationTheme.hintStyle?.copyWith(
+          fontFamily: userFont,
+        ),
+        labelStyle: base.inputDecorationTheme.labelStyle?.copyWith(
+          fontFamily: userFont,
+        ),
+      ),
+    );
+  }
+
   // ── Core Palette ──────────────────────────────────────────────────────────
-  static const Color primary      = Color(0xFF1A56DB); // True ink blue
-  static const Color primaryDark  = Color(0xFF1447AE);
+  static const Color primary = Color(0xFF1A56DB); // True ink blue
+  static const Color primaryDark = Color(0xFF1447AE);
   static const Color primaryLight = Color(0xFF4A80E8);
 
   // Blue surface tints
   static const Color primarySurface = Color(0xFFF0F5FF);
-  static const Color primaryBorder  = Color(0xFFBFCFEF);
+  static const Color primaryBorder = Color(0xFFBFCFEF);
 
   // ── Neutral Surfaces ──────────────────────────────────────────────────────
-  static const Color bgCanvas     = Color(0xFFF7F8FA); // page canvas
+  static const Color bgCanvas = Color(0xFFF7F8FA); // page canvas
   static const Color surfaceWhite = Color(0xFFFFFFFF);
   static const Color surfaceSubtle = Color(0xFFF2F4F7);
-  static const Color surfaceLight  = Color(0xFFEAECF0);
+  static const Color surfaceLight = Color(0xFFEAECF0);
 
   // ── Borders ───────────────────────────────────────────────────────────────
-  static const Color border        = Color(0xFFDDE1E7);
-  static const Color borderFocus   = Color(0xFF1A56DB);
+  static const Color border = Color(0xFFDDE1E7);
+  static const Color borderFocus = Color(0xFF1A56DB);
 
   // ── Text ──────────────────────────────────────────────────────────────────
-  static const Color textPrimary   = Color(0xFF0D1117); // near-black
+  static const Color textPrimary = Color(0xFF0D1117); // near-black
   static const Color textSecondary = Color(0xFF4B5563);
-  static const Color textMuted     = Color(0xFF9CA3AF);
+  static const Color textMuted = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Colors.white;
 
   // ── Semantic Colors ───────────────────────────────────────────────────────
-  static const Color success        = Color(0xFF059669);
+  static const Color success = Color(0xFF059669);
   static const Color successSurface = Color(0xFFF0FDF4);
-  static const Color successBorder  = Color(0xFFA7F3D0);
+  static const Color successBorder = Color(0xFFA7F3D0);
 
-  static const Color warning        = Color(0xFFD97706);
+  static const Color warning = Color(0xFFD97706);
   static const Color warningSurface = Color(0xFFFFFBEB);
-  static const Color warningBorder  = Color(0xFFFCD34D);
+  static const Color warningBorder = Color(0xFFFCD34D);
 
-  static const Color danger         = Color(0xFFDC2626);
-  static const Color dangerSurface  = Color(0xFFFEF2F2);
-  static const Color dangerBorder   = Color(0xFFFCA5A5);
+  static const Color danger = Color(0xFFDC2626);
+  static const Color dangerSurface = Color(0xFFFEF2F2);
+  static const Color dangerBorder = Color(0xFFFCA5A5);
 
   // Legacy aliases for backward compat
-  static const Color accent         = primary;
-  static const Color accentSurface  = primarySurface;
-  static const Color secondary      = Color(0xFF0D1117);
-  static const Color infoBorder     = primaryBorder;
-  static const Color infoBg         = primarySurface;
-  static const Color infoSurface    = primarySurface;
-  static const Color info           = primary;
-  static const Color successBg      = successSurface;
-  static const Color warningBg      = warningSurface;
-  static const Color dangerBg       = dangerSurface;
-  static const Color borderSubtle   = surfaceLight;
-  static const Color borderFocused  = borderFocus;
-  static const Color bgLight        = bgCanvas;
-  static const Color surfaceDark    = Color(0xFF111827);
-  static const Color cardDark       = Color(0xFF0D1117);
+  static const Color accent = primary;
+  static const Color accentSurface = primarySurface;
+  static const Color secondary = Color(0xFF0D1117);
+  static const Color infoBorder = primaryBorder;
+  static const Color infoBg = primarySurface;
+  static const Color infoSurface = primarySurface;
+  static const Color info = primary;
+  static const Color successBg = successSurface;
+  static const Color warningBg = warningSurface;
+  static const Color dangerBg = dangerSurface;
+  static const Color borderSubtle = surfaceLight;
+  static const Color borderFocused = borderFocus;
+  static const Color bgLight = bgCanvas;
+  static const Color surfaceDark = Color(0xFF111827);
+  static const Color cardDark = Color(0xFF0D1117);
 
   // ── Shadows ───────────────────────────────────────────────────────────────
   // Hair-thin shadow — suggests depth without theatrics
@@ -195,7 +269,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceWhite,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: border),
