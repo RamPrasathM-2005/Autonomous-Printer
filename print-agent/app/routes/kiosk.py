@@ -783,6 +783,24 @@ KIOSK_HTML = """<!DOCTYPE html>
       .otp-slot { flex: 0 1 44px; min-width: 0; }
       .kiosk-card-left { gap: 8px; }
     }
+    /* Low-cost rendering and full use of the station touchscreen. */
+    header, .modal-overlay { backdrop-filter: none; }
+    .status-dot { animation: none; box-shadow: none; }
+    .kiosk-card-left, .kiosk-card-right, .qr-frame { box-shadow: none; }
+    .key-btn, .otp-slot, .print-btn { transition: none; }
+    @media (min-width: 600px) and (min-height: 440px) {
+      body { height: 100dvh; min-height: 0; }
+      header { flex: 0 0 46px; }
+      .brand-icon { width: 30px; height: 30px; }
+      main { min-height: 0; padding: 10px; align-items: stretch; }
+      .kiosk-grid { height: 100%; gap: 10px; }
+      .kiosk-card-left, .kiosk-card-right { padding: 12px; border-radius: 16px; }
+      .qr-frame img { width: min(25vw, 220px); height: min(25vw, 220px); }
+      .qr-url-pill { margin-bottom: 0; }
+      .keypad-grid { flex: 1; grid-template-rows: repeat(4, minmax(44px, 1fr)); gap: 6px; }
+      .key-btn { height: 100%; min-height: 44px; }
+      .otp-slot { height: 46px; }
+    }
   </style>
 </head>
 <body oncontextmenu="return false;">
@@ -794,15 +812,15 @@ KIOSK_HTML = """<!DOCTYPE html>
         <img src="/static/achuppori-logo.png" alt="Achuppori" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">
       </div>
       <div class="brand-text">
-        <h1>ACHUPPORI</h1>
+        <h1><img src="/static/achuppori-wordmark.png" alt="Achuppori" style="display:block;width:156px;max-width:38vw;height:auto"></h1>
         {% if simulation %}<div style="color:#b45309;font-weight:700">SIMULATION — no physical pages will print</div>{% endif %}
-        <p>Self-service printing</p>
+
       </div>
     </div>
 
     <div class="station-actions">
       <div class="station-pills">
-        <span class="printer-model-badge">{{ printer_name }}</span>
+
         <div class="status-badge" id="stationStatusBadge">
           <span class="status-dot" id="stationStatusDot"></span>
           <span id="stationStatusText">READY</span>
@@ -819,7 +837,7 @@ KIOSK_HTML = """<!DOCTYPE html>
       <div class="kiosk-card-left">
         <div>
           <h2>Scan to print</h2>
-          <p>Upload &amp; pay on your phone.</p>
+          <p>Upload from your phone.</p>
         </div>
 
         <!-- High-Contrast QR Code -->
@@ -831,27 +849,13 @@ KIOSK_HTML = """<!DOCTYPE html>
           {{ web_url }}
         </div>
 
-        <!-- Direct Actions -->
-        <div class="action-group">
-          <div class="steps-list">
-            <div class="step-micro">
-              <span>Scan QR Code</span>
-            </div>
-            <div class="step-micro">
-              <span>Upload & Pay</span>
-            </div>
-            <div class="step-micro">
-              <span>Enter OTP Here</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- RIGHT COLUMN: 6-Digit Release Keypad -->
       <div class="kiosk-card-right">
         <div class="card-title-group">
-          <h2>Enter your 6-digit OTP</h2>
-          <p>Use the code from your phone.</p>
+          <h2>Enter OTP</h2>
+
         </div>
 
         <!-- Alert Banner for Errors or Notices -->
@@ -946,9 +950,7 @@ KIOSK_HTML = """<!DOCTYPE html>
   </div>
 
   <!-- Bottom Kiosk Footer -->
-  <footer>
-    Station: {{ agent_id }} &bull; Scan, upload &amp; pay, then enter OTP to print
-  </footer>
+
 
   <script>
     let currentOtp = "";
@@ -1061,12 +1063,20 @@ KIOSK_HTML = """<!DOCTYPE html>
     }
 
     document.querySelectorAll('.key-btn').forEach(btn => {
+      const activate = () => {
+        const value = btn.getAttribute('data-key') || btn.getAttribute('data-action');
+        if (value) handleKeyPress(value);
+      };
+      // Update digits on contact, without waiting for finger release.
+      btn.addEventListener('pointerdown', (e) => {
+        if (!e.isPrimary || e.button !== 0) return;
+        e.preventDefault();
+        activate();
+      });
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const key = btn.getAttribute('data-key');
-        const action = btn.getAttribute('data-action');
-        if (key) handleKeyPress(key);
-        else if (action) handleKeyPress(action);
+        // Keyboard / assistive activation has no pointer click count.
+        if (e.detail === 0) activate();
       });
     });
 
